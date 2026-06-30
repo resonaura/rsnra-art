@@ -1,0 +1,59 @@
+import styled from 'styled-components';
+import { Frame, GroupBox } from 'react95';
+import { BAND_NAME, BAND_LOCATION } from '../../data/content';
+
+const Layout = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow: auto;
+`;
+
+const InfoFrame = styled(Frame)`
+  background: ${({ theme }) => theme.canvas};
+  color: ${({ theme }) => theme.canvasText};
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+`;
+
+export function Help() {
+  return (
+    <Layout>
+      <InfoFrame variant="field">
+        <img
+          src="/icons/computer.png"
+          alt=""
+          width={48}
+          height={48}
+          style={{ imageRendering: 'pixelated' }}
+        />
+        <div>
+          <h3 style={{ margin: '0 0 4px' }}>RSNRA 95</h3>
+          <p style={{ margin: 0, fontSize: 12 }}>
+            The official desktop of {BAND_NAME}, {BAND_LOCATION}.
+          </p>
+        </div>
+      </InfoFrame>
+
+      <GroupBox label="About this site">
+        <p style={{ fontSize: 12, lineHeight: 1.5 }}>
+          This site is a fully clickable homage to Windows 95 — open windows,
+          drag them around, minimize, maximize, and explore the Start Menu.
+          Built with React, TypeScript, and React95.
+        </p>
+      </GroupBox>
+
+      <GroupBox label="Tips">
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6 }}>
+          <li>Double-click desktop icons to open them.</li>
+          <li>Drag windows by their title bar, resize from the edges.</li>
+          <li>Open RSNRA Terminal and type "help" for hidden commands.</li>
+          <li>Try Ctrl+Alt+Delete for a blast from the past.</li>
+        </ul>
+      </GroupBox>
+    </Layout>
+  );
+}

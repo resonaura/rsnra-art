@@ -1,0 +1,33 @@
+{
+  "name": "rsnra-art",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "icons:list": "python3 scripts/icons/convert_icons.py list",
+    "icons:get": "python3 scripts/icons/convert_icons.py get",
+    "icons:sync": "python3 scripts/icons/convert_icons.py sync"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-icons": "^5.7.0",
+    "react-rnd": "^10.5.3",
+    "react95": "^4.0.0",
+    "styled-components": "^6.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "oxlint": "^1.69.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.0"
+  }
+}
