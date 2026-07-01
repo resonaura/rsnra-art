@@ -74,12 +74,14 @@ let container: HTMLElement | null = null;
 // clickable and visible. Webamp centers its windows within this container
 // (i.e. the viewport).
 function ensureContainer(): HTMLElement {
-  if (container && document.body.contains(container)) return container;
+  if (container && container.parentElement) return container;
   const el = document.createElement("div");
   el.id = CONTAINER_ID;
-  // z-index is managed dynamically (see syncZIndex) so Winamp participates in
-  // the normal window z-order instead of always-on-top. Starts low; raised
-  // when the Winamp window is focused.
+  // Mount INSIDE #rsnra-desktop-root (not <body>) so Winamp shares the same
+  // stacking context as the app windows. Mounting under <body> put it in a
+  // separate stacking context above the fixed app root, making it always-on-top.
+  // z-index is managed dynamically (syncZIndex) so Winamp participates in the
+  // normal window z-order.
   el.style.cssText =
     "position:fixed;inset:0;z-index:10;pointer-events:none;background:transparent;";
   const style = document.createElement("style");
@@ -87,7 +89,8 @@ function ensureContainer(): HTMLElement {
   // the container itself stays pass-through so it never blocks the desktop.
   style.textContent = `#${CONTAINER_ID}{pointer-events:none}#${CONTAINER_ID} *{pointer-events:auto}`;
   document.head.appendChild(style);
-  document.body.appendChild(el);
+  const host = document.getElementById("rsnra-desktop-root") ?? document.body;
+  host.appendChild(el);
   container = el;
   return el;
 }

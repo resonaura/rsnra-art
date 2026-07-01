@@ -61,7 +61,10 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyle />
-      <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
+      <div
+        id="rsnra-desktop-root"
+        style={{ position: "fixed", inset: 0, overflow: "hidden" }}
+      >
         {!booted ? <BootScreen onDone={() => setBooted(true)} /> : <Desk />}
       </div>
     </ThemeProvider>

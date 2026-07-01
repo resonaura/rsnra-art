@@ -377,7 +377,7 @@ export function FileDialog({
   return (
     <Overlay onMouseDown={onCancel}>
       <Dialog onMouseDown={(e) => e.stopPropagation()}>
-        <WindowHeader>
+        <WindowHeader style={{ zoom: 0.8 }}>
           <span>{dialogTitle}</span>
         </WindowHeader>
         <Body onKeyDown={handleKeyDown}>
@@ -520,11 +520,18 @@ export function FileDialog({
           </FileTypeRow>
 
           {/* Buttons */}
-          <Footer>
-            <Button onClick={handleConfirm} primary disabled={!fileName.trim()}>
+          <Footer style={{ zoom: 0.8 }}>
+            <Button
+              style={{ width: "80px" }}
+              onClick={handleConfirm}
+              primary
+              disabled={!fileName.trim()}
+            >
               {confirmLabel}
             </Button>
-            <Button onClick={onCancel}>Cancel</Button>
+            <Button style={{ width: "80px" }} onClick={onCancel}>
+              Cancel
+            </Button>
           </Footer>
         </Body>
       </Dialog>

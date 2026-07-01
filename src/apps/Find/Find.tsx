@@ -214,6 +214,7 @@ export function Find({ windowId }: { windowId: string }) {
       <Field>
         <Label>Named:</Label>
         <TextField
+          style={{ zoom: 0.8, flex: 1 }}
           value={query}
           placeholder="* bio *"
           onChange={(e) => setQuery(e.target.value)}
@@ -223,9 +224,9 @@ export function Find({ windowId }: { windowId: string }) {
               setSelected(null);
             }
           }}
-          style={{ flex: 1 }}
         />
         <Button
+          style={{ zoom: 0.8 }}
           onClick={() => {
             setSubmitted(query);
             setSelected(null);
