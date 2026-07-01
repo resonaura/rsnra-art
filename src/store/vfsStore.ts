@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { BIO_TEXT } from "../data/content";
+import { BIO_TEXT, LINKS } from "../data/content";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type VfsNodeType = "dir" | "file";
@@ -16,9 +16,16 @@ export interface VfsNode {
   created: number;
 }
 
+export interface RecycledItem {
+  node: VfsNode;
+  originalPath: string;
+  deletedAt: number;
+}
+
 export interface VfsState {
   root: VfsNode; // C:\
   cwd: string; // current working directory (absolute, e.g. "C:\\Windows")
+  recycled: RecycledItem[];
 
   // lookups
   resolve: (path: string, base?: string) => VfsNode | null;
@@ -32,6 +39,10 @@ export interface VfsState {
   mkdir: (path: string) => boolean;
   writeFile: (path: string, content: string) => boolean;
   remove: (path: string) => boolean;
+  moveToRecycleBin: (path: string) => boolean;
+  restoreFromRecycleBin: (originalPath: string) => boolean;
+  deleteFromRecycleBin: (originalPath: string) => void;
+  emptyRecycleBin: () => void;
   move: (src: string, destDir: string) => boolean;
   copy: (src: string, destDir: string) => boolean;
   rename: (path: string, newName: string) => boolean;
@@ -214,7 +225,14 @@ function buildInitialTree(): VfsNode {
       file("winlogon.txt", { content: "", system: true, hidden: true }),
       dir("System", [...systemDlls, ...fonts], true),
       commandDir,
-      dir("Desktop", [], true),
+      dir("Desktop", [
+        file("My Computer.lnk", { content: JSON.stringify({ type: "app", target: "my-computer", icon: "/icons/computer.png" }), system: true }),
+        file("RSNRA Music.lnk", { content: JSON.stringify({ type: "url", target: LINKS.music, icon: "/icons/music-cd.png", shortcut: true }), system: false }),
+        file("TikTok.lnk", { content: JSON.stringify({ type: "url", target: LINKS.tiktok, icon: "/icons/globe.png", shortcut: true }), system: false }),
+        file("Instagram.lnk", { content: JSON.stringify({ type: "url", target: LINKS.instagram, icon: "/icons/globe-map.png", shortcut: true }), system: false }),
+        file("Contact.lnk", { content: JSON.stringify({ type: "app", target: "contact", icon: "/icons/contact-card.png" }), system: false }),
+        file("Games.lnk", { content: JSON.stringify({ type: "app", target: "games-folder", icon: "/icons/joystick.png" }), system: false }),
+      ], true),
       dir("Temp", [], true),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", [], true),
@@ -258,6 +276,49 @@ Open apps from anywhere:
   notepad      (or: C:\\Windows\\notepad.exe)
   mspaint
   winmine
+  snake        minesweeper
+
+File system tips:
+  mkdir <name>    create a folder
+  del <file>      delete a file
+  copy <src> <dst> copy a file
+  tree            show directory tree
+`,
+        false,
+      ),
+      txt(
+        "setlist.txt",
+        `RESONAURA — Setlist (current)
+================================
+
+01. Signal & Noise
+02. Phosphene
+03. Glass Teeth
+04. Low Earth Orbit
+05. Harbour Lights
+06. Static Mind
+07. Resonance
+08. [encore] All At Once
+
+Approx. runtime: 50 min
+`,
+        false,
+      ),
+    ],
+    false,
+  );
+
+  const myPictures = dir(
+    "My Pictures",
+    [
+      txt(
+        "readme.txt",
+        `Save images from Paint here using:
+  File > Save As PNG...
+  e.g.: C:\\My Pictures\\artwork.png
+
+Images saved here can be opened by
+double-clicking them in My Computer.
 `,
         false,
       ),
@@ -275,19 +336,47 @@ Open apps from anywhere:
           exe("music.exe", "music"),
           exe("social.exe", "social"),
           exe("contact.exe", "contact"),
-          txt("rsnra.ini", "[RSNRA]\nband=RESONAURA\n", false),
+          exe("minesweeper.exe", "minesweeper"),
+          txt("rsnra.ini", "[RSNRA]\nband=RESONAURA\nversion=95\nyear=1996\n", false),
+          txt(
+            "changelog.txt",
+            `RSNRA 95 — Changelog
+====================
+
+v4.95.1996
+  + Added Snake game
+  + Added MS-DOS Prompt
+  + Added Paint with full drawing tools
+  + My Computer with virtual filesystem
+  + Control Panel wallpaper selector
+  + Minesweeper
+  * Fixed font rendering on 640x480 displays
+`,
+            false,
+          ),
         ],
         false,
       ),
       dir("Internet Explorer", [exe("iexplore.exe", "")], true),
-      dir("Plus!", [], true),
+      dir("Plus!", [
+        txt("readme.txt", "Microsoft Plus! for Windows 95\nNot included in this version.\n", true),
+      ], true),
+      dir("Accessories", [
+        exe("mspaint.exe", "paint"),
+        exe("notepad.exe", "notepad"),
+        exe("terminal.exe", "terminal"),
+      ], true),
     ],
     true,
   );
 
   const recycled = dir("Recycled", [], true);
 
-  return dir("C:\\", [windows, myDocuments, programFiles, recycled], true);
+  return dir(
+    "C:\\",
+    [windows, myDocuments, myPictures, programFiles, recycled],
+    true,
+  );
 }
 
 // Directories searched when resolving a bare command name (PATH).
@@ -295,6 +384,7 @@ const PATH_DIRS = [
   "C:\\Windows",
   "C:\\Windows\\Command",
   "C:\\Program Files\\RSNRA",
+  "C:\\Program Files\\Accessories",
 ];
 
 // ─── Store ─────────────────────────────────────────────────────────────────
@@ -302,7 +392,8 @@ export const useVfsStore = create<VfsState>()(
   persist(
     (set, get) => ({
       root: buildInitialTree(),
-      cwd: "C:\\Windows",
+      cwd: "C:\\My Documents",
+      recycled: [],
 
       resolvePath: (path, base) => normalizePath(path, base ?? get().cwd),
 
@@ -390,6 +481,60 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
+      moveToRecycleBin: (path) => {
+        const abs = normalizePath(path, get().cwd);
+        if (!abs) return false;
+        const ref = findParent(get().root, abs);
+        if (!ref || ref.node.system) return false;
+        ref.parent.children = ref.parent.children!.filter(
+          (c) => c !== ref.node,
+        );
+        const item: RecycledItem = {
+          node: ref.node,
+          originalPath: abs,
+          deletedAt: Date.now(),
+        };
+        set({ root: { ...get().root }, recycled: [...get().recycled, item] });
+        return true;
+      },
+
+      restoreFromRecycleBin: (originalPath) => {
+        const item = get().recycled.find((r) => r.originalPath === originalPath);
+        if (!item) return false;
+        const parts = splitAbs(item.originalPath);
+        if (parts.length === 0) return false;
+        const parentPath =
+          parts.length === 1
+            ? "C:\\"
+            : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        let parent = findNode(get().root, parentPath);
+        if (!parent || parent.type !== "dir" || !parent.children) {
+          // fallback: restore to My Documents
+          parent = findNode(get().root, "C:\\My Documents");
+          if (!parent || parent.type !== "dir" || !parent.children) return false;
+        }
+        if (
+          parent.children.some(
+            (c) => c.name.toLowerCase() === item.node.name.toLowerCase(),
+          )
+        )
+          return false;
+        parent.children.push(item.node);
+        set({
+          root: { ...get().root },
+          recycled: get().recycled.filter((r) => r !== item),
+        });
+        return true;
+      },
+
+      deleteFromRecycleBin: (originalPath) => {
+        set({ recycled: get().recycled.filter((r) => r.originalPath !== originalPath) });
+      },
+
+      emptyRecycleBin: () => {
+        set({ recycled: [] });
+      },
+
       move: (src, destDir) => {
         const srcAbs = normalizePath(src, get().cwd);
         const destAbs = normalizePath(destDir, get().cwd);
@@ -457,6 +602,10 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
     }),
-    { name: "rsnra95-vfs" },
+    {
+      name: "rsnra95-vfs",
+      version: 3,
+      migrate: () => ({ root: buildInitialTree(), cwd: "C:\\My Documents", recycled: [] }),
+    },
   ),
 );

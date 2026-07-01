@@ -39,6 +39,16 @@ const Row = styled.div<{ $disabled?: boolean }>`
   color: ${({ $disabled, theme }) => ($disabled ? theme.materialTextDisabled : theme.materialText)};
   white-space: nowrap;
 
+  .icon-wrap {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+  }
+
   img {
     width: 22px;
     height: 22px;
@@ -74,7 +84,20 @@ export function MenuTree({ nodes, nested }: MenuTreeProps) {
               if (!node.children) node.action?.();
             }}
           >
-            {node.icon && <img src={node.icon} alt="" draggable={false} />}
+            {node.icon && (
+              <span className="icon-wrap">
+                <img
+                  src={node.icon}
+                  alt=""
+                  draggable={false}
+                  style={
+                    node.iconScale
+                      ? { transform: `scale(${node.iconScale})` }
+                      : undefined
+                  }
+                />
+              </span>
+            )}
             <span>{node.label}</span>
             {node.children && <span className="chevron">▶</span>}
           </Row>

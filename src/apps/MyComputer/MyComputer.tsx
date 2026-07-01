@@ -3,6 +3,7 @@ import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { ContextMenu, CtxItem } from "../../components/ContextMenu";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -175,40 +176,6 @@ const StatusBarEl = styled(Frame)`
   font-size: 11px;
 `;
 
-const CtxMenu = styled(Frame)`
-  position: fixed;
-  z-index: 9999;
-  min-width: 150px;
-  padding: 2px;
-  background: ${({ theme }) => theme.material};
-`;
-
-const CtxItem = styled.button<{ $disabled?: boolean }>`
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 4px 18px;
-  font-size: 12px;
-  background: transparent;
-  border: 0;
-  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
-  color: ${({ $disabled, theme }) =>
-    $disabled ? theme.materialTextDisabled : theme.materialText};
-  &:hover {
-    background: ${({ $disabled, theme }) =>
-      $disabled ? "transparent" : theme.hoverBackground};
-    color: ${({ $disabled, theme }) =>
-      $disabled ? theme.materialTextDisabled : theme.headerText};
-  }
-`;
-
-const CtxDivider = styled.div`
-  height: 1px;
-  margin: 3px 2px;
-  background: ${({ theme }) => theme.borderDark};
-  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
-`;
-void CtxDivider;
 
 interface Drive {
   label: string;
@@ -361,7 +328,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
   const deleteNode = (node: VfsNode) => {
     const abs = vfs.resolvePath(node.name, path);
-    if (abs && vfs.remove(abs)) {
+    if (abs && vfs.moveToRecycleBin(abs)) {
       refresh();
       setSelected(null);
     }
@@ -624,22 +591,17 @@ export function MyComputer({ windowId }: { windowId: string }) {
       </StatusBarEl>
 
       {ctx && (
-        <CtxMenu
-          variant="field"
-          style={{ left: ctx.x, top: ctx.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
           {ctxItems.map((it, i) => (
             <CtxItem
               key={i}
               $disabled={it.disabled}
-              disabled={it.disabled}
               onClick={() => !it.disabled && runCtx(it.action)}
             >
               {it.label}
             </CtxItem>
           ))}
-        </CtxMenu>
+        </ContextMenu>
       )}
     </Layout>
   );

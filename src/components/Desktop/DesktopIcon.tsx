@@ -32,8 +32,16 @@ const Label = styled.span<{ $selected: boolean }>`
     $selected ? theme.hoverBackground : "transparent"};
 `;
 
-// Classic Win95 shortcut arrow: a small diagonal arrow pinned to the bottom-left
-// of the icon, drawn as crisp SVG (white fill, black outline) — no border box.
+const RenameInput = styled.input`
+  width: 76px;
+  font-size: 11px;
+  text-align: center;
+  padding: 1px 2px;
+  color: ${({ theme }) => theme.materialText};
+  background: ${({ theme }) => theme.material};
+  border: 1px solid ${({ theme }) => theme.borderDarkest};
+`;
+
 const ShortcutArrow = styled.svg`
   position: absolute;
   left: -2px;
@@ -46,8 +54,14 @@ interface DesktopIconProps {
   icon: string;
   selected: boolean;
   shortcut?: boolean;
+  renaming?: boolean;
+  renameVal?: string;
   onSelect: () => void;
   onOpen: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onRenameChange?: (v: string) => void;
+  onRenameCommit?: () => void;
+  onRenameCancel?: () => void;
 }
 
 export function DesktopIcon({
@@ -55,8 +69,14 @@ export function DesktopIcon({
   icon,
   selected,
   shortcut,
+  renaming,
+  renameVal,
   onSelect,
   onOpen,
+  onContextMenu,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
 }: DesktopIconProps) {
   return (
     <IconButton
@@ -67,6 +87,7 @@ export function DesktopIcon({
       onKeyDown={(e) => {
         if (e.key === "Enter") onOpen();
       }}
+      onContextMenu={onContextMenu}
     >
       <div style={{ position: "relative" }}>
         <img src={icon} alt="" draggable={false} />
@@ -87,7 +108,23 @@ export function DesktopIcon({
           </ShortcutArrow>
         )}
       </div>
-      <Label $selected={selected}>{label}</Label>
+      {renaming ? (
+        <RenameInput
+          autoFocus
+          value={renameVal ?? ""}
+          onChange={(e) => onRenameChange?.(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onBlur={onRenameCommit}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") onRenameCommit?.();
+            if (e.key === "Escape") onRenameCancel?.();
+          }}
+        />
+      ) : (
+        <Label $selected={selected}>{label}</Label>
+      )}
     </IconButton>
   );
 }

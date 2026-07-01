@@ -1,4 +1,6 @@
 import styled from 'styled-components';
+import { AppMenuBar } from '../../components/AppMenuBar';
+import { useWindowStore } from '../../store/windowStore';
 import { openApp } from '../../data/apps';
 
 const Layout = styled.div`
@@ -31,7 +33,7 @@ const IconItem = styled.button<{ $disabled?: boolean }>`
   padding: 6px 2px;
   background: transparent;
   border: 1px dotted transparent;
-  cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
+  cursor: ${({ $disabled }) => ($disabled ? 'default' : 'pointer')};
   font-family: inherit;
   font-size: 11px;
   color: ${({ theme, $disabled }) =>
@@ -45,16 +47,20 @@ const IconItem = styled.button<{ $disabled?: boolean }>`
     opacity: ${({ $disabled }) => ($disabled ? 0.5 : 1)};
   }
 
+  &:hover:not([disabled]) {
+    background: ${({ theme }) => theme.hoverBackground};
+    color: ${({ theme }) => theme.headerText};
+    border-color: ${({ theme }) => theme.headerText};
+  }
+
   &:focus {
     outline: none;
-    background: ${({ theme, $disabled }) => ($disabled ? 'transparent' : theme.hoverBackground)};
-    color: ${({ theme, $disabled }) => ($disabled ? theme.materialTextDisabled : theme.headerText)};
   }
 `;
 
 const StatusBar = styled.div`
   flex-shrink: 0;
-  margin-top: 6px;
+  margin-top: 0;
   padding: 3px 8px;
   font-size: 11px;
   border: 1px solid;
@@ -78,9 +84,38 @@ const GAMES: GameItem[] = [
   { label: 'Spider', icon: '/icons/spider.png', disabled: true },
 ];
 
-export function GamesFolder() {
+export function GamesFolder({ windowId }: { windowId: string }) {
+  const closeWindow = useWindowStore((s) => s.closeWindow);
+
+  const menus = [
+    {
+      label: "File",
+      items: [
+        { label: "New Shortcut...", disabled: true },
+        { label: "", divider: true },
+        { label: "Close", action: () => closeWindow(windowId) },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Large Icons", disabled: true },
+        { label: "Small Icons", disabled: true },
+        { label: "List", disabled: true },
+        { label: "Details", disabled: true },
+        { label: "", divider: true },
+        { label: "Arrange Icons", disabled: true },
+      ],
+    },
+    {
+      label: "Help",
+      items: [{ label: "About Games", disabled: true }],
+    },
+  ];
+
   return (
     <Layout>
+      <AppMenuBar menus={menus} />
       <IconGrid>
         {GAMES.map((game) => (
           <IconItem
@@ -92,7 +127,7 @@ export function GamesFolder() {
           >
             <img src={game.icon} alt="" draggable={false} />
             {game.label}
-            {game.disabled && <span>(soon)</span>}
+            {game.disabled && <span style={{ fontSize: 10 }}>(soon)</span>}
           </IconItem>
         ))}
       </IconGrid>

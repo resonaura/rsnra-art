@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
+import { AppMenuBar } from "../../components/AppMenuBar";
 import { openApp } from "../../data/apps";
 import {
   BAND_LOCATION,
@@ -10,14 +11,21 @@ import {
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
+const Root = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #000;
+`;
+
 const Screen = styled.div`
   background: #000;
   color: #c0c0c0;
-  font-family: "Courier New", monospace;
-  font-size: 14px;
-  line-height: 1.4;
-  height: 100%;
-  width: 100%;
+  font-family: "VT323", "Courier New", monospace;
+  font-size: 17px;
+  line-height: 1.3;
+  flex: 1;
   padding: 8px;
   overflow-y: auto;
   cursor: text;
@@ -47,8 +55,8 @@ const HiddenInput = styled.input`
   border: none;
   outline: none;
   color: #fff;
-  font-family: "Courier New", monospace;
-  font-size: 14px;
+  font-family: "VT323", "Courier New", monospace;
+  font-size: 17px;
   caret-color: #6dff8f;
 `;
 
@@ -513,24 +521,57 @@ export function Terminal({ windowId }: { windowId: string }) {
     }
   };
 
+  const menus = [
+    {
+      label: "Edit",
+      items: [
+        { label: "Mark", disabled: true },
+        { label: "Copy\tEnter", disabled: true },
+        { label: "Paste", disabled: true },
+        { label: "Scroll", disabled: true },
+        { label: "", divider: true },
+        { label: "Select All", disabled: true },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Font...", disabled: true },
+        { label: "", divider: true },
+        { label: "Full Screen", disabled: true },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        { label: "Help Topics", disabled: true },
+        { label: "", divider: true },
+        { label: 'Type "help" for commands', disabled: true },
+      ],
+    },
+  ];
+
   return (
-    <Screen ref={screenRef} onClick={() => inputRef.current?.focus()}>
-      {history.map((entry, i) => (
-        <Line key={i} $kind={entry.kind}>
-          {entry.text}
-        </Line>
-      ))}
-      <InputRow>
-        <PromptSpan>{prompt}</PromptSpan>
-        <HiddenInput
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          spellCheck={false}
-          autoComplete="off"
-        />
-      </InputRow>
-    </Screen>
+    <Root>
+      <AppMenuBar menus={menus} />
+      <Screen ref={screenRef} onClick={() => inputRef.current?.focus()}>
+        {history.map((entry, i) => (
+          <Line key={i} $kind={entry.kind}>
+            {entry.text}
+          </Line>
+        ))}
+        <InputRow>
+          <PromptSpan>{prompt}</PromptSpan>
+          <HiddenInput
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </InputRow>
+      </Screen>
+    </Root>
   );
 }

@@ -1,14 +1,23 @@
 import styled from 'styled-components';
 import { GroupBox, Frame } from 'react95';
+import { AppMenuBar } from '../../components/AppMenuBar';
 import { useDesktopStore, WALLPAPERS } from '../../store/desktopStore';
+import { useWindowStore } from '../../store/windowStore';
 import { BAND_NAME, BAND_LOCATION } from '../../data/content';
 
 const Layout = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: 100%;
+`;
+
+const ScrollArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
   overflow: auto;
+  padding: 12px;
 `;
 
 const Preview = styled(Frame)<{ $bg: string }>`
@@ -45,13 +54,40 @@ const Swatch = styled.button<{ $bg: string; $active: boolean }>`
   outline-offset: -4px;
 `;
 
-export function ControlPanel() {
+export function ControlPanel({ windowId }: { windowId: string }) {
   const wallpaperId = useDesktopStore((s) => s.wallpaperId);
   const setWallpaper = useDesktopStore((s) => s.setWallpaper);
+  const closeWindow = useWindowStore((s) => s.closeWindow);
   const current = WALLPAPERS.find((w) => w.id === wallpaperId) ?? WALLPAPERS[0];
+
+  const menus = [
+    {
+      label: "File",
+      items: [{ label: "Close", action: () => closeWindow(windowId) }],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Large Icons", disabled: true },
+        { label: "Small Icons", disabled: true },
+        { label: "List", disabled: true },
+        { label: "Details", disabled: true },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        { label: "Help Topics", disabled: true },
+        { label: "", divider: true },
+        { label: "About Control Panel", disabled: true },
+      ],
+    },
+  ];
 
   return (
     <Layout>
+      <AppMenuBar menus={menus} />
+      <ScrollArea>
       <GroupBox label="Display Properties — Background">
         <Preview $bg={current.background}>{current.label}</Preview>
         <Swatches>
@@ -78,6 +114,7 @@ export function ControlPanel() {
           <b>Location:</b> {BAND_LOCATION}
         </p>
       </GroupBox>
+      </ScrollArea>
     </Layout>
   );
 }

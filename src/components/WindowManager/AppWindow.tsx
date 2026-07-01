@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Rnd } from "react-rnd";
 import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled from "styled-components";
@@ -69,7 +70,7 @@ interface AppWindowProps {
   win: WindowInstance;
 }
 
-export function AppWindow({ win }: AppWindowProps) {
+export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
   const updateBounds = useWindowStore((s) => s.updateBounds);
   const focusWindow = useWindowStore((s) => s.focusWindow);
   const minimizeWindow = useWindowStore((s) => s.minimizeWindow);
@@ -187,4 +188,4 @@ export function AppWindow({ win }: AppWindowProps) {
       </Window>
     </Rnd>
   );
-}
+});

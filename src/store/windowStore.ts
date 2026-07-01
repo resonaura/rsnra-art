@@ -69,7 +69,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
                   data: config.data ?? w.data,
                   title: config.title,
                 }
-              : { ...w, isFocused: false },
+              : w.isFocused ? { ...w, isFocused: false } : w,
           ),
         });
         return existingId;
@@ -94,7 +94,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     };
     set({
       topZIndex: nextZ,
-      windows: [...windows.map((w) => ({ ...w, isFocused: false })), instance],
+      windows: [...windows.map((w) => (w.isFocused ? { ...w, isFocused: false } : w)), instance],
     });
     return id;
   },
@@ -117,7 +117,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
       return {
         topZIndex: nextZ,
         windows: state.windows.map((w) => {
-          if (w.id !== id) return { ...w, isFocused: false };
+          if (w.id !== id) return w.isFocused ? { ...w, isFocused: false } : w;
           if (w.isMaximized) {
             return {
               ...w,
@@ -157,7 +157,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
         windows: state.windows.map((w) =>
           w.id === id
             ? { ...w, isFocused: true, isMinimized: false, zIndex: nextZ }
-            : { ...w, isFocused: false },
+            : w.isFocused ? { ...w, isFocused: false } : w,
         ),
       };
     });
@@ -197,8 +197,10 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     })),
 }));
 
+const EMPTY_DATA: Record<string, unknown> = {};
+
 export function useWindowData(windowId: string): Record<string, unknown> {
   return useWindowStore(
-    (s) => s.windows.find((w) => w.id === windowId)?.data ?? {},
+    (s) => s.windows.find((w) => w.id === windowId)?.data ?? EMPTY_DATA,
   );
 }

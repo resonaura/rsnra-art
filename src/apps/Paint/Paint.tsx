@@ -28,7 +28,7 @@ import {
 
 const CANVAS_W = 580;
 const CANVAS_H = 380;
-const MAGNIFICATIONS = [1, 2, 6, 8] as const;
+const MAGNIFICATIONS = [1, 2, 4, 8] as const;
 const LINE_WIDTHS = [1, 2, 3, 4, 5];
 const ERASER_SIZES = [4, 6, 8, 10];
 
@@ -540,6 +540,7 @@ export function Paint({ windowId }: { windowId: string }) {
     (windowData.path as string) ?? null,
   );
 
+  const mountedRef = useRef(true);
   const baseCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const historyRef = useRef<ImageData[]>([]);
@@ -568,6 +569,8 @@ export function Paint({ windowId }: { windowId: string }) {
   const fontItalic = paintFont.italic;
   const fontUnderline = paintFont.underline;
   const [fontsWindowId, setFontsWindowId] = useState<string | null>(null);
+  const fontsWindowIdRef = useRef<string | null>(null);
+  fontsWindowIdRef.current = fontsWindowId;
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [cursorLabel, setCursorLabel] = useState("");
   const [textEditing, setTextEditing] = useState<{
@@ -606,33 +609,37 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const getBaseCtx = useCallback(
     () =>
-      baseCanvasRef.current!.getContext("2d", { willReadFrequently: true })!,
+      baseCanvasRef.current?.getContext("2d", { willReadFrequently: true }) ??
+      null,
     [],
   );
   const getOverlayCtx = useCallback(
-    () => overlayCanvasRef.current!.getContext("2d")!,
+    () => overlayCanvasRef.current?.getContext("2d") ?? null,
     [],
   );
 
   const clearOverlay = useCallback(() => {
-    getOverlayCtx().clearRect(0, 0, CANVAS_W, CANVAS_H);
+    getOverlayCtx()?.clearRect(0, 0, CANVAS_W, CANVAS_H);
   }, [getOverlayCtx]);
 
   const makePlot =
-    (ctx: CanvasRenderingContext2D, color: string): Plot =>
+    (ctx: CanvasRenderingContext2D | null, color: string): Plot =>
     (x, y) => {
+      if (!ctx) return;
       ctx.fillStyle = color;
       ctx.fillRect(x, y, 1, 1);
     };
   const makeSpan =
-    (ctx: CanvasRenderingContext2D, color: string): SpanPlot =>
+    (ctx: CanvasRenderingContext2D | null, color: string): SpanPlot =>
     (x0, x1, y) => {
+      if (!ctx) return;
       ctx.fillStyle = color;
       ctx.fillRect(Math.min(x0, x1), y, Math.abs(x1 - x0) + 1, 1);
     };
 
   const pushHistory = useCallback(() => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     const snap = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
     const stack = historyRef.current;
     stack.length = historyPosRef.current + 1;
@@ -645,7 +652,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const restoreHistory = useCallback(() => {
     const snap = historyRef.current[historyPosRef.current];
-    if (snap) getBaseCtx().putImageData(snap, 0, 0);
+    if (snap) getBaseCtx()?.putImageData(snap, 0, 0);
     setHistoryTick((t) => t + 1);
   }, [getBaseCtx]);
 
@@ -662,10 +669,18 @@ export function Paint({ windowId }: { windowId: string }) {
   }, [restoreHistory]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     // Strict Mode mounts effects twice in dev; guard so we don't double-push
     // the blank canvas as two separate (identical) history entries.
     if (historyRef.current.length > 0) return;
     const ctx = getBaseCtx();
+    if (!ctx) return;
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     pushHistory();
@@ -727,7 +742,8 @@ export function Paint({ windowId }: { windowId: string }) {
     clientX: number;
     clientY: number;
   }): [number, number] => {
-    const canvas = overlayCanvasRef.current!;
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return [0, 0];
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / zoom);
     const y = Math.floor((e.clientY - rect.top) / zoom);
@@ -764,6 +780,7 @@ export function Paint({ windowId }: { windowId: string }) {
   ) => {
     clearOverlay();
     const ctx = getOverlayCtx();
+    if (!ctx) return [x1, y1] as [number, number];
     let ex = x1;
     let ey = y1;
     if (shift) {
@@ -795,6 +812,7 @@ export function Paint({ windowId }: { windowId: string }) {
   ) => {
     clearOverlay();
     const ctx = getOverlayCtx();
+    if (!ctx) return [x1, y1] as [number, number];
     let ex = x1;
     let ey = y1;
     if (shift) {
@@ -829,6 +847,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const commitLine = (x0: number, y0: number, x1: number, y1: number) => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     const plot = makePlot(ctx, activeColorRef.current);
     bresenhamLine(x0, y0, x1, y1, (px, py) =>
       stampSquare(px, py, lineWidth, plot),
@@ -845,6 +864,7 @@ export function Paint({ windowId }: { windowId: string }) {
     y1: number,
   ) => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     const outlinePlot = makePlot(ctx, fgColor);
     const fillColor = shapeStyle === "outline-fill" ? bgColor : fgColor;
     const fillSpan = makeSpan(ctx, fillColor);
@@ -887,6 +907,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const drawCurvePreview = () => {
     clearOverlay();
     const ctx = getOverlayCtx();
+    if (!ctx) return;
     const c = curveRef.current;
     ctx.strokeStyle = fgColor;
     ctx.lineWidth = lineWidth;
@@ -961,6 +982,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const drawPolygonPreview = (curX: number, curY: number) => {
     clearOverlay();
     const ctx = getOverlayCtx();
+    if (!ctx) return;
     const pts = polygonRef.current.points;
     if (pts.length === 0) return;
     ctx.strokeStyle = fgColor;
@@ -997,6 +1019,7 @@ export function Paint({ windowId }: { windowId: string }) {
       return;
     }
     const ctx = getBaseCtx();
+    if (!ctx) return;
     if (shapeStyle !== "outline") {
       const fillColor = shapeStyle === "outline-fill" ? bgColor : fgColor;
       polygonFillSpans(p.points, makeSpan(ctx, fillColor));
@@ -1047,16 +1070,18 @@ export function Paint({ windowId }: { windowId: string }) {
   const liftSelection = () => {
     const s = selRef.current;
     const b = s.bounds;
+    const baseCtxCheck = getBaseCtx();
+    if (!baseCtxCheck || !baseCanvasRef.current) return;
     const floating = document.createElement("canvas");
     floating.width = Math.max(1, b.w);
     floating.height = Math.max(1, b.h);
     const fctx = floating.getContext("2d")!;
     fctx.save();
     clipToPath(fctx, s.points, b.x, b.y);
-    fctx.drawImage(baseCanvasRef.current!, -b.x, -b.y);
+    fctx.drawImage(baseCanvasRef.current, -b.x, -b.y);
     fctx.restore();
 
-    const baseCtx = getBaseCtx();
+    const baseCtx = baseCtxCheck;
     baseCtx.save();
     clipToPath(baseCtx, s.points);
     baseCtx.fillStyle = bgColor;
@@ -1105,13 +1130,14 @@ export function Paint({ windowId }: { windowId: string }) {
         s.points.push([x, y]);
       }
       clearOverlay();
-      drawMarquee(getOverlayCtx(), s.points);
+      const oCtx1 = getOverlayCtx();
+      if (oCtx1) drawMarquee(oCtx1, s.points);
     } else if (s.stage === "dragging") {
       const dx = x - s.dragStart[0];
       const dy = y - s.dragStart[1];
       clearOverlay();
       const ctx = getOverlayCtx();
-      if (s.floating)
+      if (ctx && s.floating)
         ctx.drawImage(
           s.floating,
           s.floatingOrigin[0] + dx,
@@ -1120,7 +1146,7 @@ export function Paint({ windowId }: { windowId: string }) {
       const moved = s.points.map(
         ([px, py]) => [px + dx, py + dy] as [number, number],
       );
-      drawMarquee(ctx, moved);
+      if (ctx) drawMarquee(ctx, moved);
     }
   };
 
@@ -1141,12 +1167,14 @@ export function Paint({ windowId }: { windowId: string }) {
       }
       s.bounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
       s.stage = "selected";
-      drawMarquee(getOverlayCtx(), s.points);
+      const oCtx2 = getOverlayCtx();
+      if (oCtx2) drawMarquee(oCtx2, s.points);
     } else if (s.stage === "dragging") {
       const dx = x - s.dragStart[0];
       const dy = y - s.dragStart[1];
       if (s.floating) {
         const baseCtx = getBaseCtx();
+        if (!baseCtx) return;
         if (transparentSelection) {
           // Transparent move: pixels matching the background color become holes
           // so whatever is underneath shows through (classic MS Paint behavior).
@@ -1180,7 +1208,8 @@ export function Paint({ windowId }: { windowId: string }) {
       s.floatingOrigin = [s.floatingOrigin[0] + dx, s.floatingOrigin[1] + dy];
       s.stage = "selected";
       clearOverlay();
-      drawMarquee(getOverlayCtx(), s.points);
+      const oCtx3 = getOverlayCtx();
+      if (oCtx3) drawMarquee(oCtx3, s.points);
       pushHistory();
     }
   };
@@ -1189,6 +1218,7 @@ export function Paint({ windowId }: { windowId: string }) {
     const s = selRef.current;
     if (s.stage !== "selected") return;
     const baseCtx = getBaseCtx();
+    if (!baseCtx) return;
     baseCtx.save();
     clipToPath(baseCtx, s.points);
     baseCtx.fillStyle = bgColor;
@@ -1200,6 +1230,8 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const selectAll = () => {
+    const overlayCtx = getOverlayCtx();
+    if (!overlayCtx) return;
     setTool("select");
     const pts: [number, number][] = [
       [0, 0],
@@ -1215,7 +1247,7 @@ export function Paint({ windowId }: { windowId: string }) {
       dragStart: [0, 0],
       floatingOrigin: [0, 0],
     };
-    drawMarquee(getOverlayCtx(), pts);
+    drawMarquee(overlayCtx, pts);
   };
 
   // ---- Text tool ----
@@ -1224,9 +1256,11 @@ export function Paint({ windowId }: { windowId: string }) {
   // would draw the text and push history twice. Read the pending value from a
   // ref instead and treat this as an event-triggered side effect.
   const commitText = useCallback(() => {
+    if (!mountedRef.current) return;
     const current = textEditingRef.current;
     if (current && current.value.trim()) {
       const ctx = getBaseCtx();
+      if (!ctx) return;
       ctx.fillStyle = fgColor;
       ctx.font = `${fontItalic ? "italic " : ""}${fontBold ? "bold " : ""}${fontSize}px ${fontFamily}`;
       ctx.textBaseline = "top";
@@ -1254,7 +1288,6 @@ export function Paint({ windowId }: { windowId: string }) {
     fontBold,
     fontItalic,
     fontUnderline,
-    zoom,
     getBaseCtx,
     pushHistory,
   ]);
@@ -1275,9 +1308,11 @@ export function Paint({ windowId }: { windowId: string }) {
 
   // ---- Airbrush ----
   const sprayOnce = useCallback(() => {
+    if (!mountedRef.current) return;
     const pos = airbrushPosRef.current;
     if (!pos) return;
     const ctx = getBaseCtx();
+    if (!ctx) return;
     ctx.fillStyle = activeColorRef.current;
     const density = airbrushSize * 2;
     for (let i = 0; i < density; i++) {
@@ -1292,6 +1327,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   // ---- Pointer dispatch ----
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!baseCanvasRef.current || !overlayCanvasRef.current) return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const [x, y] = getLogicalPos(e);
     const isRight = e.button === 2;
@@ -1333,6 +1369,7 @@ export function Paint({ windowId }: { windowId: string }) {
       }
       case "fill": {
         const ctx = getBaseCtx();
+        if (!ctx) break;
         const img = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
         floodFillImageData(img, x, y, hexToRgba(activeColorRef.current));
         ctx.putImageData(img, 0, 0);
@@ -1340,7 +1377,9 @@ export function Paint({ windowId }: { windowId: string }) {
         break;
       }
       case "eyedropper": {
-        const d = getBaseCtx().getImageData(x, y, 1, 1).data;
+        const ctx = getBaseCtx();
+        if (!ctx) break;
+        const d = ctx.getImageData(x, y, 1, 1).data;
         const hex = rgbaToHex(d[0], d[1], d[2]);
         if (isRight) setBgColor(hex);
         else setFgColor(hex);
@@ -1383,6 +1422,7 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!baseCanvasRef.current || !overlayCanvasRef.current) return;
     const [x, y] = getLogicalPos(e);
     setCursorLabel(`${x}, ${y}`);
     airbrushPosRef.current = [x, y];
@@ -1462,6 +1502,7 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!baseCanvasRef.current || !overlayCanvasRef.current) return;
     const [x, y] = getLogicalPos(e);
 
     switch (tool) {
@@ -1587,6 +1628,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const doNew = () => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
@@ -1603,7 +1645,8 @@ export function Paint({ windowId }: { windowId: string }) {
   const updateTitle = useWindowStore((s) => s.updateTitle);
 
   const saveToVfs = (absPath: string) => {
-    const canvas = baseCanvasRef.current!;
+    const canvas = baseCanvasRef.current;
+    if (!canvas) return;
     vfs.writeFile(absPath, canvas.toDataURL("image/png"));
     setFilePath(absPath);
     const fname = absPath.split("\\").pop() ?? "untitled.png";
@@ -1620,7 +1663,8 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const handleSaveAsPng = () => {
-    const canvas = baseCanvasRef.current!;
+    const canvas = baseCanvasRef.current;
+    if (!canvas) return;
     const defaultName = filePath
       ? (filePath.split("\\").pop() ?? "untitled.png")
       : "untitled.png";
@@ -1638,11 +1682,13 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const flipHorizontal = () => {
+    const base = baseCanvasRef.current;
+    const ctx = getBaseCtx();
+    if (!base || !ctx) return;
     const tmp = document.createElement("canvas");
     tmp.width = CANVAS_W;
     tmp.height = CANVAS_H;
-    tmp.getContext("2d")!.drawImage(baseCanvasRef.current!, 0, 0);
-    const ctx = getBaseCtx();
+    tmp.getContext("2d")!.drawImage(base, 0, 0);
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.translate(CANVAS_W, 0);
@@ -1653,11 +1699,13 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const flipVertical = () => {
+    const base = baseCanvasRef.current;
+    const ctx = getBaseCtx();
+    if (!base || !ctx) return;
     const tmp = document.createElement("canvas");
     tmp.width = CANVAS_W;
     tmp.height = CANVAS_H;
-    tmp.getContext("2d")!.drawImage(baseCanvasRef.current!, 0, 0);
-    const ctx = getBaseCtx();
+    tmp.getContext("2d")!.drawImage(base, 0, 0);
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.translate(0, CANVAS_H);
@@ -1669,6 +1717,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const invertColors = () => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     const img = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) {
@@ -1682,6 +1731,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const clearImage = () => {
     const ctx = getBaseCtx();
+    if (!ctx) return;
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     selRef.current = emptySel();
@@ -1739,6 +1789,17 @@ export function Paint({ windowId }: { windowId: string }) {
         { label: "Zoom 200%", action: () => setZoom(2) },
         { label: "Zoom 400%", action: () => setZoom(4) },
         { label: "Zoom 800%", action: () => setZoom(8) },
+        { label: "", divider: true },
+        { label: "Zoom In", action: () => {
+          const idx = MAGNIFICATIONS.indexOf(zoom as (typeof MAGNIFICATIONS)[number]);
+          const next = MAGNIFICATIONS[Math.min(MAGNIFICATIONS.length - 1, idx + 1)];
+          if (next !== undefined) setZoom(next);
+        }},
+        { label: "Zoom Out", action: () => {
+          const idx = MAGNIFICATIONS.indexOf(zoom as (typeof MAGNIFICATIONS)[number]);
+          const next = MAGNIFICATIONS[Math.max(0, idx - 1)];
+          if (next !== undefined) setZoom(next);
+        }},
       ],
     },
     {
@@ -2102,20 +2163,23 @@ export function Paint({ windowId }: { windowId: string }) {
   // and close it otherwise — like jspaint showing/hiding $FontBox with the text tool.
   useEffect(() => {
     if (tool === "text") {
-      if (!fontsWindowId) {
+      if (!fontsWindowIdRef.current) {
         const id = openApp("paint-fonts", {
           title: "Fonts",
           data: { paintWindowId: windowId },
         });
         setFontsWindowId(id);
       }
-    } else if (fontsWindowId) {
-      closeWindow(fontsWindowId);
+    } else if (fontsWindowIdRef.current) {
+      closeWindow(fontsWindowIdRef.current);
       setFontsWindowId(null);
     }
-    // Close the Fonts window if this Paint window itself closes/unmounts.
+    // Use ref so unmount cleanup always sees the current id (avoids stale closure).
     return () => {
-      if (fontsWindowId) closeWindow(fontsWindowId);
+      if (fontsWindowIdRef.current) {
+        closeWindow(fontsWindowIdRef.current);
+        fontsWindowIdRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, windowId]);

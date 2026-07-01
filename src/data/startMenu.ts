@@ -5,6 +5,7 @@ export interface MenuNode {
   id: string;
   label: string;
   icon?: string;
+  iconScale?: number;
   action?: () => void;
   children?: MenuNode[];
   disabled?: boolean;
@@ -93,6 +94,7 @@ export const START_MENU_TREE: MenuNode[] = [
     id: "documents",
     label: "Documents",
     icon: "/icons/documents.png",
+    iconScale: 1.33,
     children: [
       {
         id: "bio",
@@ -122,6 +124,7 @@ export const START_MENU_TREE: MenuNode[] = [
     id: "settings",
     label: "Settings",
     icon: "/icons/settings.png",
+    iconScale: 1.33,
     children: [
       {
         id: "control-panel",
@@ -135,6 +138,7 @@ export const START_MENU_TREE: MenuNode[] = [
     id: "find",
     label: "Find",
     icon: "/icons/find.png",
+    iconScale: 1.33,
     children: [
       { id: "find-files", label: "Files or Folders...", disabled: true },
     ],
@@ -143,6 +147,7 @@ export const START_MENU_TREE: MenuNode[] = [
     id: "help",
     label: "Help",
     icon: "/icons/help.png",
+    iconScale: 1.33,
     action: run(() => openApp("help")),
   },
   {
@@ -158,6 +163,7 @@ export const START_MENU_TREE: MenuNode[] = [
     id: "shut-down",
     label: "Shut Down...",
     icon: "/icons/battery.png",
+    iconScale: 1.33,
     action: requestShutdown,
   },
 ];

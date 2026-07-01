@@ -133,6 +133,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     component: asComponent(RecycleBin),
     width: 380,
     height: 300,
+    noPadding: true,
   },
   help: {
     id: "help",
@@ -141,6 +142,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     component: asComponent(Help),
     width: 460,
     height: 440,
+    noPadding: true,
   },
   "control-panel": {
     id: "control-panel",
@@ -149,6 +151,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     component: asComponent(ControlPanel),
     width: 440,
     height: 440,
+    noPadding: true,
   },
   paint: {
     id: "paint",
