@@ -4,6 +4,8 @@ import type { AppId } from "../types/window";
 
 import { Contact } from "../apps/Contact/Contact";
 import { ControlPanel } from "../apps/ControlPanel/ControlPanel";
+import { DateTime } from "../apps/DateTime/DateTime";
+import { Find } from "../apps/Find/Find";
 import { GamesFolder } from "../apps/GamesFolder/GamesFolder";
 import { Help } from "../apps/Help/Help";
 import { Minesweeper } from "../apps/Minesweeper/Minesweeper";
@@ -12,6 +14,7 @@ import { MyComputer } from "../apps/MyComputer/MyComputer";
 import { Notepad } from "../apps/Notepad/Notepad";
 import { Paint } from "../apps/Paint/Paint";
 import { PaintFonts } from "../apps/Paint/PaintFonts";
+import { Properties } from "../apps/Properties/Properties";
 import { RecycleBin } from "../apps/RecycleBin/RecycleBin";
 import { Snake } from "../apps/Snake/Snake";
 import { Social } from "../apps/Social/Social";
@@ -174,6 +177,38 @@ export const APPS: Record<AppId, AppDefinition> = {
     height: 78,
     resizable: false,
     singleInstance: false,
+  },
+  find: {
+    id: "find",
+    title: "Find: All Files",
+    icon: "/icons/find.png",
+    component: asComponent(Find),
+    width: 480,
+    height: 360,
+    minWidth: 320,
+    minHeight: 240,
+    noPadding: true,
+    singleInstance: false,
+  },
+  properties: {
+    id: "properties",
+    title: "Properties",
+    icon: "/icons/folder-open.png",
+    component: asComponent(Properties),
+    width: 340,
+    height: 440,
+    resizable: false,
+    singleInstance: false,
+  },
+  datetime: {
+    id: "datetime",
+    title: "Date/Time Properties",
+    icon: "/icons/clock.png",
+    component: asComponent(DateTime),
+    width: 340,
+    height: 460,
+    resizable: false,
+    singleInstance: true,
   },
 };
 

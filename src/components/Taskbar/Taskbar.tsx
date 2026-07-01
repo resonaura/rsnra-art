@@ -2,9 +2,9 @@ import { AppBar, Button, Toolbar } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
-import { LINKS } from "../../data/content";
 import { useWindowStore } from "../../store/windowStore";
 import { TaskbarClock } from "./TaskbarClock";
+import { VolumeControl } from "./VolumeControl";
 
 const Bar = styled(AppBar)`
   top: auto !important;
@@ -91,18 +91,6 @@ const Tray = styled.div`
   flex-shrink: 0;
 `;
 
-const TrayIcon = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  img {
-    width: 16px;
-    height: 16px;
-    image-rendering: pixelated;
-  }
-`;
-
 export function Taskbar() {
   const windows = useWindowStore((s) => s.windows);
   const startMenuOpen = useWindowStore((s) => s.startMenuOpen);
@@ -147,22 +135,7 @@ export function Taskbar() {
             ))}
         </WindowList>
         <Tray>
-          <TrayIcon
-            title="TikTok @resonaura"
-            onClick={() =>
-              window.open(LINKS.tiktok, "_blank", "noopener,noreferrer")
-            }
-          >
-            <img src="/icons/globe.png" alt="TikTok" />
-          </TrayIcon>
-          <TrayIcon
-            title="Instagram @resonaura"
-            onClick={() =>
-              window.open(LINKS.instagram, "_blank", "noopener,noreferrer")
-            }
-          >
-            <img src="/icons/globe-map.png" alt="Instagram" />
-          </TrayIcon>
+          <VolumeControl />
           <TaskbarClock />
         </Tray>
       </StyledToolbar>

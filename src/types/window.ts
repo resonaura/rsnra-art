@@ -13,7 +13,10 @@ export type AppId =
   | "control-panel"
   | "social"
   | "paint"
-  | "paint-fonts";
+  | "paint-fonts"
+  | "find"
+  | "properties"
+  | "datetime";
 
 export interface Bounds {
   x: number;

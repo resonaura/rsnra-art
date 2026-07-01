@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
-import styled from 'styled-components';
-import { useWindowStore } from '../../store/windowStore';
-import { START_MENU_TREE } from '../../data/startMenu';
-import { TASKBAR_HEIGHT } from '../../constants';
-import { MenuTree } from './MenuTree';
+import { useEffect, useRef } from "react";
+import styled from "styled-components";
+import { TASKBAR_HEIGHT } from "../../constants";
+import { useStartMenuTree } from "../../data/startMenu";
+import { useWindowStore } from "../../store/windowStore";
+import { MenuTree } from "./MenuTree";
 
 const Positioned = styled.div`
   position: fixed;
@@ -12,8 +12,9 @@ const Positioned = styled.div`
   z-index: 100000;
   display: flex;
   border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest};
+  border-color: ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest};
   box-shadow: 2px 2px 0 1px rgba(0, 0, 0, 0.4);
   background: ${({ theme }) => theme.material};
 `;
@@ -47,19 +48,20 @@ export function StartMenu() {
   const open = useWindowStore((s) => s.startMenuOpen);
   const setOpen = useWindowStore((s) => s.setStartMenuOpen);
   const ref = useRef<HTMLDivElement>(null);
+  const tree = useStartMenuTree();
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (ref.current && !ref.current.contains(target)) {
-        const startButton = document.getElementById('start-button');
+        const startButton = document.getElementById("start-button");
         if (startButton?.contains(target)) return;
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [open, setOpen]);
 
   if (!open) return null;
@@ -68,10 +70,10 @@ export function StartMenu() {
     <Positioned ref={ref} id="start-menu-root">
       <Banner>
         <BannerLabel>
-          RSNRA<span style={{ fontWeight: 'normal', fontSize: 13 }}>95</span>
+          RSNRA<span style={{ fontWeight: "normal", fontSize: 13 }}>95</span>
         </BannerLabel>
       </Banner>
-      <MenuTree nodes={START_MENU_TREE} />
+      <MenuTree nodes={tree} />
     </Positioned>
   );
 }

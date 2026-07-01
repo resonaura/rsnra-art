@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { APPS } from "../../data/apps";
+import { useUnsavedStore } from "../../store/unsavedStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { WindowInstance } from "../../types/window";
 import {
@@ -73,6 +74,8 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
   const minimizeWindow = useWindowStore((s) => s.minimizeWindow);
   const toggleMaximize = useWindowStore((s) => s.toggleMaximize);
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const requestClose = useUnsavedStore((s) => s.requestClose);
+  void closeWindow;
 
   const def = APPS[win.appId];
   const AppComponent = def.component;
@@ -168,7 +171,7 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
             <GlyphButton
               onClick={(e) => {
                 e.stopPropagation();
-                closeWindow(win.id);
+                requestClose(win.id);
               }}
               aria-label="Close"
             >

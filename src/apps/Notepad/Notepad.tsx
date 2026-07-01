@@ -3,6 +3,8 @@ import { Separator } from "react95";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
+import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
@@ -30,7 +32,6 @@ const TextArea = styled.textarea`
   border: none;
   outline: none;
   padding: 8px;
-  font-family: "ms_sans_serif", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.4;
   background: white;
@@ -49,7 +50,6 @@ const StatusBar = styled.div`
 export function Notepad({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
   const vfs = useVfsStore();
-  const closeWindow = useWindowStore((s) => s.closeWindow);
   const updateTitle = useWindowStore((s) => s.updateTitle);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const { showFileDialog, dialog } = useFileDialog();
@@ -64,13 +64,21 @@ export function Notepad({ windowId }: { windowId: string }) {
   const [text, setText] = useState(initial);
   const [dirty, setDirty] = useState(false);
 
+  const requestClose = useUnsavedStore((s) => s.requestClose);
+  useUnsavedChanges(windowId, {
+    isDirty: dirty,
+    save: () => handleSave(),
+    name: fileName,
+  });
+
   const updateWindowTitle = (name: string) => {
     updateTitle(windowId, `${name} - Notepad`);
   };
 
-  const save = () => {
+  const save = (): boolean => {
     vfs.writeFile(filePath, text);
     setDirty(false);
+    return true;
   };
 
   const handleNew = () => {
@@ -98,7 +106,7 @@ export function Notepad({ windowId }: { windowId: string }) {
     updateWindowTitle(name);
   };
 
-  const handleSaveAs = async () => {
+  const handleSaveAs = async (): Promise<boolean> => {
     const dir = filePath.split("\\").slice(0, -1).join("\\") + "\\";
     const defaultName = filePath.split("\\").pop() ?? "untitled.txt";
     const result = await showFileDialog({
@@ -108,21 +116,21 @@ export function Notepad({ windowId }: { windowId: string }) {
       initialFileName: defaultName,
       filters: TEXT_FILTERS,
     });
-    if (!result) return;
+    if (!result) return false;
     vfs.writeFile(result, text);
     setFilePath(result);
     setDirty(false);
     const name = result.split("\\").pop() ?? "untitled.txt";
     updateWindowTitle(name);
+    return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async (): Promise<boolean> => {
     // If the file is "untitled" (doesn't exist yet), prompt for Save As
     if (!vfs.exists(filePath)) {
-      handleSaveAs();
-    } else {
-      save();
+      return handleSaveAs();
     }
+    return save();
   };
 
   const selectAll = () => {
@@ -160,7 +168,7 @@ export function Notepad({ windowId }: { windowId: string }) {
         { label: "Save As...", action: handleSaveAs },
         { label: "Print...", disabled: true },
         { label: "", divider: true },
-        { label: "Exit", action: () => closeWindow(windowId) },
+        { label: "Exit", action: () => requestClose(windowId) },
       ],
     },
     {

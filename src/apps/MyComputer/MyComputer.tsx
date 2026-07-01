@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
-import { ContextMenu, CtxItem } from "../../components/ContextMenu";
+import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { useClipboardStore } from "../../store/clipboardStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -67,7 +68,10 @@ function formatDate(node: VfsNode): string {
 }
 
 /** Is `descendantAbs` the same path as, or nested inside, `ancestorAbs`? */
-function isSameOrDescendant(descendantAbs: string, ancestorAbs: string): boolean {
+function isSameOrDescendant(
+  descendantAbs: string,
+  ancestorAbs: string,
+): boolean {
   const a = descendantAbs.toLowerCase();
   const b = ancestorAbs.toLowerCase();
   return a === b || a.startsWith(b.replace(/\\+$/, "") + "\\");
@@ -268,7 +272,8 @@ const SmallRow = styled.button<{ $selected?: boolean; $dragOver?: boolean }>`
         ? theme.hoverBackground
         : "transparent"};
   border: 1px dotted
-    ${({ $selected, $dragOver }) => ($selected || $dragOver ? "white" : "transparent")};
+    ${({ $selected, $dragOver }) =>
+      $selected || $dragOver ? "white" : "transparent"};
   outline: ${({ $dragOver, theme }) =>
     $dragOver ? `1px solid ${theme.headerBackground}` : "none"};
   color: ${({ $selected, theme }) =>
@@ -430,7 +435,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const updateTitle = useWindowStore((s) => s.updateTitle);
   const updateIcon = useWindowStore((s) => s.updateIcon);
+  const isFocused = useWindowStore(
+    (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
+  );
   const vfs = useVfsStore();
+  const clipboard = useClipboardStore();
   const [path, setPath] = useState<string>(MY_COMPUTER);
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
@@ -560,6 +569,54 @@ export function MyComputer({ windowId }: { windowId: string }) {
     refresh();
   };
 
+  // ── clipboard: copy / cut / paste ───────────────────────────────────────
+  // The clipboard stores an absolute source path + mode; paste re-resolves it
+  // against the live VFS so it stays valid across navigation and windows.
+  const copySelected = (node: VfsNode) => {
+    if (node.system) return;
+    const abs = vfs.resolvePath(node.name, path);
+    if (abs) clipboard.set("copy", abs);
+  };
+
+  const cutSelected = (node: VfsNode) => {
+    if (node.system) return;
+    const abs = vfs.resolvePath(node.name, path);
+    if (abs) clipboard.set("cut", abs);
+  };
+
+  const paste = () => {
+    if (isRoot || driveNotReady) return;
+    if (!clipboard.mode || !clipboard.sourcePath) return;
+    const src = clipboard.sourcePath;
+    if (clipboard.mode === "copy") {
+      if (vfs.copyTo(src, path) === null) return;
+    } else {
+      // cut → move; a successful move consumes the clipboard.
+      if (vfs.moveTo(src, path) === null) return;
+      clipboard.clear();
+    }
+    refresh();
+  };
+
+  // A cut source is dimmed until it is pasted elsewhere or the clipboard is
+  // cleared (e.g. by copying something new).
+  const isCutSource = (node: VfsNode): boolean => {
+    if (clipboard.mode !== "cut" || !clipboard.sourcePath) return false;
+    const abs = vfs.resolvePath(node.name, path);
+    return !!abs && abs.toLowerCase() === clipboard.sourcePath.toLowerCase();
+  };
+
+  // Open the Properties window for a node (right-click → Properties, or the
+  // File menu). Works for both files and folders, including system items.
+  const propertiesOf = (node: VfsNode) => {
+    const abs = vfs.resolvePath(node.name, path);
+    if (abs)
+      openApp("properties", {
+        title: `${node.name} Properties`,
+        data: { path: abs },
+      });
+  };
+
   // ── drag & drop ────────────────────────────────────────────────────────
   // System items (and anything else the user didn't create) are protected:
   // not draggable, and vfs.move()/rename()/remove() already refuse to touch
@@ -638,33 +695,85 @@ export function MyComputer({ windowId }: { windowId: string }) {
     action();
   };
 
-  const ctxItems: { label: string; action: () => void; disabled?: boolean }[] =
-    ctx?.node
-      ? [
-          { label: "Open", action: () => openNode(ctx.node!) },
-          {
-            label: "Rename",
-            action: () => {
-              setRenaming(ctx.node!.name);
-              setRenameVal(ctx.node!.name);
-            },
+  const ctxItems: {
+    label: string;
+    action: () => void;
+    disabled?: boolean;
+    divider?: boolean;
+  }[] = ctx?.node
+    ? [
+        { label: "Open", action: () => openNode(ctx.node!) },
+        { label: "", action: () => {}, divider: true },
+        {
+          label: "Cut",
+          action: () => cutSelected(ctx.node!),
+          disabled: !!ctx.node!.system,
+        },
+        {
+          label: "Copy",
+          action: () => copySelected(ctx.node!),
+          disabled: !!ctx.node!.system,
+        },
+        { label: "", action: () => {}, divider: true },
+        {
+          label: "Rename",
+          action: () => {
+            setRenaming(ctx.node!.name);
+            setRenameVal(ctx.node!.name);
           },
-          { label: "Delete", action: () => deleteNode(ctx.node!) },
-        ]
-      : [
-          {
-            label: "New Folder",
-            action: newFolder,
-            disabled: isRoot || driveNotReady,
-          },
-          {
-            label: "New Text Document",
-            action: newTextFile,
-            disabled: isRoot || driveNotReady,
-          },
-        ];
+        },
+        { label: "Delete", action: () => deleteNode(ctx.node!) },
+        { label: "", action: () => {}, divider: true },
+        { label: "Properties", action: () => propertiesOf(ctx.node!) },
+      ]
+    : [
+        {
+          label: "Paste",
+          action: paste,
+          disabled:
+            isRoot || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+        },
+        { label: "", action: () => {}, divider: true },
+        {
+          label: "New Folder",
+          action: newFolder,
+          disabled: isRoot || driveNotReady,
+        },
+        {
+          label: "New Text Document",
+          action: newTextFile,
+          disabled: isRoot || driveNotReady,
+        },
+      ];
 
   const selectedNode = sorted.find((n) => n.name === selected) ?? null;
+
+  // Explorer keyboard shortcuts: Ctrl+C / Ctrl+X copy/cut the selected node,
+  // Ctrl+V pastes the clipboard into the open folder. Only active while this
+  // Explorer window is the focused one, so they never collide with Notepad,
+  // Terminal, etc. Ignored while renaming so the keys edit the filename.
+  useEffect(() => {
+    if (!isFocused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (renaming) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "c" && selectedNode && !selectedNode.system) {
+        e.preventDefault();
+        copySelected(selectedNode);
+      } else if (key === "x" && selectedNode && !selectedNode.system) {
+        e.preventDefault();
+        cutSelected(selectedNode);
+      } else if (key === "v") {
+        e.preventDefault();
+        paste();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, renaming, selectedNode, path, isRoot, driveNotReady]);
 
   const menus: MenuDef[] = [
     {
@@ -701,6 +810,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
           },
           disabled: !selectedNode,
         },
+        {
+          label: "Properties",
+          action: () => selectedNode && propertiesOf(selectedNode),
+          disabled: !selectedNode,
+        },
         { label: "", divider: true },
         { label: "Close", action: () => closeWindow(windowId) },
       ],
@@ -710,9 +824,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
       items: [
         { label: "Undo", disabled: true },
         { label: "", divider: true },
-        { label: "Cut", disabled: true },
-        { label: "Copy", disabled: true },
-        { label: "Paste", disabled: true },
+        {
+          label: "Cut",
+          action: () => selectedNode && cutSelected(selectedNode),
+          disabled: !selectedNode || !!selectedNode?.system,
+        },
+        {
+          label: "Copy",
+          action: () => selectedNode && copySelected(selectedNode),
+          disabled: !selectedNode || !!selectedNode?.system,
+        },
+        {
+          label: "Paste",
+          action: paste,
+          disabled:
+            isRoot || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+        },
         { label: "", divider: true },
         {
           label: "Select All",
@@ -841,9 +968,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
       tabIndex={0}
       {...nodeHandlers(node)}
       style={{
-        opacity: node.system ? 0.85 : 1,
-        outline:
-          dragOverKey === node.name ? "1px solid #fff" : undefined,
+        opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1,
+        outline: dragOverKey === node.name ? "1px solid #fff" : undefined,
       }}
     >
       <div style={{ position: "relative" }}>
@@ -861,14 +987,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
       $dragOver={dragOverKey === node.name}
       tabIndex={0}
       {...nodeHandlers(node)}
-      style={{ opacity: node.system ? 0.85 : 1 }}
+      style={{ opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1 }}
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
         <img src={iconForNode(node)} alt="" draggable={false} />
         {node.system && <LockGlyph />}
       </div>
       <span
-        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
       >
         {renaming === node.name ? renameBox(140) : node.name}
       </span>
@@ -882,7 +1012,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       $dragOver={dragOverKey === node.name}
       tabIndex={0}
       {...nodeHandlers(node)}
-      style={{ opacity: node.system ? 0.85 : 1 }}
+      style={{ opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1 }}
     >
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>
@@ -1016,15 +1146,19 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
       {ctx && (
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
-          {ctxItems.map((it, i) => (
-            <CtxItem
-              key={i}
-              $disabled={it.disabled}
-              onClick={() => !it.disabled && runCtx(it.action)}
-            >
-              {it.label}
-            </CtxItem>
-          ))}
+          {ctxItems.map((it, i) =>
+            it.divider ? (
+              <CtxDivider key={i} />
+            ) : (
+              <CtxItem
+                key={i}
+                $disabled={it.disabled}
+                onClick={() => !it.disabled && runCtx(it.action)}
+              >
+                {it.label}
+              </CtxItem>
+            ),
+          )}
         </ContextMenu>
       )}
     </Layout>

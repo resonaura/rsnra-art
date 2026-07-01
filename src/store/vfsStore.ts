@@ -45,6 +45,11 @@ export interface VfsState {
   emptyRecycleBin: () => void;
   move: (src: string, destDir: string) => boolean;
   copy: (src: string, destDir: string) => boolean;
+  // Copy/move `src` into directory `destDir`, auto-renaming on collision with
+  // the Win95 "Copy of <name>" scheme. Returns the resulting node name, or
+  // null on failure. Refuses to copy a folder into itself/a descendant.
+  copyTo: (src: string, destDir: string) => string | null;
+  moveTo: (src: string, destDir: string) => string | null;
   rename: (path: string, newName: string) => boolean;
   setCwd: (path: string) => boolean;
 }
@@ -123,6 +128,48 @@ function findParent(
   );
   if (!node) return null;
   return { parent, node, name };
+}
+
+// Deep-clone a node (and any children) with fresh `created` timestamps so a
+// pasted copy doesn't share identity/timestamps with the original.
+function cloneNode(node: VfsNode): VfsNode {
+  const created = now();
+  if (node.type === "file") {
+    return { ...node, created };
+  }
+  return {
+    ...node,
+    created,
+    children: (node.children ?? []).map(cloneNode),
+  };
+}
+
+// Is `maybeAncestor` the same path as `path`, or a parent directory of it?
+// Used to stop a folder being copied/moved into itself or one of its descendants.
+function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
+  const a = maybeAncestor.toLowerCase().replace(/[\\/]+$/, "");
+  const b = path.toLowerCase().replace(/[\\/]+$/, "");
+  if (a === b) return true;
+  return b.startsWith(a + SEP);
+}
+
+// Generate a non-colliding name inside `parent` based on `name`, using the
+// classic Win95 "Copy of <name>", "Copy (2) of <name>", ... scheme.
+function uniqueCopyName(parent: VfsNode, name: string): string {
+  const taken = new Set(
+    (parent.children ?? []).map((c) => c.name.toLowerCase()),
+  );
+  if (!taken.has(name.toLowerCase())) return name;
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let n = 2;
+  let candidate: string;
+  do {
+    candidate = n === 2 ? `Copy of ${name}` : `Copy (${n}) of ${base}${ext}`;
+    n++;
+  } while (taken.has(candidate.toLowerCase()));
+  return candidate;
 }
 
 let _id = 0;
@@ -225,14 +272,63 @@ function buildInitialTree(): VfsNode {
       file("winlogon.txt", { content: "", system: true, hidden: true }),
       dir("System", [...systemDlls, ...fonts], true),
       commandDir,
-      dir("Desktop", [
-        file("My Computer.lnk", { content: JSON.stringify({ type: "app", target: "my-computer", icon: "/icons/computer.png" }), system: true }),
-        file("RSNRA Music.lnk", { content: JSON.stringify({ type: "url", target: LINKS.music, icon: "/icons/music-cd.png", shortcut: true }), system: false }),
-        file("TikTok.lnk", { content: JSON.stringify({ type: "url", target: LINKS.tiktok, icon: "/icons/globe.png", shortcut: true }), system: false }),
-        file("Instagram.lnk", { content: JSON.stringify({ type: "url", target: LINKS.instagram, icon: "/icons/globe-map.png", shortcut: true }), system: false }),
-        file("Contact.lnk", { content: JSON.stringify({ type: "app", target: "contact", icon: "/icons/contact-card.png" }), system: false }),
-        file("Games.lnk", { content: JSON.stringify({ type: "app", target: "games-folder", icon: "/icons/joystick.png" }), system: false }),
-      ], true),
+      dir(
+        "Desktop",
+        [
+          file("My Computer.lnk", {
+            content: JSON.stringify({
+              type: "app",
+              target: "my-computer",
+              icon: "/icons/computer.png",
+            }),
+            system: true,
+          }),
+          file("RSNRA Music.lnk", {
+            content: JSON.stringify({
+              type: "url",
+              target: LINKS.music,
+              icon: "/icons/music-cd.png",
+              shortcut: true,
+            }),
+            system: false,
+          }),
+          file("TikTok.lnk", {
+            content: JSON.stringify({
+              type: "url",
+              target: LINKS.tiktok,
+              icon: "/icons/globe.png",
+              shortcut: true,
+            }),
+            system: false,
+          }),
+          file("Instagram.lnk", {
+            content: JSON.stringify({
+              type: "url",
+              target: LINKS.instagram,
+              icon: "/icons/globe-map.png",
+              shortcut: true,
+            }),
+            system: false,
+          }),
+          file("Contact.lnk", {
+            content: JSON.stringify({
+              type: "app",
+              target: "contact",
+              icon: "/icons/contact-card.png",
+            }),
+            system: false,
+          }),
+          file("Games.lnk", {
+            content: JSON.stringify({
+              type: "app",
+              target: "games-folder",
+              icon: "/icons/joystick.png",
+            }),
+            system: false,
+          }),
+        ],
+        true,
+      ),
       dir("Temp", [], true),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", [], true),
@@ -337,7 +433,11 @@ double-clicking them in My Computer.
           exe("social.exe", "social"),
           exe("contact.exe", "contact"),
           exe("minesweeper.exe", "minesweeper"),
-          txt("rsnra.ini", "[RSNRA]\nband=RESONAURA\nversion=95\nyear=1996\n", false),
+          txt(
+            "rsnra.ini",
+            "[RSNRA]\nband=RESONAURA\nversion=95\nyear=1996\n",
+            false,
+          ),
           txt(
             "changelog.txt",
             `RSNRA 95 — Changelog
@@ -358,14 +458,26 @@ v4.95.1996
         false,
       ),
       dir("Internet Explorer", [exe("iexplore.exe", "")], true),
-      dir("Plus!", [
-        txt("readme.txt", "Microsoft Plus! for Windows 95\nNot included in this version.\n", true),
-      ], true),
-      dir("Accessories", [
-        exe("mspaint.exe", "paint"),
-        exe("notepad.exe", "notepad"),
-        exe("terminal.exe", "terminal"),
-      ], true),
+      dir(
+        "Plus!",
+        [
+          txt(
+            "readme.txt",
+            "Microsoft Plus! for Windows 95\nNot included in this version.\n",
+            true,
+          ),
+        ],
+        true,
+      ),
+      dir(
+        "Accessories",
+        [
+          exe("mspaint.exe", "paint"),
+          exe("notepad.exe", "notepad"),
+          exe("terminal.exe", "terminal"),
+        ],
+        true,
+      ),
     ],
     true,
   );
@@ -499,7 +611,9 @@ export const useVfsStore = create<VfsState>()(
       },
 
       restoreFromRecycleBin: (originalPath) => {
-        const item = get().recycled.find((r) => r.originalPath === originalPath);
+        const item = get().recycled.find(
+          (r) => r.originalPath === originalPath,
+        );
         if (!item) return false;
         const parts = splitAbs(item.originalPath);
         if (parts.length === 0) return false;
@@ -511,7 +625,8 @@ export const useVfsStore = create<VfsState>()(
         if (!parent || parent.type !== "dir" || !parent.children) {
           // fallback: restore to My Documents
           parent = findNode(get().root, "C:\\My Documents");
-          if (!parent || parent.type !== "dir" || !parent.children) return false;
+          if (!parent || parent.type !== "dir" || !parent.children)
+            return false;
         }
         if (
           parent.children.some(
@@ -528,7 +643,11 @@ export const useVfsStore = create<VfsState>()(
       },
 
       deleteFromRecycleBin: (originalPath) => {
-        set({ recycled: get().recycled.filter((r) => r.originalPath !== originalPath) });
+        set({
+          recycled: get().recycled.filter(
+            (r) => r.originalPath !== originalPath,
+          ),
+        });
       },
 
       emptyRecycleBin: () => {
@@ -565,15 +684,61 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const node = findNode(get().root, srcAbs);
         if (!node) return false;
+        // Refuse to copy a folder into itself or one of its descendants.
+        if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return false;
         if (
           dest.children.some(
             (c) => c.name.toLowerCase() === node.name.toLowerCase(),
           )
         )
           return false;
-        dest.children.push(JSON.parse(JSON.stringify(node)));
+        dest.children.push(cloneNode(node));
         set({ root: { ...get().root } });
         return true;
+      },
+
+      copyTo: (src, destDir) => {
+        const srcAbs = normalizePath(src, get().cwd);
+        const destAbs = normalizePath(destDir, get().cwd);
+        if (!srcAbs || !destAbs) return null;
+        const dest = findNode(get().root, destAbs);
+        if (!dest || dest.type !== "dir" || !dest.children) return null;
+        const node = findNode(get().root, srcAbs);
+        if (!node) return null;
+        if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return null;
+        const newName = uniqueCopyName(dest, node.name);
+        const clone = cloneNode(node);
+        clone.name = newName;
+        dest.children.push(clone);
+        set({ root: { ...get().root } });
+        return newName;
+      },
+
+      moveTo: (src, destDir) => {
+        const srcAbs = normalizePath(src, get().cwd);
+        const destAbs = normalizePath(destDir, get().cwd);
+        if (!srcAbs || !destAbs) return null;
+        const dest = findNode(get().root, destAbs);
+        if (!dest || dest.type !== "dir" || !dest.children) return null;
+        const ref = findParent(get().root, srcAbs);
+        if (!ref || ref.node.system) return null;
+        if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return null;
+        // No-op if dropped back into its own parent.
+        const srcParentAbs = splitAbs(srcAbs).slice(0, -1).join(SEP) || "C:\\";
+        if (srcParentAbs.toLowerCase() === destAbs.toLowerCase()) {
+          return ref.node.name;
+        }
+        const newName = uniqueCopyName(dest, ref.node.name);
+        ref.parent.children = ref.parent.children!.filter(
+          (c) => c !== ref.node,
+        );
+        ref.node.name = newName;
+        dest.children.push(ref.node);
+        set({ root: { ...get().root } });
+        return newName;
       },
 
       rename: (path, newName) => {
@@ -605,7 +770,11 @@ export const useVfsStore = create<VfsState>()(
     {
       name: "rsnra95-vfs",
       version: 3,
-      migrate: () => ({ root: buildInitialTree(), cwd: "C:\\My Documents", recycled: [] }),
+      migrate: () => ({
+        root: buildInitialTree(),
+        cwd: "C:\\My Documents",
+        recycled: [],
+      }),
     },
   ),
 );

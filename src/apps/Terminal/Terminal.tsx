@@ -157,7 +157,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     if (!containerRef.current) return;
 
     const term = new Terminal({
-      fontFamily: '"VT323", "Courier New", monospace',
+      fontFamily: '"VT323", monospace',
       fontSize: 16,
       cursorBlink: true,
       cursorStyle: "bar",

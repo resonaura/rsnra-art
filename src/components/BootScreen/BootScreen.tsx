@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import { useEffect, useState } from "react";
+import styled, { keyframes } from "styled-components";
 
 const blink = keyframes`
   0%, 49% { opacity: 1; }
@@ -12,7 +12,6 @@ const Screen = styled.div`
   z-index: 999999;
   background: #000;
   color: #c0c0c0;
-  font-family: 'Courier New', monospace;
   display: flex;
   flex-direction: column;
   align-items: center;

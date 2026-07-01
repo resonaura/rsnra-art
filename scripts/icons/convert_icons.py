@@ -14,12 +14,14 @@ Usage (via pnpm):
   pnpm icons:get <ico> [name]     fetch + convert <ico> -> public/icons/<name>.png
                                   (name defaults to the ico basename)
   pnpm icons:sync                 regenerate every icon in ICON_MAP below
+  pnpm icons:all [--force]        download + convert every .ico in the repo
 
 Requires Python 3 + Pillow (pip install pillow).
 """
 
 import json
 import os
+import re
 import struct
 import sys
 import urllib.request
@@ -213,7 +215,27 @@ def cmd_sync(_args):
             print(f"FAIL {out_name} <- {ico}: {e}")
 
 
-COMMANDS = {"list": cmd_list, "get": cmd_get, "sync": cmd_sync}
+def cmd_all(args):
+    force = "--force" in args
+    names = repo_icon_names()
+    converted = skipped = failed = 0
+    for ico in names:
+        base = ico[:-4] if ico.endswith(".ico") else ico
+        out_name = re.sub(r"[/:\x00-\x1f\x7f]", "_", base) + ".png"
+        if not force and os.path.exists(os.path.join(OUT_DIR, out_name)):
+            print(f"skip {out_name}")
+            skipped += 1
+            continue
+        try:
+            convert_one(ico, out_name)
+            converted += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"FAIL {out_name} <- {ico}: {e}")
+            failed += 1
+    print(f"\n{converted} converted, {skipped} skipped, {failed} failed")
+
+
+COMMANDS = {"list": cmd_list, "get": cmd_get, "sync": cmd_sync, "all": cmd_all}
 
 
 def main(argv):

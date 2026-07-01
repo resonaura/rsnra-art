@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "icons:list": "python3 scripts/icons/convert_icons.py list",
     "icons:get": "python3 scripts/icons/convert_icons.py get",
-    "icons:sync": "python3 scripts/icons/convert_icons.py sync"
+    "icons:sync": "python3 scripts/icons/convert_icons.py sync",
+    "icons:all": "python3 scripts/icons/convert_icons.py all"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

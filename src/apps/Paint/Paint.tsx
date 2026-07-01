@@ -4,6 +4,8 @@ import styled, { css } from "styled-components";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
+import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 import { DEFAULT_FONT, usePaintFontStore } from "./fontStore";
@@ -540,6 +542,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const [filePath, setFilePath] = useState<string | null>(
     (windowData.path as string) ?? null,
   );
+  const requestClose = useUnsavedStore((s) => s.requestClose);
 
   const mountedRef = useRef(true);
   const baseCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -548,6 +551,14 @@ export function Paint({ windowId }: { windowId: string }) {
   const historyPosRef = useRef(-1);
   const dirtyRef = useRef(false);
   const [historyTick, setHistoryTick] = useState(0);
+
+  // Register an unsaved-changes guard so closing Paint (X button or File ▸
+  // Exit) prompts to save when the canvas has been modified.
+  useUnsavedChanges(windowId, {
+    isDirty: dirtyRef.current,
+    save: () => handleSave(),
+    name: filePath?.split("\\").pop() ?? "untitled.png",
+  });
 
   const [tool, setTool] = useState<ToolId>("pencil");
   const prevToolRef = useRef<ToolId>("pencil");
@@ -1645,27 +1656,27 @@ export function Paint({ windowId }: { windowId: string }) {
 
   const updateTitle = useWindowStore((s) => s.updateTitle);
 
-  const saveToVfs = (absPath: string) => {
+  const saveToVfs = (absPath: string): boolean => {
     const canvas = baseCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return false;
     vfs.writeFile(absPath, canvas.toDataURL("image/png"));
     setFilePath(absPath);
     const fname = absPath.split("\\").pop() ?? "untitled.png";
     updateTitle(windowId, `${fname} - Paint`);
     dirtyRef.current = false;
+    return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async (): Promise<boolean> => {
     if (filePath) {
-      saveToVfs(filePath);
-    } else {
-      handleSaveAsPng();
+      return saveToVfs(filePath);
     }
+    return handleSaveAsPng();
   };
 
-  const handleSaveAsPng = async () => {
+  const handleSaveAsPng = async (): Promise<boolean> => {
     const canvas = baseCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return false;
     const defaultName = filePath
       ? (filePath.split("\\").pop() ?? "untitled.png")
       : "untitled.png";
@@ -1682,8 +1693,8 @@ export function Paint({ windowId }: { windowId: string }) {
         { label: "All Files (*.*)", extensions: [] },
       ],
     });
-    if (!result) return;
-    saveToVfs(result);
+    if (!result) return false;
+    return saveToVfs(result);
   };
 
   const handleOpenImage = async () => {
@@ -1806,7 +1817,7 @@ export function Paint({ windowId }: { windowId: string }) {
         { label: "Save", action: handleSave },
         { label: "Save As PNG...", action: handleSaveAsPng },
         { label: "", divider: true },
-        { label: "Exit", action: () => closeWindow(windowId) },
+        { label: "Exit", action: () => requestClose(windowId) },
       ],
     },
     {

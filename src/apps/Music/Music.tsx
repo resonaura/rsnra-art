@@ -1,6 +1,6 @@
-import styled from 'styled-components';
-import { Button, Frame, GroupBox } from 'react95';
-import { LINKS, BAND_NAME } from '../../data/content';
+import { Button, Frame, GroupBox } from "react95";
+import styled from "styled-components";
+import { BAND_NAME, LINKS } from "../../data/content";
 
 const Layout = styled.div`
   display: flex;
@@ -23,7 +23,6 @@ const Screen = styled(Frame)`
   width: 100%;
   background: #0a2a1a;
   color: #6dff8f;
-  font-family: 'Courier New', monospace;
   padding: 12px;
   font-size: 13px;
   letter-spacing: 0.5px;
@@ -41,7 +40,7 @@ const PlatformGrid = styled.div`
 `;
 
 function openMusic() {
-  window.open(LINKS.music, '_blank', 'noopener,noreferrer');
+  window.open(LINKS.music, "_blank", "noopener,noreferrer");
 }
 
 export function Music() {
@@ -72,7 +71,7 @@ export function Music() {
             ⏭
           </Button>
         </Controls>
-        <Button primary size="lg" onClick={openMusic} style={{ width: '100%' }}>
+        <Button primary size="lg" onClick={openMusic} style={{ width: "100%" }}>
           🎧 Listen on rsnra.link/resonaura
         </Button>
       </Player>
