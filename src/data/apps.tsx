@@ -15,7 +15,7 @@ import { PaintFonts } from "../apps/Paint/PaintFonts";
 import { RecycleBin } from "../apps/RecycleBin/RecycleBin";
 import { Snake } from "../apps/Snake/Snake";
 import { Social } from "../apps/Social/Social";
-import { Terminal } from "../apps/Terminal/Terminal";
+import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
 
 export interface AppDefinition {
@@ -52,6 +52,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     width: 520,
     height: 420,
     noPadding: true,
+    singleInstance: false,
   },
   notepad: {
     id: "notepad",
@@ -92,7 +93,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     id: "terminal",
     title: "MS-DOS Prompt",
     icon: "/icons/terminal.png",
-    component: asComponent(Terminal),
+    component: asComponent(TerminalApp),
     width: 600,
     height: 380,
     minWidth: 360,

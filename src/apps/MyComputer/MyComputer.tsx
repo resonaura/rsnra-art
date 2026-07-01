@@ -1,13 +1,77 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
+import { ContextMenu, CtxItem } from "../../components/ContextMenu";
+import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
-import { ContextMenu, CtxItem } from "../../components/ContextMenu";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
 const MY_COMPUTER = "My Computer";
+
+// Custom MIME type used to identify our own drag payloads (a VFS absolute
+// path) so drops from outside the app are ignored.
+const VFS_DND_TYPE = "application/x-rsnra-vfs-path";
+
+function describeType(node: VfsNode): string {
+  if (node.type === "dir") return "File Folder";
+  if (node.appId) return "Application";
+  const ext = node.name.split(".").pop()?.toLowerCase() ?? "";
+  switch (ext) {
+    case "txt":
+    case "log":
+      return "Text Document";
+    case "ini":
+    case "inf":
+      return "Configuration Settings";
+    case "bmp":
+    case "png":
+      return "Bitmap Image";
+    case "jpg":
+    case "jpeg":
+    case "gif":
+      return "Image";
+    case "bat":
+      return "MS-DOS Batch File";
+    case "dll":
+      return "Application Extension";
+    case "com":
+      return "MS-DOS Application";
+    case "hlp":
+      return "Help File";
+    case "fon":
+      return "Font File";
+    case "lnk":
+      return "Shortcut";
+    default:
+      return ext ? `${ext.toUpperCase()} File` : "File";
+  }
+}
+
+function formatSize(node: VfsNode): string {
+  if (node.type === "dir") return "";
+  const bytes = node.content?.length ?? (node.appId ? 32768 : 0);
+  return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+}
+
+function formatDate(node: VfsNode): string {
+  const d = new Date(node.created);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  const hh = String(d.getHours() % 12 || 12).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  const ampm = d.getHours() >= 12 ? "PM" : "AM";
+  return `${mm}/${dd}/${yy} ${hh}:${mi} ${ampm}`;
+}
+
+/** Is `descendantAbs` the same path as, or nested inside, `ancestorAbs`? */
+function isSameOrDescendant(descendantAbs: string, ancestorAbs: string): boolean {
+  const a = descendantAbs.toLowerCase();
+  const b = ancestorAbs.toLowerCase();
+  return a === b || a.startsWith(b.replace(/\\+$/, "") + "\\");
+}
 
 const raised = css`
   border: 2px solid;
@@ -119,7 +183,7 @@ const AddressField = styled(Frame)`
   text-overflow: ellipsis;
 `;
 
-const IconGrid = styled.div`
+const IconGrid = styled(ScrollArea)`
   flex: 1;
   background: white;
   border: 2px solid;
@@ -127,12 +191,6 @@ const IconGrid = styled.div`
     ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   margin: 0 8px 8px;
-  padding: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 4px;
-  overflow: auto;
 `;
 
 const IconItem = styled.button<{ $selected?: boolean }>`
@@ -176,6 +234,146 @@ const StatusBarEl = styled(Frame)`
   font-size: 11px;
 `;
 
+// ── view-mode rendering ──────────────────────────────────────────────────
+
+type ViewMode = "large" | "small" | "list" | "details";
+
+const rowBase = css`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px dotted transparent;
+  cursor: default;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  width: 100%;
+`;
+
+const SmallGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px;
+`;
+
+const SmallRow = styled.button<{ $selected?: boolean; $dragOver?: boolean }>`
+  ${rowBase}
+  width: 190px;
+  background: ${({ $selected, $dragOver, theme }) =>
+    $dragOver
+      ? theme.hoverBackground
+      : $selected
+        ? theme.hoverBackground
+        : "transparent"};
+  border: 1px dotted
+    ${({ $selected, $dragOver }) => ($selected || $dragOver ? "white" : "transparent")};
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `1px solid ${theme.headerBackground}` : "none"};
+  color: ${({ $selected, theme }) =>
+    $selected ? theme.headerText : theme.canvasText};
+  img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+`;
+
+const ListColumns = styled.div`
+  columns: 220px;
+  column-gap: 0;
+  width: 100%;
+`;
+
+const DetailsTable = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-size: 11px;
+`;
+
+const DetailsHeaderRow = styled.div`
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: ${({ theme }) => theme.material};
+  border-bottom: 1px solid ${({ theme }) => theme.borderDark};
+  padding: 3px 6px;
+  font-weight: bold;
+`;
+
+const DetailsRow = styled.button<{ $selected?: boolean; $dragOver?: boolean }>`
+  ${rowBase}
+  background: ${({ $selected, $dragOver, theme }) =>
+    $dragOver
+      ? theme.hoverBackground
+      : $selected
+        ? theme.hoverBackground
+        : "transparent"};
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `1px solid ${theme.headerBackground}` : "none"};
+  color: ${({ $selected, theme }) =>
+    $selected ? theme.headerText : theme.canvasText};
+  img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+`;
+
+const ColName = styled.span`
+  flex: 2.2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+const ColSize = styled.span`
+  flex: 1;
+  text-align: right;
+  padding-right: 10px;
+  white-space: nowrap;
+`;
+const ColType = styled.span`
+  flex: 1.2;
+  white-space: nowrap;
+`;
+const ColDate = styled.span`
+  flex: 1.6;
+  white-space: nowrap;
+`;
+
+const LockBadge = styled.svg`
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  pointer-events: none;
+`;
+
+function LockGlyph() {
+  return (
+    <LockBadge
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      shapeRendering="crispEdges"
+      aria-hidden
+    >
+      <path
+        d="M2 4 L2 9 L8 9 L8 4 Z M3 4 L3 2 A2 2 0 0 1 7 2 L7 4"
+        fill="#ffe680"
+        stroke="#000"
+        strokeWidth="1"
+      />
+    </LockBadge>
+  );
+}
 
 interface Drive {
   label: string;
@@ -230,6 +428,8 @@ interface CtxState {
 
 export function MyComputer({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const updateTitle = useWindowStore((s) => s.updateTitle);
+  const updateIcon = useWindowStore((s) => s.updateIcon);
   const vfs = useVfsStore();
   const [path, setPath] = useState<string>(MY_COMPUTER);
   const [selected, setSelected] = useState<string | null>(null);
@@ -237,6 +437,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>("large");
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const isRoot = path === MY_COMPUTER;
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
@@ -247,6 +449,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
+
+  // Sync the window title + icon to the current path — just like real Win95 Explorer
+  useEffect(() => {
+    updateTitle(windowId, isRoot ? MY_COMPUTER : path);
+    const icon = isRoot
+      ? "/icons/computer.png"
+      : isDriveRoot
+        ? (DRIVES.find((d) => d.target === path)?.icon ??
+          "/icons/disk-drive.png")
+        : "/icons/folder-open.png";
+    updateIcon(windowId, icon);
+  }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon]);
 
   const refresh = () => setPath((p) => p); // no-op; VFS mutations re-render via root swap
   void refresh;
@@ -311,6 +525,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
     vfs.mkdir(vfs.resolvePath(name, path)!);
     refresh();
     setSelected(name);
+    setRenaming(name);
+    setRenameVal(name);
   };
 
   const newTextFile = () => {
@@ -323,7 +539,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
     vfs.writeFile(abs, "");
     refresh();
     setSelected(name);
-    openApp("notepad", { title: `${name} - Notepad`, data: { path: abs } });
+    setRenaming(name);
+    setRenameVal(name);
   };
 
   const deleteNode = (node: VfsNode) => {
@@ -341,6 +558,67 @@ export function MyComputer({ windowId }: { windowId: string }) {
     }
     setRenaming(null);
     refresh();
+  };
+
+  // ── drag & drop ────────────────────────────────────────────────────────
+  // System items (and anything else the user didn't create) are protected:
+  // not draggable, and vfs.move()/rename()/remove() already refuse to touch
+  // them, so a drop targeting one is a guaranteed no-op we short-circuit here.
+  const handleDragStart = (node: VfsNode) => (e: React.DragEvent) => {
+    if (node.system) {
+      e.preventDefault();
+      return;
+    }
+    const abs = vfs.resolvePath(node.name, path);
+    if (!abs) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData(VFS_DND_TYPE, abs);
+    e.dataTransfer.setData("text/plain", abs);
+  };
+
+  const acceptsDrop = (e: React.DragEvent) =>
+    e.dataTransfer.types.includes(VFS_DND_TYPE);
+
+  const handleDropOnDir = (destAbs: string) => (e: React.DragEvent) => {
+    if (!acceptsDrop(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverKey(null);
+    const srcAbs = e.dataTransfer.getData(VFS_DND_TYPE);
+    if (!srcAbs || isSameOrDescendant(destAbs, srcAbs)) return;
+    if (vfs.move(srcAbs, destAbs)) {
+      refresh();
+      setSelected(null);
+    }
+  };
+
+  const handleDragOverDir = (key: string) => (e: React.DragEvent) => {
+    if (!acceptsDrop(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverKey !== key) setDragOverKey(key);
+  };
+
+  const handleDragLeaveDir = (key: string) => () => {
+    setDragOverKey((k) => (k === key ? null : k));
+  };
+
+  // Dropping on the folder's own background moves the item into the
+  // currently-open folder (useful when the source is a different subfolder).
+  const handleDropOnBackground = (e: React.DragEvent) => {
+    if (isRoot || driveNotReady || !acceptsDrop(e)) return;
+    e.preventDefault();
+    const srcAbs = e.dataTransfer.getData(VFS_DND_TYPE);
+    if (!srcAbs) return;
+    const parent = srcAbs.slice(0, srcAbs.lastIndexOf("\\")) || "C:\\";
+    if (parent.toLowerCase() === path.toLowerCase()) return;
+    if (vfs.move(srcAbs, path)) {
+      refresh();
+      setSelected(null);
+    }
   };
 
   const objectCount = isRoot ? DRIVES.length : sorted.length;
@@ -446,10 +724,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
     {
       label: "View",
       items: [
-        { label: "Large Icons", disabled: true },
-        { label: "Small Icons", disabled: true },
-        { label: "List", disabled: true },
-        { label: "Details", disabled: true },
+        {
+          label: `${view === "large" ? "✓" : " "} Large Icons`,
+          action: () => setView("large"),
+        },
+        {
+          label: `${view === "small" ? "✓" : " "} Small Icons`,
+          action: () => setView("small"),
+        },
+        {
+          label: `${view === "list" ? "✓" : " "} List`,
+          action: () => setView("list"),
+        },
+        {
+          label: `${view === "details" ? "✓" : " "} Details`,
+          action: () => setView("details"),
+        },
         { label: "", divider: true },
         { label: "Refresh", action: refresh },
       ],
@@ -502,35 +792,115 @@ export function MyComputer({ windowId }: { windowId: string }) {
     </MenuBarRow>
   );
 
+  /** Shared drag/drop + selection wiring for one real VFS entry, regardless
+   *  of which view mode renders it. */
+  const nodeHandlers = (node: VfsNode) => {
+    const abs = vfs.resolvePath(node.name, path);
+    const isDropTarget = node.type === "dir" && !!abs;
+    return {
+      draggable: !node.system,
+      onDragStart: handleDragStart(node),
+      onDragOver: isDropTarget ? handleDragOverDir(node.name) : undefined,
+      onDragLeave: isDropTarget ? handleDragLeaveDir(node.name) : undefined,
+      onDrop: isDropTarget ? handleDropOnDir(abs!) : undefined,
+      title: node.system
+        ? "System item — protected, cannot be moved, renamed, or deleted"
+        : undefined,
+      onClick: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelected(node.name);
+      },
+      onDoubleClick: () => {
+        if (renaming === node.name) return;
+        openNode(node);
+      },
+      onContextMenu: (e: React.MouseEvent) => openCtx(e, node),
+    };
+  };
+
+  const renameBox = (width?: number) => (
+    <RenameInput
+      autoFocus
+      style={width ? { width } : undefined}
+      value={renameVal}
+      onChange={(e) => setRenameVal(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onBlur={commitRename}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitRename();
+        if (e.key === "Escape") setRenaming(null);
+      }}
+    />
+  );
+
   const renderIcon = (node: VfsNode): ReactNode => (
     <IconItem
       key={node.name}
       $selected={selected === node.name}
       tabIndex={0}
-      onClick={(e) => {
-        e.stopPropagation();
-        setSelected(node.name);
+      {...nodeHandlers(node)}
+      style={{
+        opacity: node.system ? 0.85 : 1,
+        outline:
+          dragOverKey === node.name ? "1px solid #fff" : undefined,
       }}
-      onDoubleClick={() => openNode(node)}
-      onContextMenu={(e) => openCtx(e, node)}
     >
-      <img src={iconForNode(node)} alt="" draggable={false} />
-      {renaming === node.name ? (
-        <RenameInput
-          autoFocus
-          value={renameVal}
-          onChange={(e) => setRenameVal(e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRename();
-            if (e.key === "Escape") setRenaming(null);
-          }}
-        />
-      ) : (
-        node.name
-      )}
+      <div style={{ position: "relative" }}>
+        <img src={iconForNode(node)} alt="" draggable={false} />
+        {node.system && <LockGlyph />}
+      </div>
+      {renaming === node.name ? renameBox() : node.name}
     </IconItem>
+  );
+
+  const renderSmallRow = (node: VfsNode): ReactNode => (
+    <SmallRow
+      key={node.name}
+      $selected={selected === node.name}
+      $dragOver={dragOverKey === node.name}
+      tabIndex={0}
+      {...nodeHandlers(node)}
+      style={{ opacity: node.system ? 0.85 : 1 }}
+    >
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <img src={iconForNode(node)} alt="" draggable={false} />
+        {node.system && <LockGlyph />}
+      </div>
+      <span
+        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {renaming === node.name ? renameBox(140) : node.name}
+      </span>
+    </SmallRow>
+  );
+
+  const renderDetailsRow = (node: VfsNode): ReactNode => (
+    <DetailsRow
+      key={node.name}
+      $selected={selected === node.name}
+      $dragOver={dragOverKey === node.name}
+      tabIndex={0}
+      {...nodeHandlers(node)}
+      style={{ opacity: node.system ? 0.85 : 1 }}
+    >
+      <ColName>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <img src={iconForNode(node)} alt="" draggable={false} />
+          {node.system && <LockGlyph />}
+        </div>
+        {renaming === node.name ? (
+          renameBox(140)
+        ) : (
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {node.name}
+          </span>
+        )}
+      </ColName>
+      <ColSize>{formatSize(node)}</ColSize>
+      <ColType>{describeType(node)}</ColType>
+      <ColDate>{formatDate(node)}</ColDate>
+    </DetailsRow>
   );
 
   return (
@@ -558,25 +928,76 @@ export function MyComputer({ windowId }: { windowId: string }) {
           setSelected(null);
           setOpenMenu(null);
         }}
+        onDragOver={(e) => {
+          if (isRoot || driveNotReady || !acceptsDrop(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={handleDropOnBackground}
+        contentStyle={
+          isRoot || view === "large"
+            ? {
+                padding: 10,
+                display: "flex",
+                flexWrap: "wrap",
+                alignContent: "flex-start",
+                gap: 4,
+              }
+            : { padding: 10, width: "100%" }
+        }
       >
-        {isRoot
-          ? DRIVES.map((d) => (
-              <IconItem
-                key={d.label}
-                $selected={selected === d.label}
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelected(d.label);
-                }}
-                onDoubleClick={() => enter(d)}
-                onContextMenu={(e) => openCtx(e, null)}
-              >
-                <img src={d.icon} alt="" draggable={false} />
-                {d.label}
-              </IconItem>
-            ))
-          : sorted.map(renderIcon)}
+        {isRoot ? (
+          DRIVES.map((d) => (
+            <IconItem
+              key={d.label}
+              $selected={selected === d.label}
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelected(d.label);
+              }}
+              onDoubleClick={() => enter(d)}
+              onContextMenu={(e) => openCtx(e, null)}
+              onDragOver={
+                d.kind === "drive" && !d.notReady
+                  ? handleDragOverDir(d.label)
+                  : undefined
+              }
+              onDragLeave={
+                d.kind === "drive" && !d.notReady
+                  ? handleDragLeaveDir(d.label)
+                  : undefined
+              }
+              onDrop={
+                d.kind === "drive" && !d.notReady
+                  ? handleDropOnDir(d.target)
+                  : undefined
+              }
+              style={{
+                outline: dragOverKey === d.label ? "1px solid #fff" : undefined,
+              }}
+            >
+              <img src={d.icon} alt="" draggable={false} />
+              {d.label}
+            </IconItem>
+          ))
+        ) : view === "large" ? (
+          sorted.map(renderIcon)
+        ) : view === "small" ? (
+          <SmallGrid>{sorted.map(renderSmallRow)}</SmallGrid>
+        ) : view === "list" ? (
+          <ListColumns>{sorted.map(renderSmallRow)}</ListColumns>
+        ) : (
+          <DetailsTable>
+            <DetailsHeaderRow>
+              <ColName>Name</ColName>
+              <ColSize>Size</ColSize>
+              <ColType>Type</ColType>
+              <ColDate>Modified</ColDate>
+            </DetailsHeaderRow>
+            {sorted.map(renderDetailsRow)}
+          </DetailsTable>
+        )}
         {!isRoot && sorted.length === 0 && (
           <div style={{ fontSize: 12, padding: 16, color: "#888" }}>
             {driveNotReady
@@ -587,7 +1008,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
       </IconGrid>
 
       <StatusBarEl variant="status">
-        {objectCount} object(s){selected ? `    ${selected}` : ""}
+        {objectCount} object(s)
+        {selected ? `\u00a0\u00a0\u00a0\u00a0${selected}` : ""}
+        {"\u00a0\u00a0\u00a0\u00a0"}
+        {path}
       </StatusBarEl>
 
       {ctx && (

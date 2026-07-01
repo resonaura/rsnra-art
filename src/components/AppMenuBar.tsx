@@ -14,6 +14,7 @@ export const MenuBarRow = styled.div`
   height: 22px;
   flex-shrink: 0;
   font-size: 12px;
+  background: ${({ theme }) => theme.material};
   border-bottom: 1px solid ${({ theme }) => theme.borderDark};
 `;
 

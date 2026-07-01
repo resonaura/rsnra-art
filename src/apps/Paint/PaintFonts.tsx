@@ -78,6 +78,7 @@ export function PaintFonts({ windowId }: { windowId: string }) {
         options={FONT_FAMILIES.map((f) => ({ value: f, label: f }))}
         onChange={(opt) => setFont(paintWindowId, { family: opt.value })}
         aria-label="Font Family"
+        style={{ zoom: 0.65 }}
       />
       <TextInput
         type="number"
@@ -91,6 +92,7 @@ export function PaintFonts({ windowId }: { windowId: string }) {
           })
         }
         aria-label="Font Size"
+        style={{ zoom: 0.65 }}
       />
       <Toggle
         $active={!!font?.bold}

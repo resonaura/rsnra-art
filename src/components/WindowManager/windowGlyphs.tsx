@@ -45,6 +45,7 @@ export function CloseGlyph() {
       <path
         id="picto-close"
         d="M4 4h2v1h1v1h2v-1h1v-1h2v1h-1v1h-1v1h-1v1h1v1h1v1h1v1h-2v-1h-1v-1h-2v1h-1v1h-2v-1h1v-1h1v-1h1v-1h-1v-1h-1v-1h-1z"
+        fill="currentColor"
       ></path>
     </svg>
   );

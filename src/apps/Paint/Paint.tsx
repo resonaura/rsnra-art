@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, TextInput } from "react95";
 import styled, { css } from "styled-components";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
+import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
@@ -219,12 +221,10 @@ const ChooserCell = styled.button<{ $chosen: boolean; $gray?: boolean }>`
 // Sprite cell: shows a region of a PNG sprite via background-position, optionally
 // inverted (for magnification/airbrush, jspaint inverts the image when chosen).
 
-const CanvasScroll = styled.div`
+const CanvasScroll = styled(ScrollArea)`
   flex: 1;
-  overflow: auto;
   background: ${CHECKER} repeat;
   background-size: 8px;
-  padding: 8px;
 `;
 
 const CanvasStack = styled.div`
@@ -536,6 +536,7 @@ export function Paint({ windowId }: { windowId: string }) {
   );
   const windowData = useWindowData(windowId);
   const vfs = useVfsStore();
+  const { showFileDialog, dialog: fileDialog } = useFileDialog();
   const [filePath, setFilePath] = useState<string | null>(
     (windowData.path as string) ?? null,
   );
@@ -1662,23 +1663,62 @@ export function Paint({ windowId }: { windowId: string }) {
     }
   };
 
-  const handleSaveAsPng = () => {
+  const handleSaveAsPng = async () => {
     const canvas = baseCanvasRef.current;
     if (!canvas) return;
     const defaultName = filePath
       ? (filePath.split("\\").pop() ?? "untitled.png")
       : "untitled.png";
-    const input = window.prompt(
-      "Save picture to (virtual folder path):",
-      `C:\\My Documents\\${defaultName}`,
-    );
-    if (!input) return;
-    const abs = vfs.resolvePath(input);
-    if (!abs || !abs.toLowerCase().endsWith(".png")) {
-      window.alert("Please enter a full path ending in .png under C:\\");
-      return;
-    }
-    saveToVfs(abs);
+    const dir = filePath
+      ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
+      : "C:\\My Documents\\";
+    const result = await showFileDialog({
+      mode: "save",
+      title: "Save As",
+      initialDir: dir,
+      initialFileName: defaultName,
+      filters: [
+        { label: "PNG Image (*.png)", extensions: ["png"] },
+        { label: "All Files (*.*)", extensions: [] },
+      ],
+    });
+    if (!result) return;
+    saveToVfs(result);
+  };
+
+  const handleOpenImage = async () => {
+    const dir = filePath
+      ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
+      : "C:\\My Documents\\";
+    const result = await showFileDialog({
+      mode: "open",
+      title: "Open",
+      initialDir: dir,
+      filters: [
+        { label: "PNG Image (*.png)", extensions: ["png"] },
+        { label: "All Files (*.*)", extensions: [] },
+      ],
+    });
+    if (!result) return;
+    const content = vfs.read(result);
+    if (!content || !content.startsWith("data:image/")) return;
+    const img = new Image();
+    img.onload = () => {
+      const ctx = getBaseCtx();
+      if (!ctx) return;
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+      historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
+      historyPosRef.current = 0;
+      dirtyRef.current = false;
+      setHistoryTick((t) => t + 1);
+    };
+    img.src = content;
+    setFilePath(result);
+    const fname = result.split("\\").pop() ?? "untitled.png";
+    updateTitle(windowId, `${fname} - Paint`);
   };
 
   const flipHorizontal = () => {
@@ -1762,6 +1802,7 @@ export function Paint({ windowId }: { windowId: string }) {
       label: "File",
       items: [
         { label: "New", action: requestNew },
+        { label: "Open...", action: handleOpenImage },
         { label: "Save", action: handleSave },
         { label: "Save As PNG...", action: handleSaveAsPng },
         { label: "", divider: true },
@@ -1790,16 +1831,27 @@ export function Paint({ windowId }: { windowId: string }) {
         { label: "Zoom 400%", action: () => setZoom(4) },
         { label: "Zoom 800%", action: () => setZoom(8) },
         { label: "", divider: true },
-        { label: "Zoom In", action: () => {
-          const idx = MAGNIFICATIONS.indexOf(zoom as (typeof MAGNIFICATIONS)[number]);
-          const next = MAGNIFICATIONS[Math.min(MAGNIFICATIONS.length - 1, idx + 1)];
-          if (next !== undefined) setZoom(next);
-        }},
-        { label: "Zoom Out", action: () => {
-          const idx = MAGNIFICATIONS.indexOf(zoom as (typeof MAGNIFICATIONS)[number]);
-          const next = MAGNIFICATIONS[Math.max(0, idx - 1)];
-          if (next !== undefined) setZoom(next);
-        }},
+        {
+          label: "Zoom In",
+          action: () => {
+            const idx = MAGNIFICATIONS.indexOf(
+              zoom as (typeof MAGNIFICATIONS)[number],
+            );
+            const next =
+              MAGNIFICATIONS[Math.min(MAGNIFICATIONS.length - 1, idx + 1)];
+            if (next !== undefined) setZoom(next);
+          },
+        },
+        {
+          label: "Zoom Out",
+          action: () => {
+            const idx = MAGNIFICATIONS.indexOf(
+              zoom as (typeof MAGNIFICATIONS)[number],
+            );
+            const next = MAGNIFICATIONS[Math.max(0, idx - 1)];
+            if (next !== undefined) setZoom(next);
+          },
+        },
       ],
     },
     {
@@ -2249,7 +2301,7 @@ export function Paint({ windowId }: { windowId: string }) {
           <OptionsBox>{showOptions}</OptionsBox>
         </ToolboxCol>
 
-        <CanvasScroll>
+        <CanvasScroll contentStyle={{ padding: 8 }}>
           <CanvasStack
             style={{ width: CANVAS_W * zoom, height: CANVAS_H * zoom }}
           >
@@ -2422,6 +2474,7 @@ export function Paint({ windowId }: { windowId: string }) {
           </DialogBox>
         </Overlay>
       )}
+      {fileDialog}
     </Root>
   );
 }

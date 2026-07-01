@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { Window, WindowHeader, WindowContent, Button, TextInput } from 'react95';
-import { useWindowStore } from '../../store/windowStore';
-import { openApp } from '../../data/apps';
-import type { AppId } from '../../types/window';
+import { useState } from "react";
+import {
+  Button,
+  TextInput,
+  Window,
+  WindowContent,
+  WindowHeader,
+} from "react95";
+import styled from "styled-components";
+import { openApp } from "../../data/apps";
+import { useWindowStore } from "../../store/windowStore";
+import type { AppId } from "../../types/window";
 
 const Overlay = styled.div`
   position: fixed;
@@ -45,34 +51,34 @@ const ErrorText = styled.p`
 `;
 
 const RUN_MAP: Record<string, AppId> = {
-  terminal: 'terminal',
-  notepad: 'notepad',
-  'my-computer': 'my-computer',
-  computer: 'my-computer',
-  music: 'music',
-  social: 'social',
-  contact: 'contact',
-  games: 'games-folder',
-  minesweeper: 'minesweeper',
-  snake: 'snake',
-  help: 'help',
-  control: 'control-panel',
-  'control-panel': 'control-panel',
-  'recycle-bin': 'recycle-bin',
-  bin: 'recycle-bin',
+  terminal: "terminal",
+  notepad: "notepad",
+  "my-computer": "my-computer",
+  computer: "my-computer",
+  music: "music",
+  social: "social",
+  contact: "contact",
+  games: "games-folder",
+  minesweeper: "minesweeper",
+  snake: "snake",
+  help: "help",
+  control: "control-panel",
+  "control-panel": "control-panel",
+  "recycle-bin": "recycle-bin",
+  bin: "recycle-bin",
 };
 
 export function RunDialog() {
   const open = useWindowStore((s) => s.runDialogOpen);
   const setOpen = useWindowStore((s) => s.setRunDialogOpen);
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
   const close = () => {
     setOpen(false);
-    setValue('');
+    setValue("");
     setError(null);
   };
 
@@ -80,7 +86,9 @@ export function RunDialog() {
     const key = value.trim().toLowerCase();
     const target = RUN_MAP[key];
     if (!target) {
-      setError(`Cannot find "${value}". Try: terminal, notepad, music, games, contact...`);
+      setError(
+        `Cannot find "${value}". Try: terminal, notepad, music, games, contact...`,
+      );
       return;
     }
     openApp(target);
@@ -97,7 +105,7 @@ export function RunDialog() {
           <Row>
             <img src="/icons/msdos.png" alt="" />
             <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 12 }}>
+              <p style={{ margin: "0 0 8px", fontSize: 12 }}>
                 Type the name of an app, and RSNRA 95 will open it for you.
               </p>
               <TextInput
@@ -110,17 +118,23 @@ export function RunDialog() {
                   setError(null);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') submit();
+                  if (e.key === "Enter") submit();
                 }}
               />
             </div>
           </Row>
           {error && <ErrorText>{error}</ErrorText>}
           <Footer>
-            <Button onClick={submit} primary>
+            <Button
+              style={{ zoom: 0.8, width: "80px" }}
+              onClick={submit}
+              primary
+            >
               OK
             </Button>
-            <Button onClick={close}>Cancel</Button>
+            <Button style={{ zoom: 0.8, width: "80px" }} onClick={close}>
+              Cancel
+            </Button>
           </Footer>
         </WindowContent>
       </Dialog>

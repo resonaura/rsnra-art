@@ -1,8 +1,15 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { Window, WindowHeader, WindowContent, Button, Separator } from 'react95';
-import { useWindowStore } from '../../store/windowStore';
-import { requestShutdown } from '../../data/startMenu';
+import { useState } from "react";
+import {
+  Button,
+  Separator,
+  Window,
+  WindowContent,
+  WindowHeader,
+} from "react95";
+import styled from "styled-components";
+import { ScrollArea } from "../../components/ScrollArea";
+import { requestShutdown } from "../../data/startMenu";
+import { useWindowStore } from "../../store/windowStore";
 
 const Overlay = styled.div`
   position: fixed;
@@ -24,13 +31,13 @@ const Intro = styled.p`
   margin: 0 0 10px;
 `;
 
-const ListFrame = styled.div`
+const ListFrame = styled(ScrollArea)`
   background: white;
   border: 2px solid;
-  border-color: ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest}
+  border-color: ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   max-height: 180px;
-  overflow-y: auto;
   margin-bottom: 14px;
 `;
 
@@ -41,8 +48,10 @@ const Row = styled.div<{ $selected: boolean }>`
   padding: 5px 8px;
   font-size: 12px;
   cursor: pointer;
-  background: ${({ $selected, theme }) => ($selected ? theme.hoverBackground : 'transparent')};
-  color: ${({ $selected, theme }) => ($selected ? theme.headerText : theme.canvasText)};
+  background: ${({ $selected, theme }) =>
+    $selected ? theme.hoverBackground : "transparent"};
+  color: ${({ $selected, theme }) =>
+    $selected ? theme.headerText : theme.canvasText};
 
   img {
     width: 16px;
@@ -82,7 +91,7 @@ export function CloseProgramDialog() {
             RSNRA 95 is not responding to your... actually, it's fine. Here's
             what's currently running:
           </Intro>
-          <ListFrame>
+          <ListFrame orientation="vertical">
             <Row $selected={false}>
               <img src="/icons/computer.png" alt="" />
               RSNRA 95 Desktop (system)
@@ -96,11 +105,11 @@ export function CloseProgramDialog() {
               >
                 <img src={w.icon} alt="" />
                 {w.title}
-                {w.isMinimized ? ' (minimized)' : ''}
+                {w.isMinimized ? " (minimized)" : ""}
               </Row>
             ))}
             {windows.length === 0 && (
-              <Row $selected={false} style={{ color: '#888' }}>
+              <Row $selected={false} style={{ color: "#888" }}>
                 No other programs are running.
               </Row>
             )}

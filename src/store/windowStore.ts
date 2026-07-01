@@ -32,6 +32,7 @@ interface WindowStoreState {
   toggleMinimizeFromTaskbar: (id: string) => void;
   updateBounds: (id: string, bounds: Partial<Bounds>) => void;
   updateTitle: (id: string, title: string) => void;
+  updateIcon: (id: string, icon: string) => void;
   setStartMenuOpen: (open: boolean) => void;
   toggleStartMenu: () => void;
   setCloseProgramOpen: (open: boolean) => void;
@@ -69,7 +70,9 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
                   data: config.data ?? w.data,
                   title: config.title,
                 }
-              : w.isFocused ? { ...w, isFocused: false } : w,
+              : w.isFocused
+                ? { ...w, isFocused: false }
+                : w,
           ),
         });
         return existingId;
@@ -94,7 +97,10 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     };
     set({
       topZIndex: nextZ,
-      windows: [...windows.map((w) => (w.isFocused ? { ...w, isFocused: false } : w)), instance],
+      windows: [
+        ...windows.map((w) => (w.isFocused ? { ...w, isFocused: false } : w)),
+        instance,
+      ],
     });
     return id;
   },
@@ -157,7 +163,9 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
         windows: state.windows.map((w) =>
           w.id === id
             ? { ...w, isFocused: true, isMinimized: false, zIndex: nextZ }
-            : w.isFocused ? { ...w, isFocused: false } : w,
+            : w.isFocused
+              ? { ...w, isFocused: false }
+              : w,
         ),
       };
     });
@@ -194,6 +202,10 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   updateTitle: (id, title) =>
     set((state) => ({
       windows: state.windows.map((w) => (w.id === id ? { ...w, title } : w)),
+    })),
+  updateIcon: (id, icon) =>
+    set((state) => ({
+      windows: state.windows.map((w) => (w.id === id ? { ...w, icon } : w)),
     })),
 }));
 

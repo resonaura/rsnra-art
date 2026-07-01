@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { AppMenuBar } from '../../components/AppMenuBar';
-import { ContextMenu, CtxItem } from '../../components/ContextMenu';
-import { useWindowStore } from '../../store/windowStore';
-import { useVfsStore, type RecycledItem } from '../../store/vfsStore';
+import { useState } from "react";
+import styled from "styled-components";
+import { AppMenuBar } from "../../components/AppMenuBar";
+import { ContextMenu, CtxItem } from "../../components/ContextMenu";
+import { ScrollArea } from "../../components/ScrollArea";
+import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
+import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
   display: flex;
@@ -12,16 +13,14 @@ const Layout = styled.div`
   width: 100%;
 `;
 
-const Body = styled.div`
+const Body = styled(ScrollArea)`
   flex: 1;
   background: white;
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   margin: 4px 8px;
-  overflow: auto;
   font-size: 12px;
 `;
 
@@ -57,13 +56,13 @@ const Th = styled.th`
 
 const Tr = styled.tr<{ $selected?: boolean }>`
   background: ${({ $selected, theme }) =>
-    $selected ? theme.hoverBackground : 'transparent'};
+    $selected ? theme.hoverBackground : "transparent"};
   color: ${({ $selected, theme }) =>
     $selected ? theme.headerText : theme.canvasText};
   cursor: default;
   &:hover {
     background: ${({ $selected, theme }) =>
-      $selected ? theme.hoverBackground : '#e8e8e8'};
+      $selected ? theme.hoverBackground : "#e8e8e8"};
   }
 `;
 
@@ -76,29 +75,29 @@ const Td = styled.td`
   max-width: 200px;
 `;
 
-
 const StatusBar = styled.div`
   flex-shrink: 0;
   padding: 3px 8px;
   font-size: 11px;
   border: 1px solid;
-  border-color: ${({ theme }) => theme.borderDark} ${({ theme }) => theme.borderLightest}
+  border-color: ${({ theme }) => theme.borderDark}
+    ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDark};
   margin: 0 8px 6px;
 `;
 
 function formatDate(ts: number) {
-  return new Date(ts).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 function shortPath(p: string) {
-  const parts = p.split('\\');
+  const parts = p.split("\\");
   parts.pop(); // remove filename
-  return parts.join('\\') || 'C:\\';
+  return parts.join("\\") || "C:\\";
 }
 
 interface CtxState {
@@ -121,50 +120,54 @@ export function RecycleBin({ windowId }: { windowId: string }) {
 
   const menus = [
     {
-      label: 'File',
+      label: "File",
       items: [
         {
-          label: 'Empty Recycle Bin',
+          label: "Empty Recycle Bin",
           disabled: isEmpty,
           action: () => {
             emptyRecycleBin();
             setSelected(null);
           },
         },
-        { label: '', divider: true },
-        { label: 'Close', action: () => closeWindow(windowId) },
+        { label: "", divider: true },
+        { label: "Close", action: () => closeWindow(windowId) },
       ],
     },
     {
-      label: 'Edit',
+      label: "Edit",
       items: [
         {
-          label: 'Restore All',
+          label: "Restore All",
           disabled: isEmpty,
           action: () => {
             recycled.forEach((r) => restoreFromRecycleBin(r.originalPath));
             setSelected(null);
           },
         },
-        { label: '', divider: true },
+        { label: "", divider: true },
         {
-          label: 'Select All',
+          label: "Select All",
           disabled: isEmpty,
           action: () =>
-            setSelected(recycled.length ? recycled[recycled.length - 1].originalPath : null),
+            setSelected(
+              recycled.length
+                ? recycled[recycled.length - 1].originalPath
+                : null,
+            ),
         },
       ],
     },
     {
-      label: 'View',
+      label: "View",
       items: [
-        { label: 'Large Icons', disabled: true },
-        { label: 'Details', disabled: true },
+        { label: "Large Icons", disabled: true },
+        { label: "Details", disabled: true },
       ],
     },
     {
-      label: 'Help',
-      items: [{ label: 'About Recycle Bin', disabled: true }],
+      label: "Help",
+      items: [{ label: "About Recycle Bin", disabled: true }],
     },
   ];
 
@@ -188,7 +191,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
               alt=""
               width={48}
               height={48}
-              style={{ imageRendering: 'pixelated' }}
+              style={{ imageRendering: "pixelated" }}
             />
             <p style={{ margin: 0 }}>The Recycle Bin is empty.</p>
           </EmptyState>
@@ -216,17 +219,27 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                 >
                   <Td>
                     <img
-                      src={item.node.type === 'dir' ? '/icons/folder.png' : '/icons/file-txt.png'}
+                      src={
+                        item.node.type === "dir"
+                          ? "/icons/folder.png"
+                          : "/icons/file-txt.png"
+                      }
                       alt=""
                       width={16}
                       height={16}
-                      style={{ imageRendering: 'pixelated', verticalAlign: 'middle', marginRight: 6 }}
+                      style={{
+                        imageRendering: "pixelated",
+                        verticalAlign: "middle",
+                        marginRight: 6,
+                      }}
                     />
                     {item.node.name}
                   </Td>
-                  <Td title={shortPath(item.originalPath)}>{shortPath(item.originalPath)}</Td>
+                  <Td title={shortPath(item.originalPath)}>
+                    {shortPath(item.originalPath)}
+                  </Td>
                   <Td>{formatDate(item.deletedAt)}</Td>
-                  <Td>{item.node.type === 'dir' ? 'Folder' : 'File'}</Td>
+                  <Td>{item.node.type === "dir" ? "Folder" : "File"}</Td>
                 </Tr>
               ))}
             </tbody>
@@ -234,7 +247,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         )}
       </Body>
       <StatusBar>
-        {isEmpty ? '0 object(s)' : `${recycled.length} object(s)`}
+        {isEmpty ? "0 object(s)" : `${recycled.length} object(s)`}
       </StatusBar>
 
       {ctx && (

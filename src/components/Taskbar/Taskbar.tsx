@@ -1,5 +1,6 @@
 import { AppBar, Button, Toolbar } from "react95";
 import styled from "styled-components";
+import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { LINKS } from "../../data/content";
 import { useWindowStore } from "../../store/windowStore";
@@ -45,12 +46,8 @@ const Divider = styled.div`
   border-right: 1px solid ${({ theme }) => theme.borderLightest};
 `;
 
-const WindowList = styled.div`
+const WindowList = styled(ScrollArea)`
   flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  overflow-x: auto;
   height: 100%;
   min-width: 0;
 `;
@@ -126,7 +123,16 @@ export function Taskbar() {
           Start
         </StartButton>
         <Divider />
-        <WindowList>
+        <WindowList
+          orientation="horizontal"
+          contentStyle={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            height: "100%",
+            minWidth: "max-content",
+          }}
+        >
           {windows
             .filter((w) => w.appId !== "paint-fonts")
             .map((w) => (

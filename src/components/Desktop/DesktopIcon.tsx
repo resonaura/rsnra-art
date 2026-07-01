@@ -83,8 +83,12 @@ export function DesktopIcon({
       type="button"
       $selected={selected}
       onClick={onSelect}
-      onDoubleClick={onOpen}
+      onDoubleClick={() => {
+        if (renaming) return;
+        onOpen();
+      }}
       onKeyDown={(e) => {
+        if (renaming) return;
         if (e.key === "Enter") onOpen();
       }}
       onContextMenu={onContextMenu}

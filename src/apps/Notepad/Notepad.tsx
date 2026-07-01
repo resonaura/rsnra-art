@@ -2,13 +2,19 @@ import { useRef, useState } from "react";
 import { Separator } from "react95";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { useVfsStore } from "../../store/vfsStore";
-import { useWindowStore, useWindowData } from "../../store/windowStore";
+import { useWindowData, useWindowStore } from "../../store/windowStore";
 
 const DOC_PATHS: Record<string, string> = {
   bio: "C:\\My Documents\\bio.txt",
   press: "C:\\My Documents\\press-kit.txt",
 };
+
+const TEXT_FILTERS = [
+  { label: "Text Documents (*.txt)", extensions: ["txt"] },
+  { label: "All Files (*.*)", extensions: [] },
+];
 
 const Layout = styled.div`
   display: flex;
@@ -44,20 +50,79 @@ export function Notepad({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
   const vfs = useVfsStore();
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const updateTitle = useWindowStore((s) => s.updateTitle);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const { showFileDialog, dialog } = useFileDialog();
 
-  const filePath =
+  const initialPath =
     (data.path as string) ??
     DOC_PATHS[(data.docId as string) ?? "bio"] ??
     "C:\\My Documents\\bio.txt";
+  const [filePath, setFilePath] = useState(initialPath);
   const fileName = filePath.split("\\").pop() ?? "untitled.txt";
   const initial = vfs.read(filePath) ?? "";
   const [text, setText] = useState(initial);
   const [dirty, setDirty] = useState(false);
 
+  const updateWindowTitle = (name: string) => {
+    updateTitle(windowId, `${name} - Notepad`);
+  };
+
   const save = () => {
     vfs.writeFile(filePath, text);
     setDirty(false);
+  };
+
+  const handleNew = () => {
+    setFilePath("C:\\My Documents\\untitled.txt");
+    setText("");
+    setDirty(false);
+    updateWindowTitle("untitled.txt");
+  };
+
+  const handleOpen = async () => {
+    const dir = filePath.split("\\").slice(0, -1).join("\\") + "\\";
+    const result = await showFileDialog({
+      mode: "open",
+      title: "Open",
+      initialDir: dir,
+      filters: TEXT_FILTERS,
+    });
+    if (!result) return;
+    const content = vfs.read(result);
+    if (content === null) return;
+    setFilePath(result);
+    setText(content);
+    setDirty(false);
+    const name = result.split("\\").pop() ?? "untitled.txt";
+    updateWindowTitle(name);
+  };
+
+  const handleSaveAs = async () => {
+    const dir = filePath.split("\\").slice(0, -1).join("\\") + "\\";
+    const defaultName = filePath.split("\\").pop() ?? "untitled.txt";
+    const result = await showFileDialog({
+      mode: "save",
+      title: "Save As",
+      initialDir: dir,
+      initialFileName: defaultName,
+      filters: TEXT_FILTERS,
+    });
+    if (!result) return;
+    vfs.writeFile(result, text);
+    setFilePath(result);
+    setDirty(false);
+    const name = result.split("\\").pop() ?? "untitled.txt";
+    updateWindowTitle(name);
+  };
+
+  const handleSave = () => {
+    // If the file is "untitled" (doesn't exist yet), prompt for Save As
+    if (!vfs.exists(filePath)) {
+      handleSaveAs();
+    } else {
+      save();
+    }
   };
 
   const selectAll = () => {
@@ -89,10 +154,10 @@ export function Notepad({ windowId }: { windowId: string }) {
     {
       label: "File",
       items: [
-        { label: "New", disabled: true },
-        { label: "Open...", disabled: true },
-        { label: "Save", action: save },
-        { label: "Save As...", disabled: true },
+        { label: "New", action: handleNew },
+        { label: "Open...", action: handleOpen },
+        { label: "Save", action: handleSave },
+        { label: "Save As...", action: handleSaveAs },
         { label: "Print...", disabled: true },
         { label: "", divider: true },
         { label: "Exit", action: () => closeWindow(windowId) },
@@ -149,6 +214,7 @@ export function Notepad({ windowId }: { windowId: string }) {
         {dirty ? `${fileName} — unsaved` : fileName}
         {"  "}Ln 1, Col 1
       </StatusBar>
+      {dialog}
     </Layout>
   );
 }

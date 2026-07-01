@@ -1,7 +1,8 @@
-import styled from 'styled-components';
-import { AppMenuBar } from '../../components/AppMenuBar';
-import { useWindowStore } from '../../store/windowStore';
-import { openApp } from '../../data/apps';
+import styled from "styled-components";
+import { AppMenuBar } from "../../components/AppMenuBar";
+import { ScrollArea } from "../../components/ScrollArea";
+import { openApp } from "../../data/apps";
+import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
   display: flex;
@@ -10,18 +11,13 @@ const Layout = styled.div`
   width: 100%;
 `;
 
-const IconGrid = styled.div`
+const IconGrid = styled(ScrollArea)`
   flex: 1;
   background: white;
   border: 2px solid;
-  border-color: ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest}
+  border-color: ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
-  padding: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 4px;
-  overflow: auto;
 `;
 
 const IconItem = styled.button<{ $disabled?: boolean }>`
@@ -33,7 +29,7 @@ const IconItem = styled.button<{ $disabled?: boolean }>`
   padding: 6px 2px;
   background: transparent;
   border: 1px dotted transparent;
-  cursor: ${({ $disabled }) => ($disabled ? 'default' : 'pointer')};
+  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
   font-family: inherit;
   font-size: 11px;
   color: ${({ theme, $disabled }) =>
@@ -64,7 +60,8 @@ const StatusBar = styled.div`
   padding: 3px 8px;
   font-size: 11px;
   border: 1px solid;
-  border-color: ${({ theme }) => theme.borderDark} ${({ theme }) => theme.borderLightest}
+  border-color: ${({ theme }) => theme.borderDark}
+    ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDark};
 `;
 
@@ -76,12 +73,20 @@ interface GameItem {
 }
 
 const GAMES: GameItem[] = [
-  { label: 'Minesweeper', icon: '/icons/minesweeper.png', onOpen: () => openApp('minesweeper') },
-  { label: 'RSNRA Snake', icon: '/icons/joystick.png', onOpen: () => openApp('snake') },
-  { label: 'Solitaire', icon: '/icons/solitaire.png', disabled: true },
-  { label: 'Hearts', icon: '/icons/hearts.png', disabled: true },
-  { label: 'FreeCell', icon: '/icons/freecell.png', disabled: true },
-  { label: 'Spider', icon: '/icons/spider.png', disabled: true },
+  {
+    label: "Minesweeper",
+    icon: "/icons/minesweeper.png",
+    onOpen: () => openApp("minesweeper"),
+  },
+  {
+    label: "RSNRA Snake",
+    icon: "/icons/joystick.png",
+    onOpen: () => openApp("snake"),
+  },
+  { label: "Solitaire", icon: "/icons/solitaire.png", disabled: true },
+  { label: "Hearts", icon: "/icons/hearts.png", disabled: true },
+  { label: "FreeCell", icon: "/icons/freecell.png", disabled: true },
+  { label: "Spider", icon: "/icons/spider.png", disabled: true },
 ];
 
 export function GamesFolder({ windowId }: { windowId: string }) {
@@ -116,14 +121,22 @@ export function GamesFolder({ windowId }: { windowId: string }) {
   return (
     <Layout>
       <AppMenuBar menus={menus} />
-      <IconGrid>
+      <IconGrid
+        contentStyle={{
+          padding: 10,
+          display: "flex",
+          flexWrap: "wrap",
+          alignContent: "flex-start",
+          gap: 4,
+        }}
+      >
         {GAMES.map((game) => (
           <IconItem
             key={game.label}
             tabIndex={0}
             $disabled={game.disabled}
             onDoubleClick={game.disabled ? undefined : game.onOpen}
-            title={game.disabled ? 'Coming soon' : undefined}
+            title={game.disabled ? "Coming soon" : undefined}
           >
             <img src={game.icon} alt="" draggable={false} />
             {game.label}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from 'styled-components';
-import { theme } from './styles/theme';
 import { GlobalStyle } from './styles/GlobalStyle';
+import { getThemeById, useThemeStore } from './store/themeStore';
 import { useWindowStore } from './store/windowStore';
 import { openApp } from './data/apps';
 import { Desktop } from './components/Desktop/Desktop';
@@ -51,6 +51,8 @@ function Desk() {
 
 function App() {
   const [booted, setBooted] = useState(false);
+  const themeId = useThemeStore((s) => s.themeId);
+  const theme = getThemeById(themeId);
 
   return (
     <ThemeProvider theme={theme}>

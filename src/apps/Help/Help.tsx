@@ -1,8 +1,9 @@
-import styled from 'styled-components';
-import { Frame, GroupBox } from 'react95';
-import { AppMenuBar } from '../../components/AppMenuBar';
-import { useWindowStore } from '../../store/windowStore';
-import { BAND_NAME, BAND_LOCATION } from '../../data/content';
+import { Frame, GroupBox } from "react95";
+import styled from "styled-components";
+import { AppMenuBar } from "../../components/AppMenuBar";
+import { ScrollArea } from "../../components/ScrollArea";
+import { BAND_LOCATION, BAND_NAME } from "../../data/content";
+import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
   display: flex;
@@ -10,14 +11,7 @@ const Layout = styled.div`
   height: 100%;
 `;
 
-const ScrollArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1;
-  overflow: auto;
-  padding: 12px;
-`;
+// ScrollArea imported from ../../components/ScrollArea
 
 const InfoFrame = styled(Frame)`
   background: ${({ theme }) => theme.canvas};
@@ -57,17 +51,25 @@ export function Help({ windowId }: { windowId: string }) {
   return (
     <Layout>
       <AppMenuBar menus={menus} />
-      <ScrollArea>
+      <ScrollArea
+        style={{ flex: 1 }}
+        contentStyle={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          padding: 12,
+        }}
+      >
         <InfoFrame variant="field">
           <img
             src="/icons/computer.png"
             alt=""
             width={48}
             height={48}
-            style={{ imageRendering: 'pixelated' }}
+            style={{ imageRendering: "pixelated" }}
           />
           <div>
-            <h3 style={{ margin: '0 0 4px' }}>RSNRA 95</h3>
+            <h3 style={{ margin: "0 0 4px" }}>RSNRA 95</h3>
             <p style={{ margin: 0, fontSize: 12 }}>
               The official desktop of {BAND_NAME}, {BAND_LOCATION}.
             </p>
@@ -83,7 +85,14 @@ export function Help({ windowId }: { windowId: string }) {
         </GroupBox>
 
         <GroupBox label="Tips">
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6 }}>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontSize: 12,
+              lineHeight: 1.6,
+            }}
+          >
             <li>Double-click desktop icons to open them.</li>
             <li>Drag windows by their title bar, resize from the edges.</li>
             <li>Open RSNRA Terminal and type "help" for hidden commands.</li>

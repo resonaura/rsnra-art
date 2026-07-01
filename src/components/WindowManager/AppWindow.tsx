@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { Rnd } from "react-rnd";
-import { Button, Window, WindowContent, WindowHeader } from "react95";
+import { Button, Window, WindowHeader } from "react95";
 import styled from "styled-components";
+import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { APPS } from "../../data/apps";
 import { useWindowStore } from "../../store/windowStore";
@@ -54,16 +55,12 @@ const GlyphButton = styled(Button)`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #000;
+  color: ${({ theme }) => theme.materialText};
 `;
 
-const Body = styled(WindowContent)<{ $noPadding?: boolean }>`
+const Body = styled(ScrollArea)`
   height: 100%;
   width: 100%;
-  overflow: auto;
-  padding: ${({ $noPadding }) => ($noPadding ? "0" : "12px")};
-  display: flex;
-  flex-direction: column;
 `;
 
 interface AppWindowProps {
@@ -143,7 +140,7 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
             height: "30px",
           }}
         >
-          <HeaderTitle>
+          <HeaderTitle style={{ fontSize: "12px" }}>
             <img src={win.icon} alt="" draggable={false} />
             <span>{win.title}</span>
           </HeaderTitle>
@@ -180,7 +177,11 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
           </HeaderButtons>
         </StyledHeader>
         <Body
-          $noPadding={def.noPadding}
+          contentStyle={{
+            padding: def.noPadding ? 0 : 12,
+            display: "flex",
+            flexDirection: "column",
+          }}
           onMouseDown={() => focusWindow(win.id)}
         >
           <AppComponent windowId={win.id} />
