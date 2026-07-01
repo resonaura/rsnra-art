@@ -503,6 +503,14 @@ v4.95.1996
         ],
         true,
       ),
+      dir(
+        "Winamp",
+        [
+          exe("winamp.exe", "winamp"),
+          txt("winamp.ini", "[Winamp]\nversion=2.95\n", false),
+        ],
+        false,
+      ),
     ],
     true,
   );
@@ -808,7 +816,7 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 4,
+      version: 5,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",

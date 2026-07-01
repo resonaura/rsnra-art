@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
-import { openVfsAudio } from "../../lib/webamp";
+import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -64,7 +64,11 @@ function openNode(node: VfsNode, abs: string) {
     return;
   }
   if (node.appId) {
-    openApp(node.appId as AppId);
+    if (node.appId === "winamp") {
+      void openWebamp();
+    } else {
+      openApp(node.appId as AppId);
+    }
     return;
   }
   const lower = node.name.toLowerCase();

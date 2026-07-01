@@ -1,5 +1,5 @@
-import { useWindowStore } from '../../store/windowStore';
-import { AppWindow } from './AppWindow';
+import { useWindowStore } from "../../store/windowStore";
+import { AppWindow } from "./AppWindow";
 
 export function WindowManager() {
   const windows = useWindowStore((s) => s.windows);
@@ -7,7 +7,7 @@ export function WindowManager() {
   return (
     <>
       {windows
-        .filter((w) => !w.isMinimized)
+        .filter((w) => !w.isMinimized && w.appId !== "winamp")
         .map((w) => (
           <AppWindow key={w.id} win={w} />
         ))}

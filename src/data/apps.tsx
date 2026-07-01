@@ -210,6 +210,19 @@ export const APPS: Record<AppId, AppDefinition> = {
     resizable: false,
     singleInstance: true,
   },
+  // Winamp is a floating Webamp overlay (see src/lib/webamp.ts), not a real
+  // managed window. This stub only satisfies the Record<AppId, AppDefinition>
+  // type; the WindowManager never renders it and openApp("winamp") isn't used.
+  winamp: {
+    id: "winamp",
+    title: "Winamp",
+    icon: "/icons/winamp.png",
+    component: asComponent(() => null),
+    width: 275,
+    height: 116,
+    resizable: false,
+    singleInstance: true,
+  },
 };
 
 let cascade = 0;

@@ -7,7 +7,7 @@ import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
-import { openVfsAudio } from "../../lib/webamp";
+import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -527,7 +527,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
       setSelected(null);
     } else if (node.appId && APPS[node.appId as keyof typeof APPS]) {
       const id = node.appId as keyof typeof APPS;
-      if (id === "notepad")
+      if (id === "winamp") {
+        void openWebamp();
+      } else if (id === "notepad")
         openApp("notepad", {
           title: `${node.name} - Notepad`,
           data: { path: abs },

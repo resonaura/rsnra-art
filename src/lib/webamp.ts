@@ -1,20 +1,22 @@
 // Webamp (Winamp 2) integration. A single floating Webamp instance is created
-// on demand and rendered via the canonical `renderWhenReady(document.body)` so
-// its windows float over the desktop (without blocking it) and can be dragged
-// freely. Opening any audio file routes through it via `playUrl`.
+// on demand and rendered into a transparent, pass-through full-viewport
+// container so its windows float centered over the desktop (without blocking
+// it) and can be dragged freely. Opening any audio file routes through it via
+// `playUrl`.
 //
-// Fixes applied:
-//  • Position: after render, dispatch UPDATE_WINDOW_POSITIONS (absolute) so the
-//    main + playlist windows appear at the bottom-left, just above the taskbar.
-//  • Volume: the pseudo-Windows system volume (audioStore) drives Webamp's
-//    volume too, via setVolume(0–100).
-//  • Open file: a VFS file picker (supplied by the <WebampHost> React wrapper,
-//    which owns the useFileDialog hook) is registered as a Webamp filePicker so
-//    "Add file" can browse the virtual filesystem instead of the host OS.
+//   • Position: Webamp centers itself in the viewport (its default).
+//   • Taskbar: a virtual window entry is registered in windowStore so Winamp
+//     shows up in the taskbar; clicking it restores Winamp. Closing Winamp
+//     (via its own X) removes the taskbar button.
+//   • Volume: the pseudo-Windows system volume (audioStore) drives Webamp's
+//     volume too, via setVolume(0–100).
+//   • Open file: a VFS file picker (supplied by <WebampHost>) is registered as
+//     a Webamp filePicker so "Add file" can browse the virtual filesystem.
 //
 // Webamp is dynamically imported so its (large) bundle is code-split.
 
 import { useAudioStore } from "../store/audioStore";
+import { useWindowStore } from "../store/windowStore";
 
 export interface VfsFilePickerOpts {
   mode: "open";
@@ -23,8 +25,6 @@ export interface VfsFilePickerOpts {
   filters?: { label: string; extensions: string[] }[];
 }
 export type VfsFilePicker = (opts: VfsFilePickerOpts) => Promise<string | null>;
-
-const TASKBAR = 36;
 
 // Map a VFS audio file path to a URL Webamp can actually fetch+play. Only the
 // real .wav files under C:\Windows\Media have audio data (served from
@@ -48,10 +48,6 @@ type WebampInstance = {
   close: () => void;
   onWillClose: (cb: (cancel: () => void) => void) => () => void;
   onClose: (cb: () => void) => () => void;
-  store: {
-    dispatch: (a: { type: string; [k: string]: unknown }) => void;
-    getState: () => unknown;
-  };
   dispose: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [k: string]: any;
@@ -75,13 +71,17 @@ let container: HTMLElement | null = null;
 // #webamp node with its own background that paints white over the desktop.
 // This container is transparent + pointer-events:none; Webamp's own windows
 // re-enable pointer events via the injected CSS so the desktop behind stays
-// clickable and visible.
+// clickable and visible. Webamp centers its windows within this container
+// (i.e. the viewport).
 function ensureContainer(): HTMLElement {
   if (container && document.body.contains(container)) return container;
   const el = document.createElement("div");
   el.id = CONTAINER_ID;
+  // z-index is managed dynamically (see syncZIndex) so Winamp participates in
+  // the normal window z-order instead of always-on-top. Starts low; raised
+  // when the Winamp window is focused.
   el.style.cssText =
-    "position:fixed;inset:0;z-index:150000;pointer-events:none;background:transparent;";
+    "position:fixed;inset:0;z-index:10;pointer-events:none;background:transparent;";
   const style = document.createElement("style");
   // Only Webamp's windows (and their contents) should capture pointer events;
   // the container itself stays pass-through so it never blocks the desktop.
@@ -92,35 +92,8 @@ function ensureContainer(): HTMLElement {
   return el;
 }
 
-// Place the main + playlist windows at the bottom-left, above the taskbar.
-function positionAtBottom(webamp: WebampInstance): void {
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 720;
-  const mainH = 58; // standard Winamp main-window height
-  const mainW = 275;
-  const playlistW = 275;
-  const margin = 8;
-  const bottom = vh - TASKBAR - margin; // bottom edge of usable area
-  const y = bottom - mainH;
-  const x = margin;
-  try {
-    webamp.store.dispatch({
-      type: "UPDATE_WINDOW_POSITIONS",
-      positions: {
-        main: { x, y },
-        playlist: { x: x + mainW, y },
-        equalizer: { x, y: y - mainH - 4 },
-        milkdrop: { x: Math.max(margin, (vw - playlistW) / 2), y: margin },
-      },
-      absolute: true,
-    });
-  } catch {
-    // Positioning is best-effort; if the internal action shape changes we just
-    // fall back to Webamp's default centered layout.
-  }
-  void mainW;
-  void playlistW;
-}
+// The stable id used for Winamp's virtual taskbar window.
+const WINAMP_WIN_ID = "app-winamp";
 
 async function getInstance(): Promise<WebampInstance> {
   if (instancePromise) return instancePromise;
@@ -160,15 +133,39 @@ async function getInstance(): Promise<WebampInstance> {
       : undefined;
 
     const webamp = new Webamp({
-      zIndex: 150000,
+      zIndex: 1,
       ...(filePickers ? { filePickers } : {}),
     } as unknown as ConstructorParameters<typeof Webamp>[0]) as WebampInstance;
 
     // Render into our own transparent, pass-through container (NOT
     // renderWhenReady(document.body), whose #webamp node paints white over the
-    // desktop). Then move the windows to the bottom-left.
-    await webamp.renderInto(ensureContainer());
-    positionAtBottom(webamp);
+    // desktop). Webamp centers its windows within the container (the viewport).
+    const el = ensureContainer();
+    await webamp.renderInto(el);
+
+    // Make Winamp participate in the normal window z-order: bind the container's
+    // z-index to the virtual window's zIndex, and focus that window when the
+    // user clicks anywhere on Winamp (so it raises above other windows, and
+    // clicking another window lowers it — just like a real window).
+    const syncZIndex = () => {
+      const w = useWindowStore
+        .getState()
+        .windows.find((wn) => wn.id === WINAMP_WIN_ID);
+      if (w) el.style.zIndex = String(w.zIndex);
+    };
+    useWindowStore.subscribe(syncZIndex);
+    el.addEventListener("mousedown", () => {
+      useWindowStore.getState().focusWindow(WINAMP_WIN_ID);
+    });
+
+    // Register a virtual taskbar window so Winamp appears in the taskbar. The
+    // WindowManager skips rendering a real AppWindow for it (Winamp floats on
+    // its own). Closing Winamp via its own X removes the taskbar button.
+    showTaskbarWindow();
+    syncZIndex();
+    webamp.onClose(() => {
+      useWindowStore.getState().closeWindow(WINAMP_WIN_ID);
+    });
 
     // Sync the system volume into Webamp now and on every change.
     webamp.setVolume(muted ? 0 : Math.round(volume * 100));
@@ -188,8 +185,39 @@ export async function playUrl(url: string, name?: string): Promise<void> {
     const webamp = await getInstance();
     webamp.reopen();
     webamp.setTracksToPlay([{ url, defaultName: name }]);
+    showTaskbarWindow();
   } catch (err) {
     console.error("Webamp failed to open track", err);
+  }
+}
+
+// Ensure the virtual Winamp taskbar window exists and is focused. Uses the
+// stable id "app-winamp" so repeated calls reuse/restore the same button.
+function showTaskbarWindow(): void {
+  const ws = useWindowStore.getState();
+  const existing = ws.windows.find((w) => w.id === WINAMP_WIN_ID);
+  if (existing) {
+    ws.focusWindow(WINAMP_WIN_ID);
+    return;
+  }
+  ws.openWindow({
+    appId: "winamp",
+    title: "Winamp",
+    icon: "/icons/winamp.png",
+    bounds: { x: 0, y: 0, width: 275, height: 116 },
+    resizable: false,
+    singleInstance: true,
+  });
+}
+
+/** Restore/raise Winamp (called when its taskbar button is clicked). */
+export async function focusWebamp(): Promise<void> {
+  try {
+    const webamp = await getInstance();
+    webamp.reopen();
+    showTaskbarWindow();
+  } catch (err) {
+    console.error("Webamp failed to focus", err);
   }
 }
 
@@ -198,6 +226,7 @@ export async function openWebamp(): Promise<void> {
   try {
     const webamp = await getInstance();
     webamp.reopen();
+    showTaskbarWindow();
   } catch (err) {
     console.error("Webamp failed to open", err);
   }

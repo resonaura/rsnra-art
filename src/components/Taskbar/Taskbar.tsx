@@ -2,6 +2,7 @@ import { AppBar, Button, Toolbar } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
+import { focusWebamp } from "../../lib/webamp";
 import { useWindowStore } from "../../store/windowStore";
 import { TaskbarClock } from "./TaskbarClock";
 import { VolumeControl } from "./VolumeControl";
@@ -127,7 +128,11 @@ export function Taskbar() {
               <WindowButton
                 key={w.id}
                 active={w.isFocused && !w.isMinimized}
-                onClick={() => toggleMinimizeFromTaskbar(w.id)}
+                onClick={() =>
+                  w.appId === "winamp"
+                    ? focusWebamp()
+                    : toggleMinimizeFromTaskbar(w.id)
+                }
               >
                 <img src={w.icon} alt="" draggable={false} />
                 <span>{w.title}</span>

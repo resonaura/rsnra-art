@@ -16,7 +16,8 @@ export type AppId =
   | "paint-fonts"
   | "find"
   | "properties"
-  | "datetime";
+  | "datetime"
+  | "winamp";
 
 export interface Bounds {
   x: number;

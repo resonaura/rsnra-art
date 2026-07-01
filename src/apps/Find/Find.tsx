@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Button, Separator, TextField } from "react95";
 import styled from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
-import { openVfsAudio } from "../../lib/webamp";
-import { useShallow } from "zustand/react/shallow";
+import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -140,7 +140,11 @@ function openHit(hit: Hit): void {
     return;
   }
   if (n.appId) {
-    openApp(n.appId as never);
+    if (n.appId === "winamp") {
+      void openWebamp();
+    } else {
+      openApp(n.appId as never);
+    }
     return;
   }
   const lower = n.name.toLowerCase();
