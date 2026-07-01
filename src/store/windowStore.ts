@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { AppId, Bounds, WindowInstance } from '../types/window';
+import { create } from "zustand";
+import type { AppId, Bounds, WindowInstance } from "../types/window";
 
 let idCounter = 0;
 const genId = () => `win-${++idCounter}-${Date.now().toString(36)}`;
@@ -14,7 +14,7 @@ export interface OpenWindowConfig {
   data?: Record<string, unknown>;
 }
 
-export type PowerState = 'on' | 'shutting-down' | 'off' | 'restarting';
+export type PowerState = "on" | "shutting-down" | "off" | "restarting";
 
 interface WindowStoreState {
   windows: WindowInstance[];
@@ -31,6 +31,7 @@ interface WindowStoreState {
   focusWindow: (id: string) => void;
   toggleMinimizeFromTaskbar: (id: string) => void;
   updateBounds: (id: string, bounds: Partial<Bounds>) => void;
+  updateTitle: (id: string, title: string) => void;
   setStartMenuOpen: (open: boolean) => void;
   toggleStartMenu: () => void;
   setCloseProgramOpen: (open: boolean) => void;
@@ -45,11 +46,12 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   startMenuOpen: false,
   closeProgramOpen: false,
   runDialogOpen: false,
-  powerState: 'on',
+  powerState: "on",
 
   openWindow: (config) => {
     const { windows, topZIndex } = get();
-    const existingId = config.singleInstance === false ? undefined : `app-${config.appId}`;
+    const existingId =
+      config.singleInstance === false ? undefined : `app-${config.appId}`;
 
     if (existingId) {
       const existing = windows.find((w) => w.id === existingId);
@@ -142,7 +144,11 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     set((state) => {
       const target = state.windows.find((w) => w.id === id);
       if (!target) return state;
-      if (target.isFocused && !target.isMinimized && target.zIndex === state.topZIndex) {
+      if (
+        target.isFocused &&
+        !target.isMinimized &&
+        target.zIndex === state.topZIndex
+      ) {
         return state;
       }
       const nextZ = state.topZIndex + 1;
@@ -179,13 +185,20 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   },
 
   setStartMenuOpen: (open) => set({ startMenuOpen: open }),
-  toggleStartMenu: () => set((state) => ({ startMenuOpen: !state.startMenuOpen })),
+  toggleStartMenu: () =>
+    set((state) => ({ startMenuOpen: !state.startMenuOpen })),
   setCloseProgramOpen: (open) => set({ closeProgramOpen: open }),
   setRunDialogOpen: (open) => set({ runDialogOpen: open }),
   closeAll: () => set({ windows: [] }),
   setPowerState: (powerState) => set({ powerState }),
+  updateTitle: (id, title) =>
+    set((state) => ({
+      windows: state.windows.map((w) => (w.id === id ? { ...w, title } : w)),
+    })),
 }));
 
 export function useWindowData(windowId: string): Record<string, unknown> {
-  return useWindowStore((s) => s.windows.find((w) => w.id === windowId)?.data ?? {});
+  return useWindowStore(
+    (s) => s.windows.find((w) => w.id === windowId)?.data ?? {},
+  );
 }

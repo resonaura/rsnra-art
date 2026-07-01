@@ -90,7 +90,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   },
   terminal: {
     id: "terminal",
-    title: "RSNRA Terminal",
+    title: "MS-DOS Prompt",
     icon: "/icons/terminal.png",
     component: asComponent(Terminal),
     width: 600,
@@ -136,7 +136,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   },
   help: {
     id: "help",
-    title: "RSNRA 95 Help",
+    title: "Help Topics",
     icon: "/icons/help.png",
     component: asComponent(Help),
     width: 460,

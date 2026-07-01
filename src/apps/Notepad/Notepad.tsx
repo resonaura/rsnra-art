@@ -1,28 +1,13 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { MenuList, MenuListItem, Separator } from 'react95';
-import { useWindowData } from '../../store/windowStore';
-import { BIO_TEXT } from '../../data/content';
+import { useState } from "react";
+import { MenuList, MenuListItem, Separator } from "react95";
+import styled from "styled-components";
+import { useVfsStore } from "../../store/vfsStore";
+import { useWindowData } from "../../store/windowStore";
 
-const PRESS_KIT_TEXT = `RSNRA — Press Kit.txt
-=====================================
-
-RESONAURA is an alternative rock band from Vancouver, BC.
-
-For interview requests, press photos, or stage plots, reach out
-via the Contact app or email booking@rsnra.band.
-
-Quick facts:
-  Genre        Alternative Rock
-  Based in     Vancouver, BC
-  Listen       rsnra.link/resonaura
-  TikTok       @resonaura
-  Instagram    @resonaura
-`;
-
-const DOCS: Record<string, { title: string; text: string }> = {
-  bio: { title: 'bio.txt - Notepad', text: BIO_TEXT },
-  press: { title: 'press-kit.txt - Notepad', text: PRESS_KIT_TEXT },
+// Legacy docId -> virtual filesystem path.
+const DOC_PATHS: Record<string, string> = {
+  bio: "C:\\My Documents\\bio.txt",
+  press: "C:\\My Documents\\press-kit.txt",
 };
 
 const Layout = styled.div`
@@ -43,7 +28,7 @@ const TextArea = styled.textarea`
   border: none;
   outline: none;
   padding: 8px;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 13px;
   line-height: 1.4;
   background: white;
@@ -51,14 +36,28 @@ const TextArea = styled.textarea`
 
 export function Notepad({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
-  const docId = (data.docId as string) ?? 'bio';
-  const doc = DOCS[docId] ?? DOCS.bio;
-  const [text, setText] = useState(doc.text);
+  const vfs = useVfsStore();
+
+  // Resolve the file path: prefer an explicit VFS path, fall back to a docId,
+  // then to bio.txt. The window title is derived from the filename.
+  const filePath =
+    (data.path as string) ??
+    DOC_PATHS[(data.docId as string) ?? "bio"] ??
+    "C:\\My Documents\\bio.txt";
+  const fileName = filePath.split("\\").pop() ?? "untitled.txt";
+  const initial = vfs.read(filePath) ?? "";
+  const [text, setText] = useState(initial);
+  const [dirty, setDirty] = useState(false);
+
+  const save = () => {
+    vfs.writeFile(filePath, text);
+    setDirty(false);
+  };
 
   return (
     <Layout>
       <FakeMenuBar inline>
-        <MenuListItem disabled size="sm">
+        <MenuListItem size="sm" onClick={save}>
           File
         </MenuListItem>
         <MenuListItem disabled size="sm">
@@ -74,9 +73,24 @@ export function Notepad({ windowId }: { windowId: string }) {
       <Separator />
       <TextArea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setDirty(true);
+        }}
         spellCheck={false}
       />
+      {dirty && (
+        <div
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            background: "#c6c6c6",
+            borderTop: "1px solid #848584",
+          }}
+        >
+          {fileName} — unsaved changes. Click <b>File</b> to save to {filePath}.
+        </div>
+      )}
     </Layout>
   );
 }

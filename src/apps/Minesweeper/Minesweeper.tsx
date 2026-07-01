@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import styled from 'styled-components';
-import { Frame } from 'react95';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Counter, Frame } from "react95";
+import styled from "styled-components";
 
 const COLS = 9;
 const ROWS = 9;
@@ -13,7 +13,7 @@ interface Cell {
   flagged: boolean;
 }
 
-type GameStatus = 'idle' | 'playing' | 'won' | 'lost';
+type GameStatus = "idle" | "playing" | "won" | "lost";
 
 function emptyBoard(): Cell[][] {
   return Array.from({ length: ROWS }, () =>
@@ -53,21 +53,23 @@ function plantMines(board: Cell[][], avoidR: number, avoidC: number): Cell[][] {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       if (next[r][c].mine) continue;
-      next[r][c].adjacent = neighbors(r, c).filter(([nr, nc]) => next[nr][nc].mine).length;
+      next[r][c].adjacent = neighbors(r, c).filter(
+        ([nr, nc]) => next[nr][nc].mine,
+      ).length;
     }
   }
   return next;
 }
 
 const NUMBER_COLORS: Record<number, string> = {
-  1: '#0000ff',
-  2: '#008200',
-  3: '#ff0000',
-  4: '#000084',
-  5: '#840000',
-  6: '#008284',
-  7: '#000000',
-  8: '#848484',
+  1: "#0000ff",
+  2: "#008200",
+  3: "#ff0000",
+  4: "#000084",
+  5: "#840000",
+  6: "#008284",
+  7: "#000000",
+  8: "#848484",
 };
 
 const Layout = styled.div`
@@ -87,33 +89,24 @@ const Header = styled(Frame)`
   background: ${({ theme }) => theme.material};
 `;
 
-const Counter = styled.div`
-  background: #000;
-  color: #ff0000;
-  font-family: 'Courier New', monospace;
-  font-weight: bold;
-  font-size: 20px;
-  padding: 2px 6px;
-  min-width: 48px;
-  text-align: center;
-  letter-spacing: 2px;
-`;
-
 const FaceButton = styled.button`
   width: 32px;
   height: 32px;
   font-size: 18px;
   background: ${({ theme }) => theme.material};
   border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest};
+  border-color: ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest};
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   &:active {
-    border-color: ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest}
-      ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
+    border-color: ${({ theme }) => theme.borderDarkest}
+      ${({ theme }) => theme.borderLightest}
+      ${({ theme }) => theme.borderLightest}
+      ${({ theme }) => theme.borderDarkest};
   }
 `;
 
@@ -131,7 +124,6 @@ const CellButton = styled.button<{ $revealed: boolean }>`
   padding: 0;
   font-size: 13px;
   font-weight: bold;
-  font-family: 'Courier New', monospace;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -151,20 +143,23 @@ const CellButton = styled.button<{ $revealed: boolean }>`
 `;
 
 function faceForStatus(status: GameStatus) {
-  if (status === 'won') return '😎';
-  if (status === 'lost') return '😵';
-  return '🙂';
+  if (status === "won") return "😎";
+  if (status === "lost") return "😵";
+  return "🙂";
 }
 
 export function Minesweeper() {
   const [board, setBoard] = useState<Cell[][]>(emptyBoard);
-  const [status, setStatus] = useState<GameStatus>('idle');
+  const [status, setStatus] = useState<GameStatus>("idle");
   const [seconds, setSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (status === 'playing') {
-      timerRef.current = window.setInterval(() => setSeconds((s) => Math.min(999, s + 1)), 1000);
+    if (status === "playing") {
+      timerRef.current = window.setInterval(
+        () => setSeconds((s) => Math.min(999, s + 1)),
+        1000,
+      );
     }
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
@@ -175,7 +170,7 @@ export function Minesweeper() {
 
   const resetGame = useCallback(() => {
     setBoard(emptyBoard());
-    setStatus('idle');
+    setStatus("idle");
     setSeconds(0);
     if (timerRef.current) window.clearInterval(timerRef.current);
   }, []);
@@ -199,30 +194,31 @@ export function Minesweeper() {
     b.every((row) => row.every((cell) => cell.mine || cell.revealed));
 
   const handleReveal = (r: number, c: number) => {
-    if (status === 'won' || status === 'lost') return;
+    if (status === "won" || status === "lost") return;
     if (board[r][c].flagged) return;
 
     let working = board;
     let nextStatus: GameStatus = status;
 
-    if (status === 'idle') {
+    if (status === "idle") {
       working = plantMines(board, r, c);
-      nextStatus = 'playing';
+      nextStatus = "playing";
     } else {
       working = board.map((row) => row.map((cell) => ({ ...cell })));
     }
 
     if (working[r][c].mine) {
-      for (const row of working) for (const cell of row) if (cell.mine) cell.revealed = true;
+      for (const row of working)
+        for (const cell of row) if (cell.mine) cell.revealed = true;
       setBoard(working);
-      setStatus('lost');
+      setStatus("lost");
       return;
     }
 
     revealFlood(working, r, c);
 
     if (checkWin(working)) {
-      nextStatus = 'won';
+      nextStatus = "won";
     }
 
     setBoard(working);
@@ -231,7 +227,7 @@ export function Minesweeper() {
 
   const handleFlag = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-    if (status === 'won' || status === 'lost') return;
+    if (status === "won" || status === "lost") return;
     if (board[r][c].revealed) return;
     const working = board.map((row) => row.map((cell) => ({ ...cell })));
     working[r][c].flagged = !working[r][c].flagged;
@@ -241,9 +237,12 @@ export function Minesweeper() {
   return (
     <Layout>
       <Header variant="window">
-        <Counter>{String(Math.max(0, MINES - flagCount)).padStart(3, '0')}</Counter>
+        <Counter
+          style={{ zoom: 0.67 }}
+          value={Math.max(0, MINES - flagCount)}
+        />
         <FaceButton onClick={resetGame}>{faceForStatus(status)}</FaceButton>
-        <Counter>{String(seconds).padStart(3, '0')}</Counter>
+        <Counter style={{ zoom: 0.67 }} value={seconds} />
       </Header>
       <Board variant="window">
         {board.map((row, r) =>
@@ -262,20 +261,17 @@ export function Minesweeper() {
             >
               {cell.revealed
                 ? cell.mine
-                  ? '💣'
+                  ? "💣"
                   : cell.adjacent > 0
                     ? cell.adjacent
-                    : ''
+                    : ""
                 : cell.flagged
-                  ? '🚩'
-                  : ''}
+                  ? "🚩"
+                  : ""}
             </CellButton>
           )),
         )}
       </Board>
-      <p style={{ fontSize: 11, margin: 0 }}>
-        Left click to reveal, right click to flag.
-      </p>
     </Layout>
   );
 }

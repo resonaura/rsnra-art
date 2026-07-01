@@ -60,6 +60,16 @@ ICON_MAP = {
     "settings.png": "w2k_settings.ico",
     "find.png": "w2k_find.ico",
     "battery.png": "w2k_shut_down.ico",
+    # File-type icons (by extension).
+    "file-txt.png": "w2k_text_document.ico",
+    "file-ini.png": "w2k_ini_&_inf.ico",
+    "file-hlp.png": "w2k_help.ico",
+    "file-font.png": "w2k_font.ico",
+    "file-bmp.png": "w2k_bitmap_image.ico",
+    "file-img.png": "w2k_jpeg_image.ico",
+    "file-bat.png": "w2k_ms-dos_batch_file.ico",
+    "file-config.png": "w2k_configuration_settings.ico",
+    "file-dll.png": "w2k_configuration_settings.ico",
 }
 
 

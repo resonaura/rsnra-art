@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, TextInput } from "react95";
 import styled, { css } from "styled-components";
 import { openApp } from "../../data/apps";
-import { useWindowStore } from "../../store/windowStore";
+import { useVfsStore } from "../../store/vfsStore";
+import { useWindowData, useWindowStore } from "../../store/windowStore";
 import { DEFAULT_FONT, usePaintFontStore } from "./fontStore";
 import { TOOL_GRID, TOOL_LABELS, ToolIcon, type ToolId } from "./icons";
 import { PAINT_PALETTE } from "./palette";
@@ -533,6 +534,11 @@ export function Paint({ windowId }: { windowId: string }) {
   const isFocused = useWindowStore(
     (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
   );
+  const windowData = useWindowData(windowId);
+  const vfs = useVfsStore();
+  const [filePath, setFilePath] = useState<string | null>(
+    (windowData.path as string) ?? null,
+  );
 
   const baseCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -663,6 +669,24 @@ export function Paint({ windowId }: { windowId: string }) {
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     pushHistory();
+    // If opened from a VFS image file, load its contents onto the canvas.
+    const loadPath = filePath;
+    if (loadPath) {
+      const content = vfs.read(loadPath);
+      if (content && content.startsWith("data:image/")) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+          ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+          historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
+          historyPosRef.current = 0;
+          setHistoryTick((t) => t + 1);
+        };
+        img.src = content;
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1576,13 +1600,41 @@ export function Paint({ windowId }: { windowId: string }) {
     setHistoryTick((t) => t + 1);
   };
 
+  const updateTitle = useWindowStore((s) => s.updateTitle);
+
+  const saveToVfs = (absPath: string) => {
+    const canvas = baseCanvasRef.current!;
+    vfs.writeFile(absPath, canvas.toDataURL("image/png"));
+    setFilePath(absPath);
+    const fname = absPath.split("\\").pop() ?? "untitled.png";
+    updateTitle(windowId, `${fname} - Paint`);
+    dirtyRef.current = false;
+  };
+
+  const handleSave = () => {
+    if (filePath) {
+      saveToVfs(filePath);
+    } else {
+      handleSaveAsPng();
+    }
+  };
+
   const handleSaveAsPng = () => {
     const canvas = baseCanvasRef.current!;
-    const link = document.createElement("a");
-    link.download = "untitled.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-    dirtyRef.current = false;
+    const defaultName = filePath
+      ? (filePath.split("\\").pop() ?? "untitled.png")
+      : "untitled.png";
+    const input = window.prompt(
+      "Save picture to (virtual folder path):",
+      `C:\\My Documents\\${defaultName}`,
+    );
+    if (!input) return;
+    const abs = vfs.resolvePath(input);
+    if (!abs || !abs.toLowerCase().endsWith(".png")) {
+      window.alert("Please enter a full path ending in .png under C:\\");
+      return;
+    }
+    saveToVfs(abs);
   };
 
   const flipHorizontal = () => {
@@ -1660,6 +1712,7 @@ export function Paint({ windowId }: { windowId: string }) {
       label: "File",
       items: [
         { label: "New", action: requestNew },
+        { label: "Save", action: handleSave },
         { label: "Save As PNG...", action: handleSaveAsPng },
         { label: "", divider: true },
         { label: "Exit", action: () => closeWindow(windowId) },
