@@ -1,5 +1,8 @@
+import { playSound } from "../lib/audio";
+import { openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
+import { useShallow } from "zustand/react/shallow";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 
@@ -26,6 +29,7 @@ function run(fn: () => void) {
 
 export function requestShutdown() {
   useWindowStore.getState().setStartMenuOpen(false);
+  playSound("logoff");
   useWindowStore.getState().setPowerState("shutting-down");
 }
 
@@ -35,7 +39,7 @@ export function requestShutdown() {
 // folders expand into their contents.
 function docChildren(
   path: string,
-  vfs: ReturnType<typeof useVfsStore.getState>,
+  vfs: { list: (path: string) => VfsNode[] | null },
 ): MenuNode[] {
   const list = vfs.list(path) ?? [];
   const nodes: MenuNode[] = [];
@@ -83,7 +87,7 @@ function openFile(abs: string, node: VfsNode) {
 
 /** The full Start menu tree, with Documents rebuilt from the live VFS. */
 export function useStartMenuTree(): MenuNode[] {
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(useShallow((s) => ({ root: s.root, list: s.list })));
   const docs = docChildren("C:\\My Documents", vfs);
   return [
     {
@@ -120,6 +124,12 @@ export function useStartMenuTree(): MenuNode[] {
               action: run(() => openApp("paint")),
             },
           ],
+        },
+        {
+          id: "winamp",
+          label: "Winamp",
+          icon: "/icons/winamp.png",
+          action: run(() => openWebamp()),
         },
         {
           id: "games",

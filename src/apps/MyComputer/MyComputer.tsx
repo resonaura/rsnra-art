@@ -1,13 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { playSound } from "../../lib/audio";
+import { openVfsAudio } from "../../lib/webamp";
 import { useClipboardStore } from "../../store/clipboardStore";
+import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
-import { useWindowStore } from "../../store/windowStore";
+import { useWindowData, useWindowStore } from "../../store/windowStore";
 
 const MY_COMPUTER = "My Computer";
 
@@ -75,6 +79,12 @@ function isSameOrDescendant(
   const a = descendantAbs.toLowerCase();
   const b = ancestorAbs.toLowerCase();
   return a === b || a.startsWith(b.replace(/\\+$/, "") + "\\");
+}
+
+// Audio extensions Webamp can play when opened from the Explorer.
+function isAudioFile(name: string): boolean {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return ["wav", "mp3", "mid", "midi", "rmi", "ogg"].includes(ext);
 }
 
 const raised = css`
@@ -438,9 +448,33 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const isFocused = useWindowStore(
     (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
   );
-  const vfs = useVfsStore();
-  const clipboard = useClipboardStore();
-  const [path, setPath] = useState<string>(MY_COMPUTER);
+  const vfs = useVfsStore(
+    useShallow((s) => ({
+      root: s.root,
+      list: s.list,
+      resolvePath: s.resolvePath,
+      exists: s.exists,
+      mkdir: s.mkdir,
+      writeFile: s.writeFile,
+      moveToRecycleBin: s.moveToRecycleBin,
+      rename: s.rename,
+      copyTo: s.copyTo,
+      moveTo: s.moveTo,
+      move: s.move,
+    })),
+  );
+  const clipboard = useClipboardStore(
+    useShallow((s) => ({
+      mode: s.mode,
+      sourcePath: s.sourcePath,
+      set: s.set,
+      clear: s.clear,
+    })),
+  );
+  const winData = useWindowData(windowId);
+  const [path, setPath] = useState<string>(
+    (winData.path as string) ?? MY_COMPUTER,
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -452,8 +486,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const isRoot = path === MY_COMPUTER;
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
   const driveNotReady = /^[AD]:\\$/.test(path);
-  const entries: VfsNode[] =
+  const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const allEntries: VfsNode[] =
     isRoot || driveNotReady ? [] : (vfs.list(path) ?? []);
+  const entries = showHidden ? allEntries : allEntries.filter((n) => !n.hidden);
   const sorted = [...entries].sort((a, b) => {
     if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -502,6 +538,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
         title: `${node.name} - Notepad`,
         data: { path: abs },
       });
+    } else if (isAudioFile(node.name)) {
+      void openVfsAudio(abs);
     } else if (
       node.name.toLowerCase().endsWith(".png") ||
       node.name.toLowerCase().endsWith(".bmp")
@@ -557,13 +595,15 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (abs && vfs.moveToRecycleBin(abs)) {
       refresh();
       setSelected(null);
+    } else {
+      playSound("error");
     }
   };
 
   const commitRename = () => {
     if (renaming && renameVal.trim()) {
       const abs = vfs.resolvePath(renaming, path);
-      if (abs) vfs.rename(abs, renameVal.trim());
+      if (abs && !vfs.rename(abs, renameVal.trim())) playSound("error");
     }
     setRenaming(null);
     refresh();
@@ -605,6 +645,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const abs = vfs.resolvePath(node.name, path);
     return !!abs && abs.toLowerCase() === clipboard.sourcePath.toLowerCase();
   };
+
+  // Opacity for an icon: system items slightly dimmed, hidden + cut items
+  // half-transparent (only seen when "Show Hidden Files" is on).
+  const nodeOpacity = (node: VfsNode): number =>
+    node.system ? 0.85 : node.hidden || isCutSource(node) ? 0.5 : 1;
 
   // Open the Properties window for a node (right-click → Properties, or the
   // File menu). Works for both files and folders, including system items.
@@ -869,6 +914,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
         },
         { label: "", divider: true },
         { label: "Refresh", action: refresh },
+        { label: "", divider: true },
+        {
+          label: `${showHidden ? "✓" : " "} Show Hidden Files`,
+          action: () => useFilePrefsStore.getState().setShowHidden(!showHidden),
+        },
       ],
     },
     {
@@ -968,7 +1018,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       tabIndex={0}
       {...nodeHandlers(node)}
       style={{
-        opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1,
+        opacity: nodeOpacity(node),
         outline: dragOverKey === node.name ? "1px solid #fff" : undefined,
       }}
     >
@@ -987,7 +1037,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       $dragOver={dragOverKey === node.name}
       tabIndex={0}
       {...nodeHandlers(node)}
-      style={{ opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1 }}
+      style={{ opacity: nodeOpacity(node) }}
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
         <img src={iconForNode(node)} alt="" draggable={false} />
@@ -1012,7 +1062,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       $dragOver={dragOverKey === node.name}
       tabIndex={0}
       {...nodeHandlers(node)}
-      style={{ opacity: node.system ? 0.85 : isCutSource(node) ? 0.5 : 1 }}
+      style={{ opacity: nodeOpacity(node) }}
     >
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>

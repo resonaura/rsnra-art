@@ -6,8 +6,9 @@ import { Desktop } from "./components/Desktop/Desktop";
 import { RunDialog } from "./components/RunDialog/RunDialog";
 import { ShutdownScreen } from "./components/ShutdownScreen/ShutdownScreen";
 import { StartMenu } from "./components/StartMenu/StartMenu";
-import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Taskbar } from "./components/Taskbar/Taskbar";
+import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
+import { WebampHost } from "./components/WebampHost";
 import { WindowManager } from "./components/WindowManager/WindowManager";
 import { openApp } from "./data/apps";
 import { getThemeById, useThemeStore } from "./store/themeStore";
@@ -47,6 +48,7 @@ function Desk() {
       <CloseProgramDialog />
       <RunDialog />
       <UnsavedChangesDialog />
+      <WebampHost />
     </>
   );
 }

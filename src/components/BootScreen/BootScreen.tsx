@@ -46,8 +46,8 @@ const Fill = styled.div<{ $pct: number }>`
   width: ${({ $pct }) => $pct}%;
   background: repeating-linear-gradient(
     90deg,
-    #6dff8f 0px,
-    #6dff8f 8px,
+    #ffffff 0px,
+    #ffffff 8px,
     transparent 8px,
     transparent 12px
   );
@@ -83,9 +83,7 @@ export function BootScreen({ onDone }: BootScreenProps) {
 
   return (
     <Screen onClick={onDone}>
-      <Logo>
-        RSNRA<span>95</span>
-      </Logo>
+      <Logo>RSNRA</Logo>
       <Bar>
         <Fill $pct={pct} />
       </Bar>

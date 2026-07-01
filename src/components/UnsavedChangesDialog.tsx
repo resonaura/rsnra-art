@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled from "styled-components";
+import { playSound } from "../lib/audio";
 import { useUnsavedStore } from "../store/unsavedStore";
 import { useWindowStore } from "../store/windowStore";
 
@@ -55,6 +57,11 @@ export function UnsavedChangesDialog() {
   const confirmCancel = useUnsavedStore((s) => s.confirmCancel);
   const windows = useWindowStore((s) => s.windows);
 
+  // Play the Win95 "Question" sound when the save-changes prompt appears.
+  useEffect(() => {
+    if (confirmClose) playSound("question");
+  }, [confirmClose]);
+
   if (!confirmClose) return null;
   const guard = guards[confirmClose];
   const win = windows.find((w) => w.id === confirmClose);
@@ -71,7 +78,7 @@ export function UnsavedChangesDialog() {
         <WindowHeader
           active
           className="window-drag-handle"
-          style={{ display: "flex", alignItems: "center" }}
+          style={{ display: "flex", alignItems: "center", zoom: 0.8 }}
         >
           <span>Save Changes</span>
         </WindowHeader>
@@ -85,12 +92,20 @@ export function UnsavedChangesDialog() {
             <Message>{message}</Message>
           </Body>
         </WindowContent>
-        <Footer>
-          <Button primary onClick={() => void confirmSave()}>
+        <Footer style={{ zoom: 0.68 }}>
+          <Button
+            style={{ width: "80px" }}
+            primary
+            onClick={() => void confirmSave()}
+          >
             Yes
           </Button>
-          <Button onClick={confirmDiscard}>No</Button>
-          <Button onClick={confirmCancel}>Cancel</Button>
+          <Button style={{ width: "80px" }} onClick={confirmDiscard}>
+            No
+          </Button>
+          <Button style={{ width: "80px" }} onClick={confirmCancel}>
+            Cancel
+          </Button>
         </Footer>
       </Dialog>
     </Overlay>

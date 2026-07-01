@@ -5,6 +5,8 @@ import { AppMenuBar } from "../../components/AppMenuBar";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { openVfsAudio } from "../../lib/webamp";
+import { useShallow } from "zustand/react/shallow";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -143,6 +145,17 @@ function openHit(hit: Hit): void {
   }
   const lower = n.name.toLowerCase();
   if (
+    lower.endsWith(".wav") ||
+    lower.endsWith(".mp3") ||
+    lower.endsWith(".mid") ||
+    lower.endsWith(".midi") ||
+    lower.endsWith(".rmi") ||
+    lower.endsWith(".ogg")
+  ) {
+    void openVfsAudio(hit.path);
+    return;
+  }
+  if (
     lower.endsWith(".txt") ||
     lower.endsWith(".log") ||
     lower.endsWith(".ini")
@@ -157,7 +170,7 @@ function openHit(hit: Hit): void {
 }
 
 export function Find({ windowId }: { windowId: string }) {
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(useShallow((s) => ({ root: s.root })));
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");

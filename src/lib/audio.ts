@@ -1,26 +1,58 @@
-// Central audio engine for RSNRA 95. All in-app sound is synthesized here and
-// routed through a single master GainNode whose value is bound to the volume
-// store (src/store/audioStore.ts), so the tray volume slider is the one knob
-// that controls every sound the desktop makes.
+// Central audio engine for RSNRA 95. System sounds are the actual Windows
+// Me/95 .wav files from C:\Windows\Media (served from /windows/media/*.wav),
+// played through a single master GainNode bound to the volume store
+// (src/store/audioStore.ts) — so the tray volume slider controls every sound.
 //
-// The AudioContext is created lazily on the first `playSound` call (browsers
-// require a user gesture to start audio) and resumed if it's been suspended.
+// The AudioContext is created lazily on the first `playSound`/`unlockAudio`
+// call (browsers require a user gesture). AudioBuffers are fetched + decoded
+// once and cached. If a file is missing/fails, we fall back to a synthesized
+// oscillator blip so events still make *some* sound.
 
 import { useAudioStore } from "../store/audioStore";
 
 export type SoundName =
-  | "startup"
-  | "click"
+  | "startup" // boot chime — intentionally unused (kept for API compat)
+  | "error" // Critical Stop → chord.wav
+  | "exclamation" // → notify.wav
+  | "asterisk" // → chimes.wav
+  | "question" // → chord.wav
+  | "notify" // New Mail / notify → notify.wav
+  | "ding" // Default Beep → ding.wav
+  | "recycle" // Empty Recycle Bin → recycle.wav
+  | "tada" // a flourish → tada.wav
+  | "logoff" // shutdown/logoff → logoff.wav
   | "open"
   | "close"
-  | "error"
-  | "notify"
-  | "chord"
-  | "maximize";
+  | "maximize"
+  | "click";
+
+const MEDIA = "/windows/media/";
+
+// Map each event to its Windows Media .wav (lowercased filenames as served).
+const FILE_MAP: Partial<Record<SoundName, string>> = {
+  error: "chord.wav",
+  exclamation: "notify.wav",
+  asterisk: "chimes.wav",
+  question: "chord.wav",
+  notify: "notify.wav",
+  ding: "ding.wav",
+  recycle: "recycle.wav",
+  tada: "tada.wav",
+  logoff: "logoff.wav",
+  // Light UI feedback — Win95 left these silent by default, but route them to
+  // the soft default beep so they're audible when triggered.
+  open: "ding.wav",
+  close: "ding.wav",
+  maximize: "ding.wav",
+  click: "start.wav",
+  // "startup" intentionally has no file (boot sound excluded per request).
+};
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let unsub: (() => void) | null = null;
+const bufferCache = new Map<string, Promise<AudioBuffer | null>>();
+const inflight = new Set<SoundName>(); // avoid stacking the same sound
 
 function ensureContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -34,7 +66,6 @@ function ensureContext(): AudioContext | null {
     master = ctx.createGain();
     master.gain.value = effectiveGain();
     master.connect(ctx.destination);
-    // Keep the master gain in sync with the volume store.
     unsub?.();
     unsub = useAudioStore.subscribe((s) => {
       if (master && ctx) {
@@ -50,81 +81,69 @@ function effectiveGain(s = useAudioStore.getState()): number {
   return s.muted ? 0 : s.volume;
 }
 
-// A short oscillator "blip" with an exponential decay envelope.
-function blip(
-  c: AudioContext,
-  out: GainNode,
-  freq: number,
-  start: number,
-  dur: number,
-  type: OscillatorType = "sine",
-  peak = 0.9,
-): void {
-  const osc = c.createOscillator();
-  const env = c.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, start);
-  env.gain.setValueAtTime(0.0001, start);
-  env.gain.exponentialRampToValueAtTime(peak, start + 0.008);
-  env.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(env);
-  env.connect(out);
-  osc.start(start);
-  osc.stop(start + dur + 0.02);
+// Fetch + decode a .wav once, caching the AudioBuffer per URL.
+function loadBuffer(url: string): Promise<AudioBuffer | null> {
+  if (bufferCache.has(url)) return bufferCache.get(url)!;
+  const p = (async () => {
+    const c = ensureContext();
+    if (!c) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const arr = await res.arrayBuffer();
+      return await c.decodeAudioData(arr);
+    } catch {
+      return null;
+    }
+  })();
+  bufferCache.set(url, p);
+  return p;
 }
 
-// Sound definitions: each schedules notes against the shared context + a
-// per-sound gain (so individual sounds can be balanced).
-const SOUNDS: Record<SoundName, (c: AudioContext, out: GainNode) => void> = {
-  startup: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 523.25, t, 0.5, "triangle", 0.5);
-    blip(c, out, 659.25, t + 0.12, 0.5, "triangle", 0.5);
-    blip(c, out, 783.99, t + 0.24, 0.7, "triangle", 0.5);
-  },
-  open: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 440, t, 0.08, "square", 0.25);
-  },
-  close: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 330, t, 0.08, "square", 0.22);
-  },
-  maximize: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 660, t, 0.06, "square", 0.2);
-  },
-  click: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 1800, t, 0.03, "square", 0.12);
-  },
-  error: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 200, t, 0.18, "sawtooth", 0.4);
-    blip(c, out, 200, t + 0.22, 0.18, "sawtooth", 0.4);
-  },
-  notify: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 880, t, 0.12, "sine", 0.35);
-    blip(c, out, 1174.66, t + 0.1, 0.18, "sine", 0.3);
-  },
-  chord: (c, out) => {
-    const t = c.currentTime;
-    blip(c, out, 392, t, 0.4, "triangle", 0.3);
-    blip(c, out, 523.25, t, 0.4, "triangle", 0.3);
-    blip(c, out, 659.25, t, 0.4, "triangle", 0.3);
-  },
-};
+// Synthesized fallback (a short oscillator blip) if the .wav isn't available.
+function synthBlip(c: AudioContext, out: GainNode, freq: number): void {
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const env = c.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(freq, t);
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  osc.connect(env);
+  env.connect(out);
+  osc.start(t);
+  osc.stop(t + 0.2);
+}
 
-/** Play a named UI sound, routed through the master volume gain. */
+/** Play a named system sound, routed through the master volume gain. */
 export function playSound(name: SoundName): void {
   const c = ensureContext();
   if (!c || !master) return;
   if (effectiveGain() === 0) return; // muted / zero — nothing to hear
+  if (inflight.has(name)) return;
+  const file = FILE_MAP[name];
+  if (!file) return; // no mapping (e.g. startup) → silent
+
   const bus = c.createGain();
-  bus.gain.value = 0.8;
+  bus.gain.value = 0.9;
   bus.connect(master);
-  SOUNDS[name]?.(c, bus);
+
+  inflight.add(name);
+  const release = () => inflight.delete(name);
+
+  loadBuffer(MEDIA + file).then((buf) => {
+    if (buf) {
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.connect(bus);
+      src.onended = release;
+      src.start();
+    } else {
+      synthBlip(c, bus, name === "error" ? 200 : 880);
+      window.setTimeout(release, 220);
+    }
+  });
 }
 
 /** Resume the audio context on a user gesture (call from a click handler). */

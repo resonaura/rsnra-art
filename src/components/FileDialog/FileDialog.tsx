@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled, { css } from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -221,7 +222,16 @@ export function FileDialog({
   onConfirm,
   onCancel,
 }: FileDialogProps) {
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(
+    useShallow((s) => ({
+      root: s.root,
+      resolve: s.resolve,
+      resolvePath: s.resolvePath,
+      exists: s.exists,
+      mkdir: s.mkdir,
+      rename: s.rename,
+    })),
+  );
   const [currentDir, setCurrentDir] = useState(initialDir);
   const [selectedName, setSelectedName] = useState(initialFileName);
   const [fileName, setFileName] = useState(initialFileName);

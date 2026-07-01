@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ContextMenu, CtxItem } from "../../components/ContextMenu";
 import { ScrollArea } from "../../components/ScrollArea";
+import { playSound } from "../../lib/audio";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -127,6 +128,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           disabled: isEmpty,
           action: () => {
             emptyRecycleBin();
+            playSound("recycle");
             setSelected(null);
           },
         },

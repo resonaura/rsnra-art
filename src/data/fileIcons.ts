@@ -19,6 +19,9 @@ const EXT_ICONS: Record<string, string> = {
   com: "/icons/msdos.png",
   dll: "/icons/file-dll.png",
   exe: "/icons/msdos.png",
+  wav: "/icons/sound.png",
+  mid: "/icons/sound.png",
+  rmi: "/icons/sound.png",
 };
 
 const FOLDER_OPEN = "/icons/folder-open.png";

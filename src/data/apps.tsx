@@ -196,7 +196,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     icon: "/icons/folder-open.png",
     component: asComponent(Properties),
     width: 340,
-    height: 440,
+    height: 490,
     resizable: false,
     singleInstance: false,
   },

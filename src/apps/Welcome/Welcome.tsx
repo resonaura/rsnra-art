@@ -113,7 +113,7 @@ export function Welcome({ windowId }: { windowId: string }) {
             </ul>
           </ScrollArea>
         </InfoFrame>
-        <SideButtons>
+        <SideButtons style={{ zoom: 0.8 }}>
           <Button fullWidth onClick={() => openApp("music")}>
             Listen Now
           </Button>
@@ -138,8 +138,10 @@ export function Welcome({ windowId }: { windowId: string }) {
           </GroupBox>
         </SideButtons>
       </Main>
-      <Footer>
-        <Button onClick={() => closeWindow(windowId)}>Close</Button>
+      <Footer style={{ zoom: 0.8 }}>
+        <Button style={{ width: "80px" }} onClick={() => closeWindow(windowId)}>
+          Close
+        </Button>
       </Footer>
     </Layout>
   );

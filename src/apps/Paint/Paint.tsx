@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, TextInput } from "react95";
 import styled, { css } from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
@@ -537,7 +538,9 @@ export function Paint({ windowId }: { windowId: string }) {
     (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
   );
   const windowData = useWindowData(windowId);
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(
+    useShallow((s) => ({ read: s.read, writeFile: s.writeFile })),
+  );
   const { showFileDialog, dialog: fileDialog } = useFileDialog();
   const [filePath, setFilePath] = useState<string | null>(
     (windowData.path as string) ?? null,

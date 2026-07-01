@@ -13,6 +13,8 @@ export interface VfsNode {
   appId?: string; // executable: launching this file opens the app
   system?: boolean; // system file — cannot be deleted/renamed
   hidden?: boolean;
+  readonly?: boolean; // read-only — cannot be modified/deleted
+  archive?: boolean; // archive bit (Win95)
   created: number;
 }
 
@@ -52,6 +54,12 @@ export interface VfsState {
   moveTo: (src: string, destDir: string) => string | null;
   rename: (path: string, newName: string) => boolean;
   setCwd: (path: string) => boolean;
+  // Toggle file/folder attributes (Hidden, Read-only, Archive). Refuses on
+  // system items. Partial — only the provided fields are changed.
+  setAttributes: (
+    path: string,
+    attrs: { hidden?: boolean; readonly?: boolean; archive?: boolean },
+  ) => boolean;
 }
 
 // ─── Path helpers ──────────────────────────────────────────────────────────
@@ -190,6 +198,7 @@ const file = (name: string, opts: Partial<VfsNode> = {}): VfsNode => ({
   type: "file",
   content: "",
   system: false,
+  archive: true, // Win95 sets the archive bit on new/changed files
   created: now(),
   ...opts,
 });
@@ -332,6 +341,22 @@ function buildInitialTree(): VfsNode {
       dir("Temp", [], true),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", [], true),
+      // System sounds — the real Windows Me/95 .wav files, browsable at
+      // C:\Windows\Media just like in real Windows.
+      dir(
+        "Media",
+        [
+          file("chimes.wav", { system: true }),
+          file("chord.wav", { system: true }),
+          file("ding.wav", { system: true }),
+          file("logoff.wav", { system: true }),
+          file("notify.wav", { system: true }),
+          file("recycle.wav", { system: true }),
+          file("start.wav", { system: true }),
+          file("tada.wav", { system: true }),
+        ],
+        true,
+      ),
     ],
     true,
   );
@@ -565,7 +590,9 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
+          if (existing.system || existing.readonly) return false;
           existing.content = content;
+          existing.archive = true;
           set({ root: { ...get().root } });
           return true;
         }
@@ -585,7 +612,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system) return false;
+        if (!ref || ref.node.system || ref.node.readonly) return false;
         ref.parent.children = ref.parent.children!.filter(
           (c) => c !== ref.node,
         );
@@ -597,7 +624,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system) return false;
+        if (!ref || ref.node.system || ref.node.readonly) return false;
         ref.parent.children = ref.parent.children!.filter(
           (c) => c !== ref.node,
         );
@@ -661,7 +688,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.system) return false;
+        if (!ref || ref.node.system || ref.node.readonly) return false;
         if (
           dest.children.some(
             (c) => c.name.toLowerCase() === ref.node.name.toLowerCase(),
@@ -723,7 +750,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.system) return null;
+        if (!ref || ref.node.system || ref.node.readonly) return null;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         // No-op if dropped back into its own parent.
@@ -745,7 +772,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system) return false;
+        if (!ref || ref.node.system || ref.node.readonly) return false;
         if (
           ref.parent.children!.some(
             (c) =>
@@ -766,10 +793,22 @@ export const useVfsStore = create<VfsState>()(
         set({ cwd: abs });
         return true;
       },
+
+      setAttributes: (path, attrs) => {
+        const abs = normalizePath(path, get().cwd);
+        if (!abs) return false;
+        const node = findNode(get().root, abs);
+        if (!node || node.system) return false;
+        if ("hidden" in attrs) node.hidden = attrs.hidden;
+        if ("readonly" in attrs) node.readonly = attrs.readonly;
+        if ("archive" in attrs) node.archive = attrs.archive;
+        set({ root: { ...get().root } });
+        return true;
+      },
     }),
     {
       name: "rsnra95-vfs",
-      version: 3,
+      version: 4,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",

@@ -1,15 +1,7 @@
 import { useState } from "react";
-import {
-  Button,
-  Checkbox,
-  Frame,
-  GroupBox,
-  Tab,
-  TabBody,
-  Tabs,
-  Window,
-} from "react95";
+import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { iconForNode } from "../../data/fileIcons";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
@@ -141,12 +133,19 @@ function formatDate(ts: number): string {
 
 export function Properties({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(
+    useShallow((s) => ({ resolve: s.resolve, setAttributes: s.setAttributes })),
+  );
   const closeWindow = useWindowStore((s) => s.closeWindow);
-  const [tab, setTab] = useState("General");
-
   const path = (data.path as string) ?? "C:\\";
   const node = vfs.resolve(path);
+  const [tab, setTab] = useState("General");
+  // Local mirror of the attributes so checkboxes feel instant; persisted to
+  // the VFS on each toggle. System items can't be changed.
+  const [hidden, setHidden] = useState(!!node?.hidden);
+  const [readonly, setReadonly] = useState(!!node?.readonly);
+  const [archive, setArchive] = useState(node?.archive ?? true);
+
   const parent = path.includes(SEP)
     ? path.slice(0, path.lastIndexOf(SEP))
     : "C:";
@@ -171,109 +170,136 @@ export function Properties({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Window>
-        <Tabs
-          value={tab}
-          onChange={(v: string) => setTab(v)}
-          style={{ fontSize: 11 }}
-        >
-          <Tab value="General">General</Tab>
-          <Tab value="Version">Version</Tab>
-        </Tabs>
-        <Body>
-          {tab === "General" ? (
-            <>
-              <Header>
-                <IconBox variant="field">
-                  <img src={iconForNode(node)} alt="" draggable={false} />
-                </IconBox>
-                <Title>{name}</Title>
-              </Header>
-              <GroupBox
-                label={`${type} (${type === "File Folder" ? "" : "General"})`}
-              >
-                <Field>
-                  <Key>Type:</Key>
-                  <Val>{type}</Val>
-                </Field>
-                {node.type === "file" && (
-                  <Field>
-                    <Key>Opens with:</Key>
-                    <Val>
-                      {node.appId
-                        ? "RSNRA 95 Application"
-                        : extOf(name) === "TXT" || extOf(name) === "LOG"
-                          ? "Notepad"
-                          : ["BMP", "PNG", "JPG"].includes(extOf(name))
-                            ? "Paint"
-                            : "Unknown"}
-                    </Val>
-                  </Field>
-                )}
-                <Field>
-                  <Key>Location:</Key>
-                  <Val>{parentDir}</Val>
-                </Field>
-                <Field>
-                  <Key>Size:</Key>
-                  <Val>
-                    {node.type === "dir"
-                      ? formatSize(size)
-                      : `${formatSize(size)}  (${size} bytes)`}
-                  </Val>
-                </Field>
-                <Field>
-                  <Key>MS-DOS name:</Key>
-                  <Val>{shortName(name)}</Val>
-                </Field>
-              </GroupBox>
-              <GroupBox label="Date">
-                <Field>
-                  <Key>Created:</Key>
-                  <Val>{formatDate(node.created)}</Val>
-                </Field>
-                <Field>
-                  <Key>Modified:</Key>
-                  <Val>{formatDate(node.created)}</Val>
-                </Field>
-                <Field>
-                  <Key>Accessed:</Key>
-                  <Val>{formatDate(node.created)}</Val>
-                </Field>
-              </GroupBox>
-              <GroupBox label="Attributes">
-                <AttrRow>
-                  <Checkbox
-                    label="Read-only"
-                    checked={!!node.system}
-                    disabled
-                  />
-                  <Checkbox label="Hidden" checked={!!node.hidden} disabled />
-                  <Checkbox label="Archive" checked disabled />
-                </AttrRow>
-              </GroupBox>
-            </>
-          ) : (
-            <GroupBox label="Version information">
+      <Tabs
+        value={tab}
+        onChange={(v: string) => setTab(v)}
+        style={{ fontSize: 11, zoom: 0.8 }}
+      >
+        <Tab value="General">General</Tab>
+        <Tab value="Version">Version</Tab>
+      </Tabs>
+      <Body style={{ height: "fit-content" }}>
+        {tab === "General" ? (
+          <>
+            <Header style={{ zoom: 0.9 }}>
+              <IconBox variant="field">
+                <img src={iconForNode(node)} alt="" draggable={false} />
+              </IconBox>
+              <Title>{name}</Title>
+            </Header>
+            <GroupBox
+              style={{ zoom: 0.8 }}
+              label={`${type} (${type === "File Folder" ? "" : "General"})`}
+            >
               <Field>
-                <Key>File version:</Key>
-                <Val>1.0</Val>
-              </Field>
-              <Field>
-                <Key>Description:</Key>
+                <Key>Type:</Key>
                 <Val>{type}</Val>
               </Field>
+              {node.type === "file" && (
+                <Field>
+                  <Key>Opens with:</Key>
+                  <Val>
+                    {node.appId
+                      ? "RSNRA 95 Application"
+                      : extOf(name) === "TXT" || extOf(name) === "LOG"
+                        ? "Notepad"
+                        : ["BMP", "PNG", "JPG"].includes(extOf(name))
+                          ? "Paint"
+                          : "Unknown"}
+                  </Val>
+                </Field>
+              )}
               <Field>
-                <Key>Copyright:</Key>
-                <Val>© RSNRA 95</Val>
+                <Key>Location:</Key>
+                <Val>{parentDir}</Val>
+              </Field>
+              <Field>
+                <Key>Size:</Key>
+                <Val>
+                  {node.type === "dir"
+                    ? formatSize(size)
+                    : `${formatSize(size)}  (${size} bytes)`}
+                </Val>
+              </Field>
+              <Field>
+                <Key>MS-DOS name:</Key>
+                <Val>{shortName(name)}</Val>
               </Field>
             </GroupBox>
-          )}
-          <BtnRow>
-            <Button onClick={() => closeWindow(windowId)}>OK</Button>
-          </BtnRow>
-        </Body>
-      </Window>
+            <GroupBox style={{ zoom: 0.8 }} label="Date">
+              <Field>
+                <Key>Created:</Key>
+                <Val>{formatDate(node.created)}</Val>
+              </Field>
+              <Field>
+                <Key>Modified:</Key>
+                <Val>{formatDate(node.created)}</Val>
+              </Field>
+              <Field>
+                <Key>Accessed:</Key>
+                <Val>{formatDate(node.created)}</Val>
+              </Field>
+            </GroupBox>
+            <GroupBox style={{ zoom: 0.8 }} label="Attributes">
+              <AttrRow style={{ zoom: 0.8 }}>
+                <Checkbox
+                  label="Read-only"
+                  checked={readonly}
+                  disabled={!!node.system}
+                  onChange={() => {
+                    const v = !readonly;
+                    setReadonly(v);
+                    vfs.setAttributes(path, { readonly: v });
+                  }}
+                />
+                <Checkbox
+                  label="Hidden"
+                  checked={hidden}
+                  disabled={!!node.system}
+                  onChange={() => {
+                    const v = !hidden;
+                    setHidden(v);
+                    vfs.setAttributes(path, { hidden: v });
+                  }}
+                />
+                <Checkbox
+                  label="Archive"
+                  checked={archive}
+                  disabled={!!node.system}
+                  onChange={() => {
+                    const v = !archive;
+                    setArchive(v);
+                    vfs.setAttributes(path, { archive: v });
+                  }}
+                />
+              </AttrRow>
+            </GroupBox>
+          </>
+        ) : (
+          <GroupBox style={{ zoom: 0.8 }} label="Version information">
+            <Field>
+              <Key>File version:</Key>
+              <Val>1.0</Val>
+            </Field>
+            <Field>
+              <Key>Description:</Key>
+              <Val>{type}</Val>
+            </Field>
+            <Field>
+              <Key>Copyright:</Key>
+              <Val>© RSNRA 95</Val>
+            </Field>
+          </GroupBox>
+        )}
+        <BtnRow>
+          <Button
+            style={{ zoom: 0.8, width: "80px" }}
+            onClick={() => closeWindow(windowId)}
+          >
+            OK
+          </Button>
+        </BtnRow>
+      </Body>
     </Layout>
   );
 }

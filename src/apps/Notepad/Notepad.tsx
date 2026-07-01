@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Separator } from "react95";
 import styled from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
@@ -49,7 +50,13 @@ const StatusBar = styled.div`
 
 export function Notepad({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
-  const vfs = useVfsStore();
+  const vfs = useVfsStore(
+    useShallow((s) => ({
+      read: s.read,
+      writeFile: s.writeFile,
+      exists: s.exists,
+    })),
+  );
   const updateTitle = useWindowStore((s) => s.updateTitle);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const { showFileDialog, dialog } = useFileDialog();
