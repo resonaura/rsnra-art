@@ -83,7 +83,16 @@ const GAMES: GameItem[] = [
     icon: "/icons/joystick.png",
     onOpen: () => openApp("snake"),
   },
-  { label: "Solitaire", icon: "/icons/solitaire.png", disabled: true },
+  {
+    label: "Solitaire",
+    icon: "/icons/solitaire.png",
+    onOpen: () => openApp("solitaire"),
+  },
+  {
+    label: "3D Pinball",
+    icon: "/icons/pinball.png",
+    onOpen: () => openApp("pinball"),
+  },
   { label: "Hearts", icon: "/icons/hearts.png", disabled: true },
   { label: "FreeCell", icon: "/icons/freecell.png", disabled: true },
   { label: "Spider", icon: "/icons/spider.png", disabled: true },

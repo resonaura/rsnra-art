@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { useWindowStore } from "../store/windowStore";
 import type { AppId } from "../types/window";
 
+import { Calculator } from "../apps/Calculator/Calculator";
 import { Contact } from "../apps/Contact/Contact";
 import { ControlPanel } from "../apps/ControlPanel/ControlPanel";
 import { DateTime } from "../apps/DateTime/DateTime";
@@ -14,10 +15,13 @@ import { MyComputer } from "../apps/MyComputer/MyComputer";
 import { Notepad } from "../apps/Notepad/Notepad";
 import { Paint } from "../apps/Paint/Paint";
 import { PaintFonts } from "../apps/Paint/PaintFonts";
+import { Pinball } from "../apps/Pinball/Pinball";
 import { Properties } from "../apps/Properties/Properties";
 import { RecycleBin } from "../apps/RecycleBin/RecycleBin";
 import { Snake } from "../apps/Snake/Snake";
 import { Social } from "../apps/Social/Social";
+import { Solitaire } from "../apps/Solitaire/Solitaire";
+import { SoundRecorder } from "../apps/SoundRecorder/SoundRecorder";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
 
@@ -208,6 +212,51 @@ export const APPS: Record<AppId, AppDefinition> = {
     width: 340,
     height: 460,
     resizable: false,
+    singleInstance: true,
+  },
+  calculator: {
+    id: "calculator",
+    title: "Calculator",
+    icon: "/icons/calculator.png",
+    component: asComponent(Calculator),
+    width: 260,
+    height: 360,
+    resizable: false,
+    noPadding: true,
+    singleInstance: false,
+  },
+  "sound-recorder": {
+    id: "sound-recorder",
+    title: "Sound Recorder",
+    icon: "/icons/sound-recorder.png",
+    component: asComponent(SoundRecorder),
+    width: 380,
+    height: 220,
+    resizable: false,
+    noPadding: true,
+    singleInstance: false,
+  },
+  solitaire: {
+    id: "solitaire",
+    title: "Solitaire",
+    icon: "/icons/solitaire.png",
+    component: asComponent(Solitaire),
+    width: 640,
+    height: 480,
+    minWidth: 480,
+    minHeight: 380,
+    noPadding: true,
+    singleInstance: false,
+  },
+  pinball: {
+    id: "pinball",
+    title: "3D Pinball for Windows - Space Cadet",
+    icon: "/icons/pinball.png",
+    component: asComponent(Pinball),
+    width: 616,
+    height: 468,
+    resizable: false,
+    noPadding: true,
     singleInstance: true,
   },
   // Winamp is a floating Webamp overlay (see src/lib/webamp.ts), not a real

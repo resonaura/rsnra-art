@@ -17,7 +17,11 @@ export type AppId =
   | "find"
   | "properties"
   | "datetime"
-  | "winamp";
+  | "winamp"
+  | "calculator"
+  | "sound-recorder"
+  | "solitaire"
+  | "pinball";
 
 export interface Bounds {
   x: number;

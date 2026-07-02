@@ -1,0 +1,31 @@
+The programs under public/legacy/programs are vendored, with minimal
+changes, from the 98.js project (https://github.com/1j01/98), which
+brings together several independently authored Windows 98 clones.
+
+Calculator
+  Windows 98 interface by Isaiah Odhner (https://github.com/1j01/98)
+  Web port of the Windows 10 Calculator engine ("mcalculator") by
+  Muzam1l (https://github.com/Muzammil-Xhah/mcalculator) — MIT License,
+  Copyright (c) 2020 muzamil
+
+Sound Recorder
+  by Isaiah Odhner (https://github.com/1j01/98)
+
+Minesweeper (face/tile icon sprite only, see public/icons/minesweeper-*;
+game logic is our own)
+  by Jon Ziebell (https://github.com/ziebelje/minesweeper)
+
+Solitaire
+  by Radovan Janjic (https://github.com/rjanjic/js-solitaire) —
+  MIT License, Copyright (c) 2021 Radovan Janjic
+
+3D Pinball for Windows - Space Cadet
+  decompiled & ported to WebAssembly by Muzychenko Andrey and Alula
+  (https://github.com/alula/SpaceCadetPinball)
+
+Shared runtime (public/legacy/lib, public/legacy/src)
+  os-gui window/menu toolkit and msgbox by Isaiah Odhner
+  (https://github.com/1j01/os-gui)
+
+Full MIT license texts for the above are available in their
+respective upstream repositories.

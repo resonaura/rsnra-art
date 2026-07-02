@@ -5,6 +5,7 @@ import styled from "styled-components";
 const COLS = 9;
 const ROWS = 9;
 const MINES = 10;
+const CELL_SIZE = 24;
 
 interface Cell {
   mine: boolean;
@@ -14,6 +15,7 @@ interface Cell {
 }
 
 type GameStatus = "idle" | "playing" | "won" | "lost";
+type Coord = { r: number; c: number };
 
 function emptyBoard(): Cell[][] {
   return Array.from({ length: ROWS }, () =>
@@ -61,17 +63,6 @@ function plantMines(board: Cell[][], avoidR: number, avoidC: number): Cell[][] {
   return next;
 }
 
-const NUMBER_COLORS: Record<number, string> = {
-  1: "#0000ff",
-  2: "#008200",
-  3: "#ff0000",
-  4: "#000084",
-  5: "#840000",
-  6: "#008284",
-  7: "#000000",
-  8: "#848484",
-};
-
 const Layout = styled.div`
   display: flex;
   flex-direction: column;
@@ -89,69 +80,81 @@ const Header = styled(Frame)`
   background: ${({ theme }) => theme.material};
 `;
 
+// The face/tile sprites (from the classic Minesweeper spritesheet) already
+// include their own raised/pressed bevel art, so these buttons stay bare —
+// any extra CSS border here would just double up on top of the sprite's own.
 const FaceButton = styled.button`
   width: 32px;
   height: 32px;
-  font-size: 18px;
-  background: ${({ theme }) => theme.material};
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
+  padding: 0;
+  border: none;
+  background: none;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  &:active {
-    border-color: ${({ theme }) => theme.borderDarkest}
-      ${({ theme }) => theme.borderLightest}
-      ${({ theme }) => theme.borderLightest}
-      ${({ theme }) => theme.borderDarkest};
+
+  img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
   }
 `;
 
 const Board = styled(Frame)`
   display: inline-grid;
-  grid-template-columns: repeat(${COLS}, 24px);
-  grid-template-rows: repeat(${ROWS}, 24px);
+  grid-template-columns: repeat(${COLS}, ${CELL_SIZE}px);
+  grid-template-rows: repeat(${ROWS}, ${CELL_SIZE}px);
   background: ${({ theme }) => theme.material};
   padding: 4px;
 `;
 
-const CellButton = styled.button<{ $revealed: boolean }>`
-  width: 24px;
-  height: 24px;
+const CellButton = styled.button`
+  width: ${CELL_SIZE}px;
+  height: ${CELL_SIZE}px;
   padding: 0;
-  font-size: 13px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border: none;
+  background: none;
   cursor: pointer;
-  background: ${({ theme }) => theme.material};
 
-  ${({ $revealed, theme }) =>
-    $revealed
-      ? `
-    border: 1px solid ${theme.borderDark};
-    background: ${theme.material};
-  `
-      : `
-    border: 2px solid;
-    border-color: ${theme.borderLightest} ${theme.borderDarkest} ${theme.borderDarkest} ${theme.borderLightest};
-  `}
+  img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
 `;
 
-function faceForStatus(status: GameStatus) {
-  if (status === "won") return "😎";
-  if (status === "lost") return "😵";
-  return "🙂";
+function faceIcon(status: GameStatus, digging: boolean, pressed: boolean) {
+  const state = pressed
+    ? "depressed-smile"
+    : status === "won"
+      ? "sunglasses"
+      : status === "lost"
+        ? "dead"
+        : digging
+          ? "scared"
+          : "smile";
+  return `/icons/minesweeper-face-${state}.png`;
+}
+
+function tileIcon(cell: Cell, coord: Coord, status: GameStatus, losingCell: Coord | null) {
+  if (cell.flagged && !cell.revealed) {
+    if (status === "lost" && !cell.mine) return "mine-x"; // flagged a cell that wasn't a mine
+    return "flag";
+  }
+  if (!cell.revealed) return "covered";
+  if (cell.mine) {
+    const isLosingCell =
+      losingCell && losingCell.r === coord.r && losingCell.c === coord.c;
+    return isLosingCell ? "mine-red" : "mine";
+  }
+  return cell.adjacent > 0 ? `count-${cell.adjacent}` : "empty";
 }
 
 export function Minesweeper() {
   const [board, setBoard] = useState<Cell[][]>(emptyBoard);
   const [status, setStatus] = useState<GameStatus>("idle");
   const [seconds, setSeconds] = useState(0);
+  const [digging, setDigging] = useState(false);
+  const [facePressed, setFacePressed] = useState(false);
+  const [losingCell, setLosingCell] = useState<Coord | null>(null);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -172,6 +175,7 @@ export function Minesweeper() {
     setBoard(emptyBoard());
     setStatus("idle");
     setSeconds(0);
+    setLosingCell(null);
     if (timerRef.current) window.clearInterval(timerRef.current);
   }, []);
 
@@ -211,6 +215,7 @@ export function Minesweeper() {
       for (const row of working)
         for (const cell of row) if (cell.mine) cell.revealed = true;
       setBoard(working);
+      setLosingCell({ r, c });
       setStatus("lost");
       return;
     }
@@ -241,35 +246,40 @@ export function Minesweeper() {
           style={{ zoom: 0.67 }}
           value={Math.max(0, MINES - flagCount)}
         />
-        <FaceButton onClick={resetGame}>{faceForStatus(status)}</FaceButton>
+        <FaceButton
+          onClick={resetGame}
+          onMouseDown={() => setFacePressed(true)}
+          onMouseUp={() => setFacePressed(false)}
+          onMouseLeave={() => setFacePressed(false)}
+        >
+          <img src={faceIcon(status, digging, facePressed)} alt="" />
+        </FaceButton>
         <Counter style={{ zoom: 0.67 }} value={seconds} />
       </Header>
-      <Board variant="window">
+      <Board variant="window" onMouseLeave={() => setDigging(false)}>
         {board.map((row, r) =>
-          row.map((cell, c) => (
-            <CellButton
-              key={`${r}-${c}`}
-              $revealed={cell.revealed}
-              onClick={() => handleReveal(r, c)}
-              onContextMenu={(e) => handleFlag(e, r, c)}
-              style={{
-                color:
-                  cell.revealed && cell.adjacent > 0 && !cell.mine
-                    ? NUMBER_COLORS[cell.adjacent]
-                    : undefined,
-              }}
-            >
-              {cell.revealed
-                ? cell.mine
-                  ? "💣"
-                  : cell.adjacent > 0
-                    ? cell.adjacent
-                    : ""
-                : cell.flagged
-                  ? "🚩"
-                  : ""}
-            </CellButton>
-          )),
+          row.map((cell, c) => {
+            const diggable =
+              (status === "idle" || status === "playing") &&
+              !cell.revealed &&
+              !cell.flagged;
+            return (
+              <CellButton
+                key={`${r}-${c}`}
+                onClick={() => handleReveal(r, c)}
+                onContextMenu={(e) => handleFlag(e, r, c)}
+                onMouseDown={(e) => {
+                  if (e.button === 0 && diggable) setDigging(true);
+                }}
+                onMouseUp={() => setDigging(false)}
+              >
+                <img
+                  src={`/icons/minesweeper-tile-${tileIcon(cell, { r, c }, status, losingCell)}.png`}
+                  alt=""
+                />
+              </CellButton>
+            );
+          }),
         )}
       </Board>
     </Layout>

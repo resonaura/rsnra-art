@@ -123,6 +123,18 @@ export function useStartMenuTree(): MenuNode[] {
               icon: "/icons/paint.png",
               action: run(() => openApp("paint")),
             },
+            {
+              id: "calculator",
+              label: "Calculator",
+              icon: "/icons/calculator.png",
+              action: run(() => openApp("calculator")),
+            },
+            {
+              id: "sound-recorder",
+              label: "Sound Recorder",
+              icon: "/icons/sound-recorder.png",
+              action: run(() => openApp("sound-recorder")),
+            },
           ],
         },
         {
@@ -147,6 +159,18 @@ export function useStartMenuTree(): MenuNode[] {
               label: "RSNRA Snake",
               icon: "/icons/joystick.png",
               action: run(() => openApp("snake")),
+            },
+            {
+              id: "solitaire",
+              label: "Solitaire",
+              icon: "/icons/solitaire.png",
+              action: run(() => openApp("solitaire")),
+            },
+            {
+              id: "pinball",
+              label: "3D Pinball",
+              icon: "/icons/pinball.png",
+              action: run(() => openApp("pinball")),
             },
           ],
         },
