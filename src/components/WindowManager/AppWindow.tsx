@@ -22,6 +22,12 @@ const StyledHeader = styled(WindowHeader)`
   cursor: default;
   user-select: none;
   touch-action: none;
+  
+  color: ${({ active, theme }) => (active ? theme.headerText : theme.headerNotActiveText)} !important;
+
+  span, div {
+    color: ${({ active, theme }) => (active ? theme.headerText : theme.headerNotActiveText)} !important;
+  }
 `;
 
 const HeaderTitle = styled.div`
@@ -56,6 +62,8 @@ const GlyphButton = styled(Button)`
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Control glyphs in Windows 95 buttons are always drawn using the theme's materialText color,
+     independent of the title background color, because they sit inside their own grey button */
   color: ${({ theme }) => theme.materialText};
 `;
 

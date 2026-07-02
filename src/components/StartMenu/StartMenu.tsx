@@ -22,7 +22,16 @@ const Positioned = styled.div`
 const Banner = styled.div`
   width: 34px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #1a0b3d 0%, #4a1d7a 55%, #8a2f8f 100%);
+  background: ${({ theme }) => {
+    const bg = theme.headerBackground as string;
+    // If the theme already supplies a gradient, use it directly (rotated 180°).
+    if (bg.includes("gradient")) {
+      // Convert "to right" → "to bottom" for the vertical banner orientation.
+      return bg.replace("to right", "to bottom");
+    }
+    // Solid colour: build a dark→colour gradient for visual depth.
+    return `linear-gradient(180deg, color-mix(in srgb, ${bg} 55%, #000) 0%, ${bg} 60%, color-mix(in srgb, ${bg} 70%, #fff) 100%)`;
+  }};
   position: relative;
   overflow: hidden;
 `;
@@ -37,7 +46,7 @@ const BannerLabel = styled.div`
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   white-space: nowrap;
-  color: #f4f1ff;
+  color: ${({ theme }) => theme.headerText};
   font-weight: bold;
   font-size: 19px;
   letter-spacing: 0.5px;
