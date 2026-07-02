@@ -81,3 +81,20 @@ textarea::-webkit-scrollbar-corner {
 }
 
 /* dakedres was here ;3 */
+
+html,
+body {
+  /* 1. Отключаем плавную прокрутку (делаем её мгновенной) */
+  scroll-behavior: auto !important;
+
+  /* 2. Вырубаем пружинящий эффект (overscroll) */
+  overscroll-behavior: none !important;
+}
+
+/* 3. Для Safari / iOS (у них свои капризы с резиновым скроллом) */
+@supports (-webkit-touch-callout: none) {
+  body {
+    /* Отключает инерционный скролл на iOS, делая его обрывистым */
+    -webkit-overflow-scrolling: auto !important;
+  }
+}

@@ -13,6 +13,7 @@ import { WindowManager } from "./components/WindowManager/WindowManager";
 import { openApp } from "./data/apps";
 import { getThemeById, useThemeStore } from "./store/themeStore";
 import { useWindowStore } from "./store/windowStore";
+import { CursorGlobalStyle } from "./styles/CursorGlobalStyle";
 import { GlobalStyle } from "./styles/GlobalStyle";
 
 function Desk() {
@@ -61,6 +62,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyle />
+      <CursorGlobalStyle />
       <div
         id="rsnra-desktop-root"
         style={{ position: "fixed", inset: 0, overflow: "hidden" }}

@@ -1,96 +1,111 @@
-import { Frame, GroupBox } from "react95";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ScrollArea } from "../../components/ScrollArea";
-import { BAND_LOCATION, BAND_NAME } from "../../data/content";
-import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
-import { THEMES, useThemeStore } from "../../store/themeStore";
+import { openApp } from "../../data/apps";
 import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-`;
-
-// ScrollArea imported from ../../components/ScrollArea
-
-const Preview = styled(Frame)<{ $bg: string }>`
   width: 100%;
-  height: 90px;
-  background: ${({ $bg }) => $bg};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 12px;
-  text-shadow: 1px 1px black;
 `;
 
-const Swatches = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-`;
-
-const Swatch = styled.button<{ $bg: string; $active: boolean }>`
-  width: 56px;
-  height: 36px;
-  background: ${({ $bg }) => $bg};
+const IconGrid = styled(ScrollArea)`
+  flex: 1;
+  background: white;
   border: 2px solid;
-  border-color: ${({ $active, theme }) =>
-      $active ? theme.borderDarkest : theme.borderLightest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderLightest : theme.borderDarkest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderLightest : theme.borderDarkest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderDarkest : theme.borderLightest};
-  cursor: pointer;
-  outline: ${({ $active }) => ($active ? "1px dotted black" : "none")};
-  outline-offset: -4px;
+  border-color: ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
-const SchemeSwatch = styled.button<{ $active: boolean }>`
-  width: 64px;
-  height: 44px;
+const IconItem = styled.button<{ $disabled?: boolean }>`
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 2px solid;
-  border-color: ${({ $active, theme }) =>
-      $active ? theme.borderDarkest : theme.borderLightest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderLightest : theme.borderDarkest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderLightest : theme.borderDarkest}
-    ${({ $active, theme }) =>
-      $active ? theme.borderDarkest : theme.borderLightest};
-  cursor: pointer;
-  outline: ${({ $active }) => ($active ? "1px dotted black" : "none")};
-  outline-offset: -4px;
+  align-items: center;
+  gap: 4px;
+  width: 88px;
+  padding: 6px 2px;
+  background: transparent;
+  border: 1px dotted transparent;
+  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
+  font-family: inherit;
+  font-size: 11px;
+  color: ${({ theme, $disabled }) =>
+    $disabled ? theme.materialTextDisabled : theme.canvasText};
+  text-align: center;
+
+  img {
+    width: 32px;
+    height: 32px;
+    image-rendering: pixelated;
+    opacity: ${({ $disabled }) => ($disabled ? 0.5 : 1)};
+  }
+
+  &:hover:not([disabled]) {
+    background: ${({ theme }) => theme.hoverBackground};
+    color: ${({ theme }) => theme.headerText};
+    border-color: ${({ theme }) => theme.headerText};
+  }
+
+  &:focus {
+    outline: none;
+  }
 `;
 
-const SchemeTitleBar = styled.div<{ $bg: string }>`
-  height: 14px;
+const StatusBar = styled.div`
   flex-shrink: 0;
-  background: ${({ $bg }) => $bg};
+  margin-top: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid;
+  border-color: ${({ theme }) => theme.borderDark}
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDark};
 `;
 
-const SchemeBody = styled.div<{ $bg: string }>`
-  flex: 1;
-  background: ${({ $bg }) => $bg};
-`;
+interface AppletItem {
+  label: string;
+  icon: string;
+  onOpen?: () => void;
+}
+
+const APPLETS: AppletItem[] = [
+  { label: "Accessibility Options", icon: "/icons/w98_access_wheelchair_big.png" },
+  { label: "Add New Hardware", icon: "/icons/w98_hardware.png" },
+  { label: "Add/Remove Programs", icon: "/icons/w98_program_manager.png" },
+  { label: "Automatic Updates", icon: "/icons/w98_windows_update_large.png" },
+  { label: "Date/Time", icon: "/icons/w98_time_and_date.png", onOpen: () => openApp("datetime") },
+  { label: "Dial-Up Networking", icon: "/icons/w98_conn_dialup.png" },
+  {
+    label: "Display",
+    icon: "/icons/w98_display_properties.png",
+    onOpen: () => openApp("display-properties"),
+  },
+  { label: "Folder Options", icon: "/icons/folder-open.png" },
+  { label: "Fonts", icon: "/icons/w98_font_tt.png" },
+  { label: "Gaming Options", icon: "/icons/joystick.png" },
+  { label: "Internet Options", icon: "/icons/w98_internet_options.png" },
+  { label: "Keyboard", icon: "/icons/w98_keyboard.png" },
+  { label: "Modems", icon: "/icons/w98_conn_dialup_alt.png" },
+  { label: "Mouse", icon: "/icons/w98_mouse.png", onOpen: () => openApp("mouse-properties") },
+  { label: "Network", icon: "/icons/w98_network.png" },
+  { label: "ODBC Data Sources (32bit)", icon: "/icons/w98_odbc.png" },
+  { label: "Passwords", icon: "/icons/w98_users_key.png" },
+  { label: "Power Options", icon: "/icons/w98_power_management.png" },
+  { label: "Printers", icon: "/icons/w98_printer_big.png" },
+  { label: "Regional Settings", icon: "/icons/globe.png" },
+  { label: "Scanners and Cameras", icon: "/icons/w98_scanner_camera.png" },
+  { label: "Scheduled Tasks", icon: "/icons/w2k_scheduled_tasks.png" },
+  { label: "Sounds and Multimedia", icon: "/icons/w98_mixer_sound.png" },
+  { label: "System", icon: "/icons/computer.png", onOpen: () => openApp("system-properties") },
+  { label: "Telephony", icon: "/icons/w98_telephony.png" },
+  { label: "Users", icon: "/icons/w98_users.png" },
+];
 
 export function ControlPanel({ windowId }: { windowId: string }) {
-  const wallpaperId = useDesktopStore((s) => s.wallpaperId);
-  const setWallpaper = useDesktopStore((s) => s.setWallpaper);
-  const themeId = useThemeStore((s) => s.themeId);
-  const setThemeId = useThemeStore((s) => s.setThemeId);
   const closeWindow = useWindowStore((s) => s.closeWindow);
-  const current = WALLPAPERS.find((w) => w.id === wallpaperId) ?? WALLPAPERS[0];
-  const currentScheme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
 
   const menus = [
     {
@@ -119,61 +134,29 @@ export function ControlPanel({ windowId }: { windowId: string }) {
   return (
     <Layout>
       <AppMenuBar menus={menus} />
-      <ScrollArea
-        style={{ flex: 1 }}
+      <IconGrid
         contentStyle={{
+          padding: 10,
           display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          padding: 12,
+          flexWrap: "wrap",
+          alignContent: "flex-start",
+          gap: 4,
         }}
       >
-        <GroupBox label="Display Properties — Appearance">
-          <p style={{ fontSize: 12, margin: "0 0 8px" }}>
-            Scheme: <b>{currentScheme.label}</b>
-          </p>
-          <Swatches>
-            {THEMES.map((t) => (
-              <SchemeSwatch
-                key={t.id}
-                $active={t.id === themeId}
-                title={t.label}
-                onClick={() => setThemeId(t.id)}
-              >
-                <SchemeTitleBar $bg={t.theme.headerBackground} />
-                <SchemeBody $bg={t.theme.material} />
-              </SchemeSwatch>
-            ))}
-          </Swatches>
-        </GroupBox>
-
-        <GroupBox label="Display Properties — Background">
-          <Preview $bg={current.background}>{current.label}</Preview>
-          <Swatches>
-            {WALLPAPERS.map((wp) => (
-              <Swatch
-                key={wp.id}
-                $bg={wp.background}
-                $active={wp.id === wallpaperId}
-                title={wp.label}
-                onClick={() => setWallpaper(wp.id)}
-              />
-            ))}
-          </Swatches>
-        </GroupBox>
-
-        <GroupBox label="System">
-          <p style={{ fontSize: 12, margin: "0 0 4px" }}>
-            <b>Computer:</b> RSNRA 95
-          </p>
-          <p style={{ fontSize: 12, margin: "0 0 4px" }}>
-            <b>Registered to:</b> {BAND_NAME}
-          </p>
-          <p style={{ fontSize: 12, margin: 0 }}>
-            <b>Location:</b> {BAND_LOCATION}
-          </p>
-        </GroupBox>
-      </ScrollArea>
+        {APPLETS.map((applet) => (
+          <IconItem
+            key={applet.label}
+            tabIndex={0}
+            $disabled={!applet.onOpen}
+            onDoubleClick={applet.onOpen}
+            title={applet.onOpen ? undefined : "Not available in this build"}
+          >
+            <img src={applet.icon} alt="" draggable={false} />
+            {applet.label}
+          </IconItem>
+        ))}
+      </IconGrid>
+      <StatusBar>{APPLETS.length} object(s)</StatusBar>
     </Layout>
   );
 }

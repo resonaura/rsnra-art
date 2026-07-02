@@ -6,10 +6,12 @@ import { Calculator } from "../apps/Calculator/Calculator";
 import { Contact } from "../apps/Contact/Contact";
 import { ControlPanel } from "../apps/ControlPanel/ControlPanel";
 import { DateTime } from "../apps/DateTime/DateTime";
+import { DisplayProperties } from "../apps/DisplayProperties/DisplayProperties";
 import { Find } from "../apps/Find/Find";
 import { GamesFolder } from "../apps/GamesFolder/GamesFolder";
 import { Help } from "../apps/Help/Help";
 import { Minesweeper } from "../apps/Minesweeper/Minesweeper";
+import { MouseProperties } from "../apps/MouseProperties/MouseProperties";
 import { Music } from "../apps/Music/Music";
 import { MyComputer } from "../apps/MyComputer/MyComputer";
 import { Notepad } from "../apps/Notepad/Notepad";
@@ -22,6 +24,7 @@ import { Snake } from "../apps/Snake/Snake";
 import { Social } from "../apps/Social/Social";
 import { Solitaire } from "../apps/Solitaire/Solitaire";
 import { SoundRecorder } from "../apps/SoundRecorder/SoundRecorder";
+import { SystemProperties } from "../apps/SystemProperties/SystemProperties";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
 
@@ -161,6 +164,36 @@ export const APPS: Record<AppId, AppDefinition> = {
     width: 440,
     height: 440,
     noPadding: true,
+  },
+  "display-properties": {
+    id: "display-properties",
+    title: "Display Properties",
+    icon: "/icons/w98_display_properties.png",
+    component: asComponent(DisplayProperties),
+    width: 520,
+    height: 480,
+    resizable: false,
+    singleInstance: true,
+  },
+  "mouse-properties": {
+    id: "mouse-properties",
+    title: "Mouse Properties",
+    icon: "/icons/w98_mouse.png",
+    component: asComponent(MouseProperties),
+    width: 420,
+    height: 480,
+    resizable: false,
+    singleInstance: true,
+  },
+  "system-properties": {
+    id: "system-properties",
+    title: "System Properties",
+    icon: "/icons/computer.png",
+    component: asComponent(SystemProperties),
+    width: 400,
+    height: 420,
+    resizable: false,
+    singleInstance: true,
   },
   paint: {
     id: "paint",

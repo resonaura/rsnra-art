@@ -5,6 +5,8 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { APPS } from "../../data/apps";
+import { CURSOR_ROLE_MAP, cursorCss } from "../../data/cursors";
+import { useCursorStore } from "../../store/cursorStore";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { WindowInstance } from "../../types/window";
@@ -83,7 +85,17 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
   const toggleMaximize = useWindowStore((s) => s.toggleMaximize);
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const requestClose = useUnsavedStore((s) => s.requestClose);
+  const cursorScheme = useCursorStore((s) => s.schemeId);
+  const cursorFiles = useCursorStore((s) => s.files);
   void closeWindow;
+
+  const resizeCursor = (role: keyof typeof CURSOR_ROLE_MAP) => {
+    if (cursorScheme === "none") return undefined;
+    const file = cursorFiles[role] ?? CURSOR_ROLE_MAP[role].file;
+    return {
+      cursor: `${cursorCss(file)}, ${CURSOR_ROLE_MAP[role].cssCursor}`,
+    };
+  };
 
   const def = APPS[win.appId];
   const AppComponent = def.component;
@@ -120,6 +132,13 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
           : false
       }
       dragHandleClassName="window-drag-handle"
+      resizeHandleStyles={{
+        bottom: resizeCursor("verticalResize"),
+        right: resizeCursor("horizontalResize"),
+        left: resizeCursor("horizontalResize"),
+        bottomRight: resizeCursor("diagonalResize1"),
+        bottomLeft: resizeCursor("diagonalResize2"),
+      }}
       onMouseDown={() => focusWindow(win.id)}
       onDragStop={(_e, d) => updateBounds(win.id, { x: d.x, y: d.y })}
       onResizeStop={(_e, _dir, ref, _delta, pos) => {
