@@ -1,4 +1,4 @@
-# RSNRA 95
+# RSNRA.ART
 
 The official desktop of **RESONAURA** — an alternative rock band from
 Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable

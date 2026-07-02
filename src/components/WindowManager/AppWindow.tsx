@@ -24,11 +24,14 @@ const StyledHeader = styled(WindowHeader)`
   cursor: default;
   user-select: none;
   touch-action: none;
-  
-  color: ${({ active, theme }) => (active ? theme.headerText : theme.headerNotActiveText)} !important;
 
-  span, div {
-    color: ${({ active, theme }) => (active ? theme.headerText : theme.headerNotActiveText)} !important;
+  color: ${({ active, theme }) =>
+    active ? theme.headerText : theme.headerNotActiveText} !important;
+
+  span,
+  div {
+    color: ${({ active, theme }) =>
+      active ? theme.headerText : theme.headerNotActiveText} !important;
   }
 `;
 

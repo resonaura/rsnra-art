@@ -78,9 +78,7 @@ export function StartMenu() {
   return (
     <Positioned ref={ref} id="start-menu-root">
       <Banner>
-        <BannerLabel>
-          RSNRA<span style={{ fontWeight: "normal", fontSize: 13 }}>95</span>
-        </BannerLabel>
+        <BannerLabel>RSNRA</BannerLabel>
       </Banner>
       <MenuTree nodes={tree} />
     </Positioned>

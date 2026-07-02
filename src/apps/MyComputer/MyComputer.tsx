@@ -1104,7 +1104,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     },
     {
       label: "Help",
-      items: [{ label: "About RSNRA 95", disabled: true }],
+      items: [{ label: "About RSNRA.ART", disabled: true }],
     },
   ];
 

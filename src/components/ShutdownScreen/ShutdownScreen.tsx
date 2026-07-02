@@ -37,7 +37,7 @@ export function ShutdownScreen() {
   if (powerState === 'shutting-down') {
     return (
       <Screen>
-        <p style={{ fontSize: 16 }}>RSNRA 95 is shutting down...</p>
+        <p style={{ fontSize: 16 }}>RSNRA.ART is shutting down...</p>
       </Screen>
     );
   }
@@ -49,9 +49,9 @@ export function ShutdownScreen() {
           It's now safe to close this tab.
         </p>
         <p style={{ fontSize: 12, maxWidth: 360 }}>
-          Or jump right back in — RSNRA 95 boots fast, no floppy disks required.
+          Or jump right back in — RSNRA.ART boots fast, no floppy disks required.
         </p>
-        <Button onClick={() => setPowerState('on')}>Restart RSNRA 95</Button>
+        <Button onClick={() => setPowerState('on')}>Restart RSNRA.ART</Button>
       </Screen>
     );
   }

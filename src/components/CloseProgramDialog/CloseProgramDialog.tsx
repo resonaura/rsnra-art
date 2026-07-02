@@ -88,13 +88,13 @@ export function CloseProgramDialog() {
         </WindowHeader>
         <WindowContent>
           <Intro>
-            RSNRA 95 is not responding to your... actually, it's fine. Here's
+            RSNRA.ART is not responding to your... actually, it's fine. Here's
             what's currently running:
           </Intro>
           <ListFrame orientation="vertical">
             <Row $selected={false}>
               <img src="/icons/computer.png" alt="" />
-              RSNRA 95 Desktop (system)
+              RSNRA.ART Desktop (system)
             </Row>
             {windows.map((w) => (
               <Row

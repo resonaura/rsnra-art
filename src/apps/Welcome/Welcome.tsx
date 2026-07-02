@@ -17,7 +17,7 @@ const Layout = styled.div`
 `;
 
 const Heading = styled.h2`
-  font-size: 20px;
+  font-size: 16px;
   margin: 0;
   display: flex;
   align-items: baseline;
@@ -76,11 +76,7 @@ export function Welcome({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Heading>
-        Welcome to{" "}
-        <span style={{ color: "#000", fontWeight: "bold" }}>RSNRA</span>
-        <span style={{ fontSize: 13 }}>95</span>
-      </Heading>
+      <Heading>Welcome ( • ᴗ - ) ✧</Heading>
       <Main>
         <InfoFrame variant="field">
           <ScrollArea

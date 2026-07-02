@@ -232,7 +232,9 @@ export function FileDialog({
       rename: s.rename,
     })),
   );
-  const [currentDir, setCurrentDir] = useState(initialDir);
+  const [currentDir, setCurrentDir] = useState(() => {
+    return vfs.resolvePath(initialDir) ?? initialDir;
+  });
   const [selectedName, setSelectedName] = useState(initialFileName);
   const [fileName, setFileName] = useState(initialFileName);
   const [filterIndex, setFilterIndex] = useState(0);

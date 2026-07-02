@@ -121,7 +121,11 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Tabs value={tab} onChange={(v: string) => setTab(v)} style={{ fontSize: 11 }}>
+      <Tabs
+        value={tab}
+        onChange={(v: string) => setTab(v)}
+        style={{ fontSize: 11, zoom: 0.8 }}
+      >
         <Tab value="Background">Background</Tab>
         <Tab value="Screen Saver">Screen Saver</Tab>
         <Tab value="Appearance">Appearance</Tab>
@@ -130,7 +134,7 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
       </Tabs>
       <Body>
         {tab === "Background" && (
-          <GroupBox label="Desktop wallpaper">
+          <GroupBox style={{ zoom: 0.8 }} label="Desktop wallpaper">
             <Preview $bg={current.background}>{current.label}</Preview>
             <Swatches>
               {WALLPAPERS.map((wp) => (
@@ -147,18 +151,25 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
         )}
 
         {tab === "Screen Saver" && (
-          <GroupBox label="Screen Saver">
+          <GroupBox
+            style={{ zoom: 0.8, display: "flex", flexDirection: "column" }}
+            label="Screen Saver"
+          >
             <MiniScreen>(None)</MiniScreen>
-            <Checkbox label="Password protected" disabled style={{ marginTop: 8 }} />
-            <Button disabled style={{ marginTop: 8, fontSize: 11 }}>
+            <Checkbox
+              label="Password protected"
+              disabled
+              style={{ marginTop: 8 }}
+            />
+            <Button style={{ width: "fit-content" }} disabled>
               Settings...
             </Button>
           </GroupBox>
         )}
 
         {tab === "Appearance" && (
-          <GroupBox label="Scheme">
-            <p style={{ fontSize: 12, margin: "0 0 8px" }}>
+          <GroupBox style={{ zoom: 0.8 }} label="Scheme">
+            <p style={{ fontSize: 14, margin: "0 0 8px" }}>
               Current: <b>{THEMES.find((t) => t.id === themeId)?.label}</b>
             </p>
             <Swatches>
@@ -178,10 +189,23 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
         )}
 
         {tab === "Effects" && (
-          <GroupBox label="Visual effects">
+          <GroupBox
+            style={{ zoom: 0.8, display: "flex", flexDirection: "column" }}
+            label="Visual effects"
+          >
             <Checkbox label="Use large icons" disabled />
-            <Checkbox label="Show window contents while dragging" disabled checked style={{ marginTop: 4 }} />
-            <Checkbox label="Smooth edges of screen fonts" disabled checked style={{ marginTop: 4 }} />
+            <Checkbox
+              label="Show window contents while dragging"
+              disabled
+              checked
+              style={{ marginTop: 4 }}
+            />
+            <Checkbox
+              label="Smooth edges of screen fonts"
+              disabled
+              checked
+              style={{ marginTop: 4 }}
+            />
           </GroupBox>
         )}
 
@@ -196,9 +220,19 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
           </GroupBox>
         )}
 
-        <BtnRow>
-          <Button onClick={() => closeWindow(windowId)}>OK</Button>
-          <Button onClick={() => closeWindow(windowId)}>Cancel</Button>
+        <BtnRow style={{ zoom: 0.8, marginTop: "auto" }}>
+          <Button
+            style={{ width: "80px" }}
+            onClick={() => closeWindow(windowId)}
+          >
+            OK
+          </Button>
+          <Button
+            style={{ width: "80px" }}
+            onClick={() => closeWindow(windowId)}
+          >
+            Cancel
+          </Button>
         </BtnRow>
       </Body>
     </Layout>

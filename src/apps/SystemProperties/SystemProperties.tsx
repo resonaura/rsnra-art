@@ -42,7 +42,11 @@ export function SystemProperties({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Tabs value={tab} onChange={(v: string) => setTab(v)} style={{ fontSize: 11 }}>
+      <Tabs
+        value={tab}
+        onChange={(v: string) => setTab(v)}
+        style={{ fontSize: 11, zoom: 0.8 }}
+      >
         <Tab value="General">General</Tab>
         <Tab value="Device Manager">Device Manager</Tab>
         <Tab value="Performance">Performance</Tab>
@@ -53,27 +57,34 @@ export function SystemProperties({ windowId }: { windowId: string }) {
             <Header>
               <Logo src="/icons/computer.png" alt="" draggable={false} />
               <div>
-                <div style={{ fontSize: 13, fontWeight: "bold" }}>RSNRA 95</div>
+                <div style={{ fontSize: 13, fontWeight: "bold" }}>
+                  RSNRA.ART
+                </div>
                 <div style={{ fontSize: 11 }}>Version 4.00.950</div>
               </div>
             </Header>
-            <GroupBox label="Registered to">
-              <p style={{ fontSize: 12, margin: "0 0 4px" }}>{BAND_NAME}</p>
-              <p style={{ fontSize: 12, margin: 0 }}>{BAND_LOCATION}</p>
+            <GroupBox style={{ zoom: 0.8 }} label="Registered to">
+              <p style={{ fontSize: 16, margin: "0 0 4px" }}>{BAND_NAME}</p>
+              <p style={{ fontSize: 16, margin: 0 }}>{BAND_LOCATION}</p>
             </GroupBox>
-            <GroupBox label="Computer">
-              <p style={{ fontSize: 12, margin: 0 }}>
+            <GroupBox style={{ zoom: 0.8 }} label="Computer">
+              <p style={{ fontSize: 16, margin: 0 }}>
                 A React 19 desktop, running on your browser's JavaScript engine.
               </p>
             </GroupBox>
           </>
         ) : (
-          <GroupBox label={tab}>
-            <p style={{ fontSize: 12 }}>This information is not available.</p>
+          <GroupBox style={{ zoom: 0.8 }} label={tab}>
+            <p style={{ fontSize: 16 }}>This information is not available.</p>
           </GroupBox>
         )}
-        <BtnRow>
-          <Button onClick={() => closeWindow(windowId)}>OK</Button>
+        <BtnRow style={{ zoom: 0.8, marginTop: "auto" }}>
+          <Button
+            style={{ width: "80px" }}
+            onClick={() => closeWindow(windowId)}
+          >
+            OK
+          </Button>
         </BtnRow>
       </Body>
     </Layout>

@@ -1,4 +1,4 @@
-// Central audio engine for RSNRA 95. System sounds are the actual Windows
+// Central audio engine for RSNRA.ART. System sounds are the actual Windows
 // Me/95 .wav files from C:\Windows\Media (served from /windows/media/*.wav),
 // played through a single master GainNode bound to the volume store
 // (src/store/audioStore.ts) — so the tray volume slider controls every sound.

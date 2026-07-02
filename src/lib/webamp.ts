@@ -109,7 +109,7 @@ async function getInstance(): Promise<WebampInstance> {
     const filePickers = vfsPicker
       ? [
           {
-            contextMenuName: "RSNRA 95 File...",
+            contextMenuName: "RSNRA.ART File...",
             filePicker: async (): Promise<
               { url: string; defaultName?: string }[]
             > => {

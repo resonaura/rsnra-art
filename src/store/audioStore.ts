@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// Global system volume for RSNRA 95. Every sound played through the audio
+// Global system volume for RSNRA.ART. Every sound played through the audio
 // engine (src/lib/audio.ts) routes through a master GainNode whose value is
 // bound to `volume` (and zeroed when `muted`), so the tray volume control is
 // the single source of truth for all in-app audio.

@@ -113,7 +113,7 @@ export function RunDialog() {
             <img src="/icons/msdos.png" alt="" />
             <div style={{ flex: 1 }}>
               <p style={{ margin: "0 0 8px", fontSize: 12 }}>
-                Type the name of an app, and RSNRA 95 will open it for you.
+                Type the name of an app, and RSNRA.ART will open it for you.
               </p>
               <TextInput
                 fullWidth

@@ -201,7 +201,7 @@ export function Properties({ windowId }: { windowId: string }) {
                   <Key>Opens with:</Key>
                   <Val>
                     {node.appId
-                      ? "RSNRA 95 Application"
+                      ? "RSNRA.ART Application"
                       : extOf(name) === "TXT" || extOf(name) === "LOG"
                         ? "Notepad"
                         : ["BMP", "PNG", "JPG"].includes(extOf(name))
@@ -288,7 +288,7 @@ export function Properties({ windowId }: { windowId: string }) {
             </Field>
             <Field>
               <Key>Copyright:</Key>
-              <Val>© RSNRA 95</Val>
+              <Val>© RSNRA.ART</Val>
             </Field>
           </GroupBox>
         )}

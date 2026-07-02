@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Button, Checkbox, GroupBox, Radio, Select, Tab, TabBody, Tabs } from "react95";
+import { useEffect, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  GroupBox,
+  Radio,
+  Select,
+  Tab,
+  TabBody,
+  Tabs,
+} from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { Slider95 } from "../../components/Slider95/Slider95";
@@ -7,9 +16,14 @@ import {
   CURSOR_GALLERY,
   CURSOR_ROLES,
   type CursorRoleId,
-  cursorPreviewUrl,
 } from "../../data/cursors";
-import { useCursorStore, type CursorSchemeId } from "../../store/cursorStore";
+import { parseAni } from "../../lib/aniParser";
+import { parseCur } from "../../lib/curParser";
+import {
+  SCHEME_FILES,
+  useCursorStore,
+  type CursorSchemeId,
+} from "../../store/cursorStore";
 import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
@@ -63,7 +77,8 @@ const Row = styled.button<{ $active: boolean }>`
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  background: ${({ theme, $active }) => ($active ? theme.hoverBackground : "transparent")};
+  background: ${({ theme, $active }) =>
+    $active ? theme.hoverBackground : "transparent"};
   color: ${({ theme, $active }) => ($active ? theme.headerText : "black")};
 
   img {
@@ -75,7 +90,7 @@ const Row = styled.button<{ $active: boolean }>`
 `;
 
 const PreviewBox = styled.div`
-  width: 88px;
+  width: 64px;
   height: 64px;
   flex-shrink: 0;
   display: flex;
@@ -136,9 +151,11 @@ const GalleryItem = styled.button<{ $active: boolean }>`
   width: 60px;
   padding: 4px 2px;
   border: 1px dotted transparent;
-  background: ${({ theme, $active }) => ($active ? theme.hoverBackground : "transparent")};
+  background: ${({ theme, $active }) =>
+    $active ? theme.hoverBackground : "transparent"};
   cursor: pointer;
   font-size: 10px;
+  overflow: hidden;
 
   img {
     width: 32px;
@@ -150,7 +167,95 @@ const GalleryItem = styled.button<{ $active: boolean }>`
 const SCHEMES: { id: CursorSchemeId; label: string }[] = [
   { id: "none", label: "(None)" },
   { id: "windows", label: "Windows Standard" },
+  { id: "3d-gold", label: "3D Gold" },
+  { id: "3d-silver", label: "3D Silver" },
+  { id: "3d-white", label: "3D White" },
 ];
+
+export function CursorPreview({
+  file,
+  style,
+  className,
+}: {
+  file: string;
+  style?: any;
+  className?: string;
+}) {
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) return;
+
+    let active = true;
+    let timerId: any = null;
+    let objectUrls: string[] = [];
+
+    const loadAndAnimate = async () => {
+      try {
+        const res = await fetch(`/cursors/${file}`);
+        if (!res.ok) return;
+        const buffer = await res.arrayBuffer();
+        if (!active) return;
+
+        if (file.endsWith(".ani") || file.endsWith(".ANI")) {
+          const parsed = await parseAni(buffer);
+          if (!active) return;
+
+          objectUrls = parsed.frames.map((blob) => URL.createObjectURL(blob));
+
+          let step = 0;
+          const tick = () => {
+            if (!active) return;
+            const frameIdx = parsed.seq ? parsed.seq[step] : step;
+            if (frameIdx >= 0 && frameIdx < objectUrls.length) {
+              setFrameUrl(objectUrls[frameIdx]);
+            }
+            const duration = parsed.rate[step] || 100;
+            step =
+              (step + 1) % (parsed.seq ? parsed.seq.length : objectUrls.length);
+            timerId = setTimeout(tick, duration);
+          };
+
+          tick();
+        } else {
+          const parsed = await parseCur(buffer, file);
+          if (!active) return;
+          setFrameUrl(parsed.blobUrl);
+          objectUrls.push(parsed.blobUrl);
+        }
+      } catch (e) {
+        console.error("Error loading preview:", e);
+      }
+    };
+
+    loadAndAnimate();
+
+    return () => {
+      active = false;
+      if (timerId) clearTimeout(timerId);
+      objectUrls.forEach((url) => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [file]);
+
+  if (!frameUrl)
+    return (
+      <div style={{ width: 32, height: 32, ...style }} className={className} />
+    );
+
+  return (
+    <img
+      src={frameUrl}
+      alt=""
+      draggable={false}
+      style={{ imageRendering: "pixelated", objectFit: "contain", ...style }}
+      className={className}
+    />
+  );
+}
 
 export function MouseProperties({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
@@ -180,7 +285,11 @@ export function MouseProperties({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Tabs value={tab} onChange={(v: string) => setTab(v)} style={{ fontSize: 11 }}>
+      <Tabs
+        value={tab}
+        onChange={(v: string) => setTab(v)}
+        style={{ fontSize: 11, zoom: 0.8 }}
+      >
         <Tab value="Buttons">Buttons</Tab>
         <Tab value="Pointers">Pointers</Tab>
         <Tab value="Pointer Options">Pointer Options</Tab>
@@ -188,7 +297,10 @@ export function MouseProperties({ windowId }: { windowId: string }) {
       <Body>
         {tab === "Buttons" && (
           <>
-            <GroupBox label="Button configuration">
+            <GroupBox
+              style={{ zoom: 0.8, display: "flex", gap: "20px" }}
+              label="Button configuration"
+            >
               <Radio
                 label="Right-handed"
                 checked={rightHanded}
@@ -201,18 +313,14 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                 style={{ marginTop: 4 }}
               />
             </GroupBox>
-            <GroupBox label="Double-click speed">
+            <GroupBox style={{ zoom: 0.8 }} label="Double-click speed">
               <div style={{ fontSize: 12, marginBottom: 6 }}>
                 Slow
-                <Slider95
-                  value={dblClick}
-                  onChange={setDblClick}
-                  size="100%"
-                />
+                <Slider95 value={dblClick} onChange={setDblClick} size="100%" />
                 Fast
               </div>
             </GroupBox>
-            <GroupBox label="ClickLock">
+            <GroupBox style={{ zoom: 0.8 }} label="ClickLock">
               <Checkbox label="Turn on ClickLock" disabled />
             </GroupBox>
           </>
@@ -224,41 +332,75 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, marginBottom: 2 }}>Scheme</div>
                 <Select
+                  style={{ zoom: 0.8 }}
                   value={scheme}
-                  options={SCHEMES.map((s) => ({ label: s.label, value: s.id }))}
+                  options={SCHEMES.map((s) => ({
+                    label: s.label,
+                    value: s.id,
+                  }))}
                   width="100%"
-                  onChange={(opt) => setLocalScheme(opt.value)}
+                  onChange={(opt) => {
+                    const nextScheme = opt.value as CursorSchemeId;
+                    setLocalScheme(nextScheme);
+                    if (nextScheme !== "none") {
+                      setFiles(SCHEME_FILES[nextScheme]);
+                    }
+                  }}
                 />
               </div>
               <PreviewBox>
                 {scheme !== "none" && (
-                  <img src={cursorPreviewUrl(files[selectedRole])} alt="" draggable={false} />
+                  <CursorPreview
+                    file={files[selectedRole]}
+                    style={{ width: 32, height: 32 }}
+                  />
                 )}
               </PreviewBox>
             </SchemeRow>
 
             <div style={{ fontSize: 12 }}>Customize:</div>
-            <List
-              contentStyle={{ display: "flex", flexDirection: "column" }}
-            >
+            <List contentStyle={{ display: "flex", flexDirection: "column" }}>
               {CURSOR_ROLES.map((r) => (
                 <Row
                   key={r.id}
                   $active={r.id === selectedRole}
                   onClick={() => setSelectedRole(r.id)}
                 >
-                  <span>{r.label}</span>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: r.id === selectedRole ? "bold" : "normal",
+                      }}
+                    >
+                      {r.label}
+                    </span>
+                    {scheme !== "none" &&
+                      files[r.id] === SCHEME_FILES.windows[r.id] && (
+                        <span style={{ color: "#888", fontSize: 10 }}>
+                          (Default)
+                        </span>
+                      )}
+                  </div>
                   {scheme !== "none" && (
-                    <img src={cursorPreviewUrl(files[r.id])} alt="" draggable={false} />
+                    <CursorPreview
+                      file={files[r.id]}
+                      style={{ width: 24, height: 24 }}
+                    />
                   )}
                 </Row>
               ))}
             </List>
 
-            <PointersHead>
+            <PointersHead style={{ zoom: 0.8 }}>
               <Button
                 disabled={scheme === "none"}
-                onClick={() => resetRoleFile(selectedRole)}
+                onClick={() => {
+                  const s = scheme === "none" ? "windows" : scheme;
+                  const defFile = SCHEME_FILES[s][selectedRole];
+                  setFiles((f) => ({ ...f, [selectedRole]: defFile }));
+                }}
                 style={{ flex: 1 }}
               >
                 Use Default
@@ -294,8 +436,11 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                           setBrowsing(false);
                         }}
                       >
-                        <img src={cursorPreviewUrl(file)} alt="" draggable={false} />
-                        <span>{file.replace(/\.CUR$/i, "")}</span>
+                        <CursorPreview
+                          file={file}
+                          style={{ width: 32, height: 32 }}
+                        />
+                        <span>{file.replace(/\.(CUR|ANI)$/i, "")}</span>
                       </GalleryItem>
                     ))}
                   </Gallery>
@@ -310,25 +455,33 @@ export function MouseProperties({ windowId }: { windowId: string }) {
 
         {tab === "Pointer Options" && (
           <>
-            <GroupBox label="Pointer speed">
+            <GroupBox style={{ zoom: 0.8 }} label="Pointer speed">
               <div style={{ fontSize: 12, marginBottom: 6 }}>
                 Slow
-                <Slider95 value={pointerSpeed} onChange={setPointerSpeed} size="100%" />
+                <Slider95
+                  value={pointerSpeed}
+                  onChange={setPointerSpeed}
+                  size="100%"
+                />
                 Fast
               </div>
               <Button disabled style={{ fontSize: 11 }}>
                 Accelerate...
               </Button>
             </GroupBox>
-            <GroupBox label="SnapTo">
+            <GroupBox style={{ zoom: 0.8 }} label="SnapTo">
               <Checkbox
                 label="Automatically move pointer to the default button in a dialog box."
                 disabled
               />
             </GroupBox>
-            <GroupBox label="Visibility">
+            <GroupBox style={{ zoom: 0.8 }} label="Visibility">
               <Checkbox label="Show pointer trails" disabled />
-              <Checkbox label="Hide pointer while typing" disabled style={{ marginTop: 4 }} />
+              <Checkbox
+                label="Hide pointer while typing"
+                disabled
+                style={{ marginTop: 4 }}
+              />
               <Checkbox
                 label="Show location of pointer when you press the CTRL key"
                 disabled
@@ -338,17 +491,25 @@ export function MouseProperties({ windowId }: { windowId: string }) {
           </>
         )}
 
-        <BtnRow>
+        <BtnRow style={{ zoom: 0.8, marginTop: "auto" }}>
           <Button
             onClick={() => {
               apply();
               closeWindow(windowId);
             }}
+            style={{ width: "80px" }}
           >
             OK
           </Button>
-          <Button onClick={() => closeWindow(windowId)}>Cancel</Button>
-          <Button onClick={apply}>Apply</Button>
+          <Button
+            style={{ width: "80px" }}
+            onClick={() => closeWindow(windowId)}
+          >
+            Cancel
+          </Button>
+          <Button style={{ width: "80px" }} onClick={apply}>
+            Apply
+          </Button>
         </BtnRow>
       </Body>
     </Layout>

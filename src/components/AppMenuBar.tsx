@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { css } from 'styled-components';
 
 const raised = css`
@@ -30,9 +31,8 @@ const MenuTopItem = styled.button<{ $open: boolean }>`
 `;
 
 const Dropdown = styled.div`
-  position: absolute;
-  top: 22px;
-  z-index: 50;
+  position: fixed;
+  z-index: 999999;
   ${raised}
   background: ${({ theme }) => theme.material};
   min-width: 180px;
@@ -76,46 +76,81 @@ export interface MenuDef {
 
 export function AppMenuBar({ menus }: { menus: MenuDef[] }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.app-menu-bar-dropdown') || target.closest('.app-menu-bar-row')) {
+        return;
+      }
+      setOpenMenu(null);
+      setDropdownPos(null);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, [openMenu]);
+
+  const activeMenu = menus.find((m) => m.label === openMenu);
 
   return (
-    <MenuBarRow
-      onMouseLeave={() => setOpenMenu(null)}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <MenuBarRow className="app-menu-bar-row">
       {menus.map((menu) => (
         <div key={menu.label} style={{ position: 'relative' }}>
           <MenuTopItem
             $open={openMenu === menu.label}
-            onClick={() =>
-              setOpenMenu((m) => (m === menu.label ? null : menu.label))
-            }
-            onMouseEnter={() => setOpenMenu((m) => (m ? menu.label : m))}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (openMenu === menu.label) {
+                setOpenMenu(null);
+                setDropdownPos(null);
+              } else {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setOpenMenu(menu.label);
+                setDropdownPos({ top: rect.bottom, left: rect.left });
+              }
+            }}
+            onMouseEnter={(e) => {
+              if (openMenu) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setOpenMenu(menu.label);
+                setDropdownPos({ top: rect.bottom, left: rect.left });
+              }
+            }}
           >
             {menu.label}
           </MenuTopItem>
-          {openMenu === menu.label && (
-            <Dropdown>
-              {menu.items.map((item, i) =>
-                item.divider ? (
-                  <DropdownDivider key={i} />
-                ) : (
-                  <DropdownItem
-                    key={item.label + i}
-                    $disabled={item.disabled}
-                    onClick={() => {
-                      if (item.disabled) return;
-                      item.action?.();
-                      setOpenMenu(null);
-                    }}
-                  >
-                    {item.label}
-                  </DropdownItem>
-                ),
-              )}
-            </Dropdown>
-          )}
         </div>
       ))}
+
+      {activeMenu && dropdownPos && createPortal(
+        <Dropdown
+          className="app-menu-bar-dropdown"
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
+        >
+          {activeMenu.items.map((item, i) =>
+            item.divider ? (
+              <DropdownDivider key={i} />
+            ) : (
+              <DropdownItem
+                key={item.label + i}
+                $disabled={item.disabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (item.disabled) return;
+                  item.action?.();
+                  setOpenMenu(null);
+                  setDropdownPos(null);
+                }}
+              >
+                {item.label}
+              </DropdownItem>
+            )
+          )}
+        </Dropdown>,
+        document.body
+      )}
     </MenuBarRow>
   );
 }

@@ -388,7 +388,7 @@ Quick facts:
       ),
       txt(
         "readme.txt",
-        `Welcome to RSNRA 95.
+        `Welcome to RSNRA.ART.
 
 This is your My Documents folder. Try these in the terminal:
   cd \\My Documents
@@ -434,6 +434,10 @@ Approx. runtime: 50 min
   const myPictures = dir(
     "My Pictures",
     [
+      file("artwork.png", {
+        content:
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      }),
       txt(
         "readme.txt",
         `Save images from Paint here using:
@@ -467,7 +471,7 @@ double-clicking them in My Computer.
           ),
           txt(
             "changelog.txt",
-            `RSNRA 95 — Changelog
+            `RSNRA.ART — Changelog
 ====================
 
 v4.95.1996

@@ -1,20 +1,20 @@
 // Central place for editable band content. Update freely — nothing else
 // in the codebase should hardcode copy that belongs here.
 
-export const BAND_NAME = 'RESONAURA';
-export const BAND_SHORT = 'RSNRA';
-export const BAND_LOCATION = 'Vancouver, BC';
-export const BAND_GENRE = 'Alternative Rock';
+export const BAND_NAME = "RESONAURA";
+export const BAND_SHORT = "RSNRA";
+export const BAND_LOCATION = "Vancouver, BC";
+export const BAND_GENRE = "Alternative Rock";
 
 export const LINKS = {
-  music: 'https://rsnra.link/resonaura',
-  tiktok: 'https://www.tiktok.com/@resonaura',
-  instagram: 'https://www.instagram.com/resonaura',
-  tiktokHandle: '@resonaura',
-  instagramHandle: '@resonaura',
+  music: "https://rsnra.link/resonaura",
+  tiktok: "https://www.tiktok.com/@resonaura",
+  instagram: "https://www.instagram.com/resonaura",
+  tiktokHandle: "@resonaura",
+  instagramHandle: "@resonaura",
 };
 
-export const CONTACT_EMAIL = 'booking@rsnra.band';
+export const CONTACT_EMAIL = "booking@rsnra.band";
 
 export const BIO_TEXT = `RESONAURA — Bio.txt
 =====================================
@@ -41,7 +41,7 @@ Thanks for stopping by. Turn it up.
 `;
 
 export const WELCOME_CHANGELOG = [
-  'Booted up RSNRA 95 for the first time — welcome aboard.',
-  'New: Minesweeper and Snake added to the Games folder.',
+  "Booted up RSNRA.ART for the first time — welcome aboard.",
+  "New: Minesweeper and Snake added to the Games folder.",
   'New: Command line is live — open RSNRA Terminal and type "help".',
 ];

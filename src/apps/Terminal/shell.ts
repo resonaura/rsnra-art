@@ -64,7 +64,7 @@ export class Shell {
   }
 
   start() {
-    this.term.writeln("RSNRA 95 [Version 4.95.1996]");
+    this.term.writeln("RSNRA.ART [Version 4.95.1996]");
     this.term.writeln("(c) RSNRA. All rights reserved.");
     this.term.writeln("");
     this.term.writeln('Type "help" to see what this thing can do.');
@@ -88,7 +88,7 @@ export class Shell {
       .replace(/\$L/g, "<")
       .replace(/\$D/g, new Date().toLocaleDateString())
       .replace(/\$T/g, new Date().toLocaleTimeString())
-      .replace(/\$V/g, "RSNRA 95")
+      .replace(/\$V/g, "RSNRA.ART")
       .replace(/\$N/g, "C")
       .replace(/\$_/g, "\n")
       .replace(/\$\$/g, "$");
@@ -105,9 +105,7 @@ export class Shell {
 
   /** Redraw the current input line (prompt + buffer). */
   private redrawInput() {
-    this.term.write(
-      `\r\x1b[2K${this.promptText}${this.buffer}`,
-    );
+    this.term.write(`\r\x1b[2K${this.promptText}${this.buffer}`);
     // Position cursor
     const col = this.promptLen + this.cursorPos + 1;
     this.term.write(`\x1b[${col}G`);

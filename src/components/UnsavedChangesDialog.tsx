@@ -23,6 +23,7 @@ const Body = styled(WindowContent)`
   display: flex;
   gap: 14px;
   align-items: flex-start;
+  padding: 0;
 `;
 
 const WarnIcon = styled.img`

@@ -109,11 +109,7 @@ function dirStamp(date: Date): string {
 /** Get file size for dir listing. */
 function fileSize(node: VfsNode): number {
   if (node.type === "dir") return 0;
-  return node.content
-    ? contentByteSize(node.content)
-    : node.appId
-      ? 32768
-      : 0;
+  return node.content ? contentByteSize(node.content) : node.appId ? 32768 : 0;
 }
 
 // ─── Command handlers ─────────────────────────────────────────────────────
@@ -693,7 +689,7 @@ function cmdExit(_args: string[], ctx: CmdContext) {
 }
 
 function cmdVer(_args: string[], ctx: CmdContext) {
-  ctx.print(["", "RSNRA 95 [Version 4.95.1996]", ""]);
+  ctx.print(["", "RSNRA.ART [Version 4.95.1996]", ""]);
 }
 
 function cmdVol(_args: string[], ctx: CmdContext) {
@@ -992,7 +988,10 @@ function cmdColor(args: string[], ctx: CmdContext) {
   }
   const arg = args[0].toLowerCase();
   if (arg.length !== 2) {
-    ctx.print(["Invalid color attribute. Try: color 0f, color 1a, etc."], "error");
+    ctx.print(
+      ["Invalid color attribute. Try: color 0f, color 1a, etc."],
+      "error",
+    );
     ctx.setErrorLevel(1);
     return;
   }
@@ -1009,12 +1008,12 @@ function cmdColor(args: string[], ctx: CmdContext) {
     "7": "#c0c0c0",
     "8": "#808080",
     "9": "#0000ff",
-    "a": "#00ff00",
-    "b": "#00ffff",
-    "c": "#ff0000",
-    "d": "#ff00ff",
-    "e": "#ffff00",
-    "f": "#ffffff",
+    a: "#00ff00",
+    b: "#00ffff",
+    c: "#ff0000",
+    d: "#ff00ff",
+    e: "#ffff00",
+    f: "#ffffff",
   };
   const bg = COLOR_MAP[bgChar];
   const fg = COLOR_MAP[fgChar];
@@ -1024,7 +1023,10 @@ function cmdColor(args: string[], ctx: CmdContext) {
     return;
   }
   if (bgChar === fgChar) {
-    ctx.print(["Background and foreground colors cannot be the same."], "error");
+    ctx.print(
+      ["Background and foreground colors cannot be the same."],
+      "error",
+    );
     ctx.setErrorLevel(1);
     return;
   }
@@ -1116,7 +1118,8 @@ function cmdWhoami(_args: string[], ctx: CmdContext) {
   ctx.print(["rsnra"]);
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Probe a real round trip to `target` and time it. Browsers can't send raw
@@ -1128,7 +1131,10 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * (DNS failure, connection refused, TLS failure, or our own abort-timeout)
  * means it didn't — same semantics as a real ping's "Reply" vs "timed out".
  */
-async function pingOnce(target: string, timeoutMs: number): Promise<number | null> {
+async function pingOnce(
+  target: string,
+  timeoutMs: number,
+): Promise<number | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const start = performance.now();
@@ -1619,7 +1625,7 @@ const HELP_TOPICS: Record<string, string[]> = {
 
 export function buildHelpText(): string[] {
   return [
-    "RSNRA 95 — Command Reference",
+    "RSNRA.ART — Command Reference",
     "============================",
     "",
     "Directory & Navigation:",

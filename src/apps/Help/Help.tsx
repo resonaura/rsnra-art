@@ -69,7 +69,7 @@ export function Help({ windowId }: { windowId: string }) {
             style={{ imageRendering: "pixelated" }}
           />
           <div>
-            <h3 style={{ margin: "0 0 4px" }}>RSNRA 95</h3>
+            <h3 style={{ margin: "0 0 4px" }}>RSNRA.ART</h3>
             <p style={{ margin: 0, fontSize: 12 }}>
               The official desktop of {BAND_NAME}, {BAND_LOCATION}.
             </p>

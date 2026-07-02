@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Button, TextInput } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
@@ -361,6 +367,51 @@ const StatusSeg = styled.div<{ $w?: number }>`
   overflow: hidden;
   white-space: nowrap;
 `;
+const Handle = styled.div<{ $position: "right" | "bottom" | "corner" }>`
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #ffffff;
+  border: 1px solid #000000;
+  box-sizing: border-box;
+  z-index: 60;
+
+  ${({ $position }) => {
+    switch ($position) {
+      case "right":
+        return `
+          top: 50%;
+          right: -3px;
+          margin-top: -3px;
+          cursor: e-resize;
+        `;
+      case "bottom":
+        return `
+          left: 50%;
+          bottom: -3px;
+          margin-left: -3px;
+          cursor: s-resize;
+        `;
+      case "corner":
+        return `
+          right: -3px;
+          bottom: -3px;
+          cursor: nw-resize;
+        `;
+    }
+  }}
+`;
+
+const ResizePreview = styled.div<{ $w: number; $h: number; $zoom: number }>`
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: ${({ $w, $zoom }) => $w * $zoom}px;
+  height: ${({ $h, $zoom }) => $h * $zoom}px;
+  border: 1px dashed #000000;
+  pointer-events: none;
+  z-index: 70;
+`;
 
 const Overlay = styled.div`
   position: fixed;
@@ -597,6 +648,86 @@ export function Paint({ windowId }: { windowId: string }) {
   );
   textEditingRef.current = textEditing;
   const [showNewConfirm, setShowNewConfirm] = useState(false);
+  const [canvasW, setCanvasW] = useState(580);
+  const [canvasH, setCanvasH] = useState(380);
+  const [resizing, setResizing] = useState<{
+    handle: "right" | "bottom" | "corner";
+    startW: number;
+    startH: number;
+    startX: number;
+    startY: number;
+    currentW: number;
+    currentH: number;
+  } | null>(null);
+  const pendingRestoreRef = useRef<{
+    imgData: ImageData;
+    oldW: number;
+    oldH: number;
+  } | null>(null);
+
+  const resizeCanvas = (w: number, h: number) => {
+    const baseCanvas = baseCanvasRef.current;
+    if (!baseCanvas) return;
+    const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
+    if (!baseCtx) return;
+
+    const oldW = canvasW;
+    const oldH = canvasH;
+    const imgData = baseCtx.getImageData(0, 0, oldW, oldH);
+
+    pendingRestoreRef.current = { imgData, oldW, oldH };
+    setCanvasW(w);
+    setCanvasH(h);
+    dirtyRef.current = true;
+  };
+
+  const handleMouseDown = (
+    handle: "right" | "bottom" | "corner",
+    e: React.MouseEvent,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizing({
+      handle,
+      startW: canvasW,
+      startH: canvasH,
+      startX: e.clientX,
+      startY: e.clientY,
+      currentW: canvasW,
+      currentH: canvasH,
+    });
+  };
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMouseMove = (e: MouseEvent) => {
+      const dx = Math.round((e.clientX - resizing.startX) / zoom);
+      const dy = Math.round((e.clientY - resizing.startY) / zoom);
+      let nextW = resizing.startW;
+      let nextH = resizing.startH;
+      if (resizing.handle === "right" || resizing.handle === "corner") {
+        nextW = Math.max(8, resizing.startW + dx);
+      }
+      if (resizing.handle === "bottom" || resizing.handle === "corner") {
+        nextH = Math.max(8, resizing.startH + dy);
+      }
+      setResizing((r) =>
+        r ? { ...r, currentW: nextW, currentH: nextH } : null,
+      );
+    };
+
+    const onMouseUp = () => {
+      resizeCanvas(resizing.currentW, resizing.currentH);
+      setResizing(null);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [resizing, zoom]);
   const [colorEditor, setColorEditor] = useState<{
     target: "fg" | "bg";
     r: number;
@@ -633,8 +764,8 @@ export function Paint({ windowId }: { windowId: string }) {
   );
 
   const clearOverlay = useCallback(() => {
-    getOverlayCtx()?.clearRect(0, 0, CANVAS_W, CANVAS_H);
-  }, [getOverlayCtx]);
+    getOverlayCtx()?.clearRect(0, 0, canvasW, canvasH);
+  }, [getOverlayCtx, canvasW, canvasH]);
 
   const makePlot =
     (ctx: CanvasRenderingContext2D | null, color: string): Plot =>
@@ -654,7 +785,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const pushHistory = useCallback(() => {
     const ctx = getBaseCtx();
     if (!ctx) return;
-    const snap = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+    const snap = ctx.getImageData(0, 0, canvasW, canvasH);
     const stack = historyRef.current;
     stack.length = historyPosRef.current + 1;
     stack.push(snap);
@@ -662,7 +793,7 @@ export function Paint({ windowId }: { windowId: string }) {
     historyPosRef.current = stack.length - 1;
     dirtyRef.current = true;
     setHistoryTick((t) => t + 1);
-  }, [getBaseCtx]);
+  }, [getBaseCtx, canvasW, canvasH]);
 
   const restoreHistory = useCallback(() => {
     const snap = historyRef.current[historyPosRef.current];
@@ -689,29 +820,71 @@ export function Paint({ windowId }: { windowId: string }) {
     };
   }, []);
 
-  useEffect(() => {
-    // Strict Mode mounts effects twice in dev; guard so we don't double-push
-    // the blank canvas as two separate (identical) history entries.
-    if (historyRef.current.length > 0) return;
-    const ctx = getBaseCtx();
+  // Synchronize canvas size changes and restore pixel data
+  useLayoutEffect(() => {
+    const base = baseCanvasRef.current;
+    if (!base) return;
+    const ctx = base.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
+
     ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    pushHistory();
-    // If opened from a VFS image file, load its contents onto the canvas.
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    if (pendingRestoreRef.current) {
+      const { imgData, oldW, oldH } = pendingRestoreRef.current;
+      pendingRestoreRef.current = null;
+
+      const temp = document.createElement("canvas");
+      temp.width = oldW;
+      temp.height = oldH;
+      temp.getContext("2d")?.putImageData(imgData, 0, 0);
+      ctx.drawImage(temp, 0, 0);
+    }
+
+    // Update history
+    historyRef.current = [ctx.getImageData(0, 0, canvasW, canvasH)];
+    historyPosRef.current = 0;
+    setHistoryTick((t) => t + 1);
+  }, [canvasW, canvasH]);
+
+  // Load initial content on mount if filePath is present
+  useEffect(() => {
     const loadPath = filePath;
     if (loadPath) {
       const content = vfs.read(loadPath);
       if (content && content.startsWith("data:image/")) {
         const img = new Image();
         img.onload = () => {
-          ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-          ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
-          historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
-          historyPosRef.current = 0;
-          setHistoryTick((t) => t + 1);
+          if (img.width === canvasW && img.height === canvasH) {
+            const ctx = getBaseCtx();
+            if (ctx) {
+              ctx.clearRect(0, 0, canvasW, canvasH);
+              ctx.fillStyle = "#FFFFFF";
+              ctx.fillRect(0, 0, canvasW, canvasH);
+              ctx.drawImage(img, 0, 0);
+              historyRef.current = [ctx.getImageData(0, 0, canvasW, canvasH)];
+              historyPosRef.current = 0;
+              setHistoryTick((t) => t + 1);
+            }
+          } else {
+            const temp = document.createElement("canvas");
+            temp.width = img.width;
+            temp.height = img.height;
+            const tempCtx = temp.getContext("2d");
+            if (tempCtx) {
+              tempCtx.fillStyle = "#FFFFFF";
+              tempCtx.fillRect(0, 0, img.width, img.height);
+              tempCtx.drawImage(img, 0, 0);
+              pendingRestoreRef.current = {
+                imgData: tempCtx.getImageData(0, 0, img.width, img.height),
+                oldW: img.width,
+                oldH: img.height,
+              };
+            }
+            setCanvasW(img.width);
+            setCanvasH(img.height);
+          }
+          dirtyRef.current = false;
         };
         img.src = content;
       }
@@ -762,8 +935,8 @@ export function Paint({ windowId }: { windowId: string }) {
     const x = Math.floor((e.clientX - rect.left) / zoom);
     const y = Math.floor((e.clientY - rect.top) / zoom);
     return [
-      Math.max(0, Math.min(CANVAS_W - 1, x)),
-      Math.max(0, Math.min(CANVAS_H - 1, y)),
+      Math.max(0, Math.min(canvasW - 1, x)),
+      Math.max(0, Math.min(canvasH - 1, y)),
     ];
   };
 
@@ -1249,14 +1422,14 @@ export function Paint({ windowId }: { windowId: string }) {
     setTool("select");
     const pts: [number, number][] = [
       [0, 0],
-      [CANVAS_W, 0],
-      [CANVAS_W, CANVAS_H],
-      [0, CANVAS_H],
+      [canvasW, 0],
+      [canvasW, canvasH],
+      [0, canvasH],
     ];
     selRef.current = {
       stage: "selected",
       points: pts,
-      bounds: { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H },
+      bounds: { x: 0, y: 0, w: canvasW, h: canvasH },
       floating: null,
       dragStart: [0, 0],
       floatingOrigin: [0, 0],
@@ -1334,10 +1507,10 @@ export function Paint({ windowId }: { windowId: string }) {
       const dist = Math.random() * airbrushSize;
       const px = Math.round(pos[0] + Math.cos(angle) * dist);
       const py = Math.round(pos[1] + Math.sin(angle) * dist);
-      if (px >= 0 && py >= 0 && px < CANVAS_W && py < CANVAS_H)
+      if (px >= 0 && py >= 0 && px < canvasW && py < canvasH)
         ctx.fillRect(px, py, 1, 1);
     }
-  }, [airbrushSize, getBaseCtx]);
+  }, [airbrushSize, getBaseCtx, canvasW, canvasH]);
 
   // ---- Pointer dispatch ----
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1384,7 +1557,7 @@ export function Paint({ windowId }: { windowId: string }) {
       case "fill": {
         const ctx = getBaseCtx();
         if (!ctx) break;
-        const img = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+        const img = ctx.getImageData(0, 0, canvasW, canvasH);
         floodFillImageData(img, x, y, hexToRgba(activeColorRef.current));
         ctx.putImageData(img, 0, 0);
         pushHistory();
@@ -1641,19 +1814,25 @@ export function Paint({ windowId }: { windowId: string }) {
   };
 
   const doNew = () => {
-    const ctx = getBaseCtx();
-    if (!ctx) return;
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
-    historyPosRef.current = 0;
+    if (canvasW === 580 && canvasH === 380) {
+      const ctx = getBaseCtx();
+      if (ctx) {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, 580, 380);
+        historyRef.current = [ctx.getImageData(0, 0, 580, 380)];
+        historyPosRef.current = 0;
+        setHistoryTick((t) => t + 1);
+      }
+    } else {
+      setCanvasW(580);
+      setCanvasH(380);
+    }
     dirtyRef.current = false;
     selRef.current = emptySel();
     polygonRef.current = { active: false, points: [] };
     curveRef.current = emptyCurve();
     clearOverlay();
     setShowNewConfirm(false);
-    setHistoryTick((t) => t + 1);
   };
 
   const updateTitle = useWindowStore((s) => s.updateTitle);
@@ -1684,7 +1863,7 @@ export function Paint({ windowId }: { windowId: string }) {
       : "untitled.png";
     const dir = filePath
       ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
-      : "C:\\My Documents\\";
+      : "C:\\My Pictures";
     const result = await showFileDialog({
       mode: "save",
       title: "Save As",
@@ -1702,7 +1881,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const handleOpenImage = async () => {
     const dir = filePath
       ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
-      : "C:\\My Documents\\";
+      : "C:\\My Pictures";
     const result = await showFileDialog({
       mode: "open",
       title: "Open",
@@ -1717,16 +1896,36 @@ export function Paint({ windowId }: { windowId: string }) {
     if (!content || !content.startsWith("data:image/")) return;
     const img = new Image();
     img.onload = () => {
-      const ctx = getBaseCtx();
-      if (!ctx) return;
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-      ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
-      historyRef.current = [ctx.getImageData(0, 0, CANVAS_W, CANVAS_H)];
-      historyPosRef.current = 0;
+      if (img.width === canvasW && img.height === canvasH) {
+        const ctx = getBaseCtx();
+        if (ctx) {
+          ctx.clearRect(0, 0, canvasW, canvasH);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvasW, canvasH);
+          ctx.drawImage(img, 0, 0);
+          historyRef.current = [ctx.getImageData(0, 0, canvasW, canvasH)];
+          historyPosRef.current = 0;
+          setHistoryTick((t) => t + 1);
+        }
+      } else {
+        const temp = document.createElement("canvas");
+        temp.width = img.width;
+        temp.height = img.height;
+        const tempCtx = temp.getContext("2d");
+        if (tempCtx) {
+          tempCtx.fillStyle = "#FFFFFF";
+          tempCtx.fillRect(0, 0, img.width, img.height);
+          tempCtx.drawImage(img, 0, 0);
+          pendingRestoreRef.current = {
+            imgData: tempCtx.getImageData(0, 0, img.width, img.height),
+            oldW: img.width,
+            oldH: img.height,
+          };
+        }
+        setCanvasW(img.width);
+        setCanvasH(img.height);
+      }
       dirtyRef.current = false;
-      setHistoryTick((t) => t + 1);
     };
     img.src = content;
     setFilePath(result);
@@ -1739,12 +1938,12 @@ export function Paint({ windowId }: { windowId: string }) {
     const ctx = getBaseCtx();
     if (!base || !ctx) return;
     const tmp = document.createElement("canvas");
-    tmp.width = CANVAS_W;
-    tmp.height = CANVAS_H;
+    tmp.width = canvasW;
+    tmp.height = canvasH;
     tmp.getContext("2d")!.drawImage(base, 0, 0);
     ctx.save();
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.translate(CANVAS_W, 0);
+    ctx.clearRect(0, 0, canvasW, canvasH);
+    ctx.translate(canvasW, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(tmp, 0, 0);
     ctx.restore();
@@ -1756,12 +1955,12 @@ export function Paint({ windowId }: { windowId: string }) {
     const ctx = getBaseCtx();
     if (!base || !ctx) return;
     const tmp = document.createElement("canvas");
-    tmp.width = CANVAS_W;
-    tmp.height = CANVAS_H;
+    tmp.width = canvasW;
+    tmp.height = canvasH;
     tmp.getContext("2d")!.drawImage(base, 0, 0);
     ctx.save();
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.translate(0, CANVAS_H);
+    ctx.clearRect(0, 0, canvasW, canvasH);
+    ctx.translate(0, canvasH);
     ctx.scale(1, -1);
     ctx.drawImage(tmp, 0, 0);
     ctx.restore();
@@ -1771,7 +1970,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const invertColors = () => {
     const ctx = getBaseCtx();
     if (!ctx) return;
-    const img = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+    const img = ctx.getImageData(0, 0, canvasW, canvasH);
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) {
       d[i] = 255 - d[i];
@@ -1786,7 +1985,7 @@ export function Paint({ windowId }: { windowId: string }) {
     const ctx = getBaseCtx();
     if (!ctx) return;
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillRect(0, 0, canvasW, canvasH);
     selRef.current = emptySel();
     clearOverlay();
     pushHistory();
@@ -2316,21 +2515,21 @@ export function Paint({ windowId }: { windowId: string }) {
 
         <CanvasScroll contentStyle={{ padding: 8 }}>
           <CanvasStack
-            style={{ width: CANVAS_W * zoom, height: CANVAS_H * zoom }}
+            style={{ width: canvasW * zoom, height: canvasH * zoom }}
           >
             <PixelCanvas
               ref={baseCanvasRef}
-              width={CANVAS_W}
-              height={CANVAS_H}
-              style={{ width: CANVAS_W * zoom, height: CANVAS_H * zoom }}
+              width={canvasW}
+              height={canvasH}
+              style={{ width: canvasW * zoom, height: canvasH * zoom }}
             />
             <OverlayCanvas
               ref={overlayCanvasRef}
-              width={CANVAS_W}
-              height={CANVAS_H}
+              width={canvasW}
+              height={canvasH}
               style={{
-                width: CANVAS_W * zoom,
-                height: CANVAS_H * zoom,
+                width: canvasW * zoom,
+                height: canvasH * zoom,
                 cursor: cursorStyle,
               }}
               onPointerDown={handlePointerDown}
@@ -2339,6 +2538,27 @@ export function Paint({ windowId }: { windowId: string }) {
               onDoubleClick={handleDoubleClick}
               onContextMenu={handleContextMenuCanvas}
             />
+
+            <Handle
+              $position="right"
+              onMouseDown={(e) => handleMouseDown("right", e)}
+            />
+            <Handle
+              $position="bottom"
+              onMouseDown={(e) => handleMouseDown("bottom", e)}
+            />
+            <Handle
+              $position="corner"
+              onMouseDown={(e) => handleMouseDown("corner", e)}
+            />
+
+            {resizing && (
+              <ResizePreview
+                $w={resizing.currentW}
+                $h={resizing.currentH}
+                $zoom={zoom}
+              />
+            )}
             {textEditing && (
               <TextEditOverlay
                 ref={textAreaRef}

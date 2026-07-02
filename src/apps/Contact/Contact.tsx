@@ -70,7 +70,7 @@ export function Contact() {
     if (!validate()) return;
 
     const subject = encodeURIComponent(
-      `Message from ${form.name} via RSNRA 95`,
+      `Message from ${form.name} via RSNRA.ART`,
     );
     const body = encodeURIComponent(
       `${form.message}\n\n— ${form.name} (${form.email})`,
