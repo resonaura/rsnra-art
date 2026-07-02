@@ -113,8 +113,9 @@ export const APPS: Record<AppId, AppDefinition> = {
     icon: "/icons/minesweeper.png",
     component: asComponent(Minesweeper),
     width: 280,
-    height: 360,
+    height: 384,
     resizable: false,
+    noPadding: true,
   },
   snake: {
     id: "snake",

@@ -165,8 +165,8 @@ export function TerminalApp({ windowId }: { windowId: string }) {
       theme: {
         background: "#000000",
         foreground: "#c0c0c0",
-        cursor: "#6dff8f",
-        selectionBackground: "#4a4a8a",
+        cursor: "#ffffff",
+        selectionBackground: "#ffffff",
         black: "#000000",
         red: "#ff6b6b",
         green: "#6dff8f",

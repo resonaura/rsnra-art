@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { Button, TextInput, GroupBox } from 'react95';
-import { CONTACT_EMAIL } from '../../data/content';
+import { useState } from "react";
+import { Button, GroupBox, TextInput } from "react95";
+import styled from "styled-components";
+import { CONTACT_EMAIL } from "../../data/content";
 
 const Layout = styled.div`
   display: flex;
@@ -43,7 +43,7 @@ interface FormState {
   message: string;
 }
 
-const EMPTY: FormState = { name: '', email: '', message: '' };
+const EMPTY: FormState = { name: "", email: "", message: "" };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function Contact() {
@@ -51,15 +51,16 @@ export function Contact() {
   const [errors, setErrors] = useState<Partial<FormState>>({});
   const [sent, setSent] = useState(false);
 
-  const update = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const update =
+    (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const validate = () => {
     const next: Partial<FormState> = {};
-    if (!form.name.trim()) next.name = 'Please enter your name.';
+    if (!form.name.trim()) next.name = "Please enter your name.";
     if (!form.email.trim() || !EMAIL_RE.test(form.email))
-      next.email = 'Please enter a valid email.';
-    if (!form.message.trim()) next.message = 'Please write a message.';
+      next.email = "Please enter a valid email.";
+    if (!form.message.trim()) next.message = "Please write a message.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -68,8 +69,12 @@ export function Contact() {
     e.preventDefault();
     if (!validate()) return;
 
-    const subject = encodeURIComponent(`Message from ${form.name} via RSNRA 95`);
-    const body = encodeURIComponent(`${form.message}\n\n— ${form.name} (${form.email})`);
+    const subject = encodeURIComponent(
+      `Message from ${form.name} via RSNRA 95`,
+    );
+    const body = encodeURIComponent(
+      `${form.message}\n\n— ${form.name} (${form.email})`,
+    );
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
     setSent(true);
   };
@@ -82,13 +87,13 @@ export function Contact() {
 
   return (
     <Layout as="form" onSubmit={handleSubmit}>
-      <GroupBox label="Get in touch">
+      <GroupBox style={{ zoom: 0.9 }} label="Get in touch">
         <Field>
           <label htmlFor="contact-name">Your name</label>
           <TextInput
             id="contact-name"
             value={form.name}
-            onChange={update('name')}
+            onChange={update("name")}
             placeholder="Jane Doe"
             fullWidth
           />
@@ -100,7 +105,7 @@ export function Contact() {
             id="contact-email"
             type="email"
             value={form.email}
-            onChange={update('email')}
+            onChange={update("email")}
             placeholder="you@example.com"
             fullWidth
           />
@@ -114,7 +119,9 @@ export function Contact() {
             rows={6}
             value={form.message}
             onChange={
-              update('message') as unknown as React.ChangeEventHandler<HTMLTextAreaElement>
+              update(
+                "message",
+              ) as unknown as React.ChangeEventHandler<HTMLTextAreaElement>
             }
             placeholder="Booking inquiry, press request, or just say hi..."
             fullWidth
@@ -129,7 +136,7 @@ export function Contact() {
           : `We read everything sent to ${CONTACT_EMAIL}.`}
       </Status>
 
-      <Footer>
+      <Footer style={{ zoom: 0.8 }}>
         <Button type="button" onClick={handleReset}>
           Reset
         </Button>
