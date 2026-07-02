@@ -38,6 +38,7 @@ export class Shell {
   private resizeDisposable: { dispose: () => void };
   private active = true;
   private nano: Nano | null = null;
+  private onSetColor?: (bg: string, fg: string) => void;
   // True while an async command (e.g. `ping`) is awaiting the network —
   // input is ignored meanwhile so keystrokes can't pile into a buffer for a
   // prompt that hasn't been shown yet.
@@ -48,11 +49,13 @@ export class Shell {
     windowId: string,
     closeWindow: (id: string) => void,
     updateTitle: (id: string, title: string) => void,
+    onSetColor?: (bg: string, fg: string) => void,
   ) {
     this.term = term;
     this.windowId = windowId;
     this.closeWindow = closeWindow;
     this.updateTitle = updateTitle;
+    this.onSetColor = onSetColor;
 
     this.disposable = term.onData((data) => this.onData(data));
     this.resizeDisposable = term.onResize(() => {
@@ -97,13 +100,13 @@ export class Shell {
   }
 
   private showPrompt() {
-    this.term.write(`\r${ANSI.WHITE}${this.promptText}${ANSI.RESET}`);
+    this.term.write(`\r${this.promptText}`);
   }
 
   /** Redraw the current input line (prompt + buffer). */
   private redrawInput() {
     this.term.write(
-      `\r\x1b[2K${ANSI.WHITE}${this.promptText}${ANSI.RESET}${this.buffer}`,
+      `\r\x1b[2K${this.promptText}${this.buffer}`,
     );
     // Position cursor
     const col = this.promptLen + this.cursorPos + 1;
@@ -306,8 +309,6 @@ export class Shell {
       for (const text of lines) {
         if (kind === "error")
           this.term.writeln(`${ANSI.RED}${text}${ANSI.RESET}`);
-        else if (kind === "echo")
-          this.term.writeln(`${ANSI.WHITE}${text}${ANSI.RESET}`);
         else this.term.writeln(text);
       }
     };
@@ -331,6 +332,18 @@ export class Shell {
       errorLevel: this.errorLevel,
       setErrorLevel: (n: number) => {
         this.errorLevel = n;
+      },
+      setColor: (bg: string, fg: string) => {
+        this.term.options.theme = {
+          ...this.term.options.theme,
+          background: bg,
+          foreground: fg,
+          cursor: fg,
+          selectionBackground: fg,
+        };
+        if (this.onSetColor) {
+          this.onSetColor(bg, fg);
+        }
       },
     };
 

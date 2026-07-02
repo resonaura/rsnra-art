@@ -25,6 +25,7 @@ export interface CmdContext {
   promptStr: string;
   errorLevel: number;
   setErrorLevel: (n: number) => void;
+  setColor?: (bg: string, fg: string) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -978,14 +979,57 @@ function cmdTitle(args: string[], ctx: CmdContext) {
 }
 
 function cmdColor(args: string[], ctx: CmdContext) {
-  // Simplified color command — just print a message
-  if (!args[0]) {
-    ctx.print(["Color reset."]);
+  if (!ctx.setColor) {
+    ctx.print(["Color change not supported in this terminal."], "error");
+    ctx.setErrorLevel(1);
     return;
   }
-  ctx.print([
-    `Colors set to ${args[0]}. (Visual changes not supported in web terminal)`,
-  ]);
+  if (!args[0]) {
+    // Reset to default black background, light gray text
+    ctx.setColor("#000000", "#c0c0c0");
+    ctx.setErrorLevel(0);
+    return;
+  }
+  const arg = args[0].toLowerCase();
+  if (arg.length !== 2) {
+    ctx.print(["Invalid color attribute. Try: color 0f, color 1a, etc."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const bgChar = arg[0];
+  const fgChar = arg[1];
+  const COLOR_MAP: Record<string, string> = {
+    "0": "#000000",
+    "1": "#000080",
+    "2": "#008000",
+    "3": "#008080",
+    "4": "#800000",
+    "5": "#800080",
+    "6": "#808000",
+    "7": "#c0c0c0",
+    "8": "#808080",
+    "9": "#0000ff",
+    "a": "#00ff00",
+    "b": "#00ffff",
+    "c": "#ff0000",
+    "d": "#ff00ff",
+    "e": "#ffff00",
+    "f": "#ffffff",
+  };
+  const bg = COLOR_MAP[bgChar];
+  const fg = COLOR_MAP[fgChar];
+  if (!bg || !fg) {
+    ctx.print(["Invalid color digits. Valid digits: 0-9, a-f."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  if (bgChar === fgChar) {
+    ctx.print(["Background and foreground colors cannot be the same."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  ctx.setColor(bg, fg);
+  ctx.setErrorLevel(0);
 }
 
 function cmdPrompt(args: string[], ctx: CmdContext) {

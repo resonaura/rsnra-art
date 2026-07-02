@@ -120,6 +120,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
   );
   const [scrollState, setScrollState] = useState<ScrollState>(INITIAL_SCROLL);
+  const [bgColor, setBgColor] = useState("#000000");
 
   const syncScroll = useCallback(() => {
     const term = termRef.current;
@@ -201,7 +202,9 @@ export function TerminalApp({ windowId }: { windowId: string }) {
 
     termRef.current = term;
 
-    const shell = new Shell(term, windowId, closeWindow, updateTitle);
+    const shell = new Shell(term, windowId, closeWindow, updateTitle, (bg) => {
+      setBgColor(bg);
+    });
     shellRef.current = shell;
     shell.start();
 
@@ -263,12 +266,13 @@ export function TerminalApp({ windowId }: { windowId: string }) {
   }, [isFocused]);
 
   return (
-    <Root>
+    <Root style={{ background: bgColor }}>
       <AppMenuBar menus={menus} />
-      <TermRow>
+      <TermRow style={{ background: bgColor }}>
         <TermContainer
           ref={containerRef}
           onMouseDown={() => termRef.current?.focus()}
+          style={{ background: bgColor }}
         />
         <TerminalScrollbar
           scrollTop={scrollState.scrollTop}
