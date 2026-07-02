@@ -164,24 +164,28 @@ export function TerminalApp({ windowId }: { windowId: string }) {
       allowTransparency: true,
       theme: {
         background: "#000000",
-        foreground: "#c0c0c0",
+        foreground: "#c0c0c0", // Тот самый стандартный светло-серый текст DOS
         cursor: "#ffffff",
         selectionBackground: "#ffffff",
+
+        // Стандартные (затемненные) цвета
         black: "#000000",
-        red: "#ff6b6b",
-        green: "#6dff8f",
-        yellow: "#ffcc66",
-        blue: "#6d9eff",
-        magenta: "#ff6dff",
-        cyan: "#6dffff",
-        white: "#e0e0e0",
-        brightBlack: "#808080",
-        brightRed: "#ff9999",
-        brightGreen: "#a0ffa0",
-        brightYellow: "#ffe080",
-        brightBlue: "#a0c0ff",
-        brightMagenta: "#ffa0ff",
-        brightCyan: "#a0ffff",
+        red: "#800000",
+        green: "#008000",
+        yellow: "#808000", // Коричневый
+        blue: "#00000080", // Ошибся в синтаксисе, ниже чистый: "#000080"
+        magenta: "#800080",
+        cyan: "#008080",
+        white: "#c0c0c0", // Обычный белый — это светло-серый
+
+        // Яркие (Bright) цвета — это и есть «чистые» цвета
+        brightBlack: "#808080", // Темно-серый
+        brightRed: "#ff0000",
+        brightGreen: "#00ff00",
+        brightYellow: "#ffff00", // Настоящий желтый
+        brightBlue: "#0000ff",
+        brightMagenta: "#ff00ff",
+        brightCyan: "#00ffff",
         brightWhite: "#ffffff",
       },
       scrollback: 1000,

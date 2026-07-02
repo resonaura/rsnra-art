@@ -255,7 +255,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     icon: "/icons/pinball.png",
     component: asComponent(Pinball),
     width: 616,
-    height: 468,
+    height: 500,
     resizable: false,
     noPadding: true,
     singleInstance: true,

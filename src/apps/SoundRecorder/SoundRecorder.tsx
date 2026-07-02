@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "react95";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
@@ -58,18 +57,11 @@ function dirOf(path: string): string {
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload  = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
 }
-
-const raised = css`
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
-`;
 
 const Layout = styled.div`
   display: flex;
@@ -78,61 +70,22 @@ const Layout = styled.div`
   width: 100%;
 `;
 
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const DialogBox = styled.div`
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  width: 300px;
-`;
-
-const DialogHeader = styled.div`
-  background: ${({ theme }) => theme.headerBackground};
-  color: ${({ theme }) => theme.headerText};
-  padding: 4px 8px;
-  font-weight: bold;
-  font-size: 13px;
-`;
-
-const DialogBody = styled.div`
-  padding: 14px;
-  font-size: 12px;
-`;
-
-const DialogFooter = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 0 14px 14px;
-`;
-
 export function SoundRecorder({ windowId }: { windowId: string }) {
-  const data = useWindowData(windowId);
-  const vfs = useVfsStore(
+  const data          = useWindowData(windowId);
+  const vfs           = useVfsStore(
     useShallow((s) => ({ read: s.read, writeFile: s.writeFile })),
   );
-  const updateTitle = useWindowStore((s) => s.updateTitle);
-  const requestClose = useUnsavedStore((s) => s.requestClose);
+  const updateTitle   = useWindowStore((s) => s.updateTitle);
+  const requestClose  = useUnsavedStore((s) => s.requestClose);
   const { showFileDialog, dialog } = useFileDialog();
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const loadedInitialRef = useRef(false);
-  const [ready, setReady] = useState(false);
+  const iframeRef          = useRef<HTMLIFrameElement>(null);
+  const loadedInitialRef   = useRef(false);
+  const [ready, setReady]  = useState(false);
   const [filePath, setFilePath] = useState<string | null>(
     (data.path as string) ?? null,
   );
   const [dirty, setDirty] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState<(() => void) | null>(
-    null,
-  );
 
   const getWin = () =>
     iframeRef.current?.contentWindow as unknown as RecorderWindow | undefined;
@@ -151,16 +104,16 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
   }, [ready]);
 
   const loadPath = async (path: string) => {
-    const win = getWin();
+    const win     = getWin();
     const content = vfs.read(path);
     if (!win || !content) return;
-    const blob = await fetch(content).then((r) => r.blob());
-    const name = basename(path);
+    const blob   = await fetch(content).then((r) => r.blob());
+    const name   = basename(path);
     const asFile = new File([blob], name, { type: "audio/wav" });
     win.read_audio_data(asFile, (buffer) => {
       win.reset();
       win.file.original_blob = asFile;
-      win.file.name = name;
+      win.file.name          = name;
       win.file.setBuffer(buffer);
       win.saved = true;
       win.update();
@@ -170,7 +123,7 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     });
   };
 
-  // Opened from Explorer/Find/etc. with a specific VFS path.
+  // Opened from Explorer / Find / etc. with a specific VFS path.
   useEffect(() => {
     if (!ready || loadedInitialRef.current || !filePath) return;
     loadedInitialRef.current = true;
@@ -178,38 +131,12 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const confirmIfDirty = (run: () => void) => {
-    if (dirty) setConfirmDiscard(() => run);
-    else run();
-  };
-
-  const handleNew = () =>
-    confirmIfDirty(() => {
-      const win = getWin();
-      if (!win) return;
-      win.reset();
-      win.saved = true;
-      setFilePath(null);
-      setDirty(false);
-      updateTitle(windowId, "Sound Recorder");
-    });
-
-  const handleOpen = () =>
-    confirmIfDirty(async () => {
-      const result = await showFileDialog({
-        mode: "open",
-        title: "Open",
-        initialDir: filePath ? dirOf(filePath) : DEFAULT_DIR,
-        filters: WAV_FILTERS,
-      });
-      if (!result) return;
-      await loadPath(result);
-    });
+  // ── save / open helpers ───────────────────────────────────────────────────
 
   const saveToPath = async (path: string): Promise<boolean> => {
     const win = getWin();
     if (!win) return false;
-    const blob = await new Promise<Blob>((resolve) =>
+    const blob    = await new Promise<Blob>((resolve) =>
       win.get_wav_file(win.file, resolve),
     );
     const dataUrl = await blobToDataUrl(blob);
@@ -227,7 +154,7 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     const result = await showFileDialog({
       mode: "save",
       title: "Save As",
-      initialDir: filePath ? dirOf(filePath) : DEFAULT_DIR,
+      initialDir:      filePath ? dirOf(filePath) : DEFAULT_DIR,
       initialFileName: filePath ? basename(filePath) : win.file.name || "Sound.wav",
       filters: WAV_FILTERS,
     });
@@ -240,6 +167,42 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     return saveToPath(filePath);
   };
 
+
+  // For New/Open actions: ask the user to discard if there are unsaved changes.
+  // The system UnsavedChangesDialog handles the window-close case separately.
+  const confirmIfDirty = (run: () => void) => {
+    if (!dirty) { run(); return; }
+    if (window.confirm("This sound has changed. Discard unsaved changes?")) {
+      run();
+    }
+  };
+
+
+  const handleNew = () =>
+    confirmIfDirty(() => {
+      const win = getWin();
+      if (!win) return;
+      win.reset();
+      win.saved = true;
+      setFilePath(null);
+      setDirty(false);
+      updateTitle(windowId, "Sound Recorder");
+    });
+
+  const handleOpen = () =>
+    confirmIfDirty(async () => {
+      const result = await showFileDialog({
+        mode:       "open",
+        title:      "Open",
+        initialDir: filePath ? dirOf(filePath) : DEFAULT_DIR,
+        filters:    WAV_FILTERS,
+      });
+      if (!result) return;
+      await loadPath(result);
+    });
+
+  // Register with the system unsaved-changes guard so closing the window
+  // via X / File → Exit shows the standard "Save changes?" dialog.
   useUnsavedChanges(windowId, {
     isDirty: dirty,
     save: () => handleSave(),
@@ -257,25 +220,25 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     {
       label: "File",
       items: [
-        { label: "New", action: handleNew, disabled: !ready },
-        { label: "Open...", action: handleOpen, disabled: !ready },
-        { label: "Save", action: handleSave, disabled: !hasAudio },
+        { label: "New",       action: handleNew,    disabled: !ready    },
+        { label: "Open...",   action: handleOpen,   disabled: !ready    },
+        { label: "Save",      action: handleSave,   disabled: !hasAudio },
         { label: "Save As...", action: handleSaveAs, disabled: !hasAudio },
         { label: "", divider: true },
-        { label: "Exit", action: () => requestClose(windowId) },
+        { label: "Exit",      action: () => requestClose(windowId) },
       ],
     },
     {
       label: "Edit",
       items: [
         {
-          label: "Delete Before Current Position",
-          action: callWin((win) => win.delete_before_current_position()),
+          label:    "Delete Before Current Position",
+          action:   callWin((win) => win.delete_before_current_position()),
           disabled: !ready || !getWin()?.can_delete_before_current_position(),
         },
         {
-          label: "Delete After Current Position",
-          action: callWin((win) => win.delete_after_current_position()),
+          label:    "Delete After Current Position",
+          action:   callWin((win) => win.delete_after_current_position()),
           disabled: !ready || !getWin()?.can_delete_after_current_position(),
         },
       ],
@@ -283,38 +246,14 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
     {
       label: "Effects",
       items: [
-        {
-          label: "Increase Volume (by 25%)",
-          action: callWin((win) => win.effects_increase_volume()),
-          disabled: !ready,
-        },
-        {
-          label: "Decrease Volume",
-          action: callWin((win) => win.effects_decrease_volume()),
-          disabled: !ready,
-        },
+        { label: "Increase Volume (by 25%)", action: callWin((win) => win.effects_increase_volume()), disabled: !ready },
+        { label: "Decrease Volume",          action: callWin((win) => win.effects_decrease_volume()), disabled: !ready },
         { label: "", divider: true },
-        {
-          label: "Increase Speed (by 100%)",
-          action: callWin((win) => win.effects_increase_speed()),
-          disabled: !ready,
-        },
-        {
-          label: "Decrease Speed",
-          action: callWin((win) => win.effects_decrease_speed()),
-          disabled: !ready,
-        },
+        { label: "Increase Speed (by 100%)", action: callWin((win) => win.effects_increase_speed()), disabled: !ready },
+        { label: "Decrease Speed",           action: callWin((win) => win.effects_decrease_speed()), disabled: !ready },
         { label: "", divider: true },
-        {
-          label: "Add Echo",
-          action: callWin((win) => win.effects_add_echo()),
-          disabled: !ready,
-        },
-        {
-          label: "Reverse",
-          action: callWin((win) => win.effects_reverse()),
-          disabled: !ready,
-        },
+        { label: "Add Echo",                 action: callWin((win) => win.effects_add_echo()),        disabled: !ready },
+        { label: "Reverse",                  action: callWin((win) => win.effects_reverse()),         disabled: !ready },
       ],
     },
     {
@@ -333,29 +272,8 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
         allow="microphone"
         onLoad={() => setReady(true)}
       />
+      {/* System file dialog (Save As / Open) */}
       {dialog}
-      {confirmDiscard && (
-        <Overlay onMouseDown={() => setConfirmDiscard(null)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Sound Recorder</DialogHeader>
-            <DialogBody>
-              This sound has changed. Discard unsaved changes?
-            </DialogBody>
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  const run = confirmDiscard;
-                  setConfirmDiscard(null);
-                  run();
-                }}
-              >
-                Discard
-              </Button>
-              <Button onClick={() => setConfirmDiscard(null)}>Cancel</Button>
-            </DialogFooter>
-          </DialogBox>
-        </Overlay>
-      )}
     </Layout>
   );
 }
