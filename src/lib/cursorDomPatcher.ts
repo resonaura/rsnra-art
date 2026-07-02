@@ -1,4 +1,5 @@
-import { LIVE_CURSOR_PREFIX, type CursorRoleId } from "../data/cursors";
+import { LIVE_CURSOR_PREFIX, type CursorRoleId, CURSOR_ROLE_MAP, cursorCss } from "../data/cursors";
+import { useCursorStore } from "../store/cursorStore";
 
 // Maps every native CSS cursor keyword we might see in `getComputedStyle`
 // to the pointer-scheme role that should replace it. This is deliberately
@@ -44,23 +45,59 @@ const NATIVE_TO_ROLE: Partial<Record<string, CursorRoleId>> = {
 
 const PATCHED_ATTR = "data-rsnra-cursor-patched";
 
+function getCumulativeZoom(el: Element): number {
+  let zoom = 1;
+  let current: Element | null = el;
+  while (current) {
+    const style = getComputedStyle(current);
+    const z = parseFloat(style.zoom);
+    if (!isNaN(z) && z !== 0) {
+      zoom *= z;
+    }
+    current = current.parentElement;
+  }
+  return zoom;
+}
+
+export function clearPatchedCursors() {
+  const elements = document.querySelectorAll(`[${PATCHED_ATTR}]`);
+  elements.forEach((el) => {
+    el.removeAttribute(PATCHED_ATTR);
+    (el as HTMLElement).style.removeProperty("cursor");
+  });
+}
+
 function patch(el: Element) {
   if (el.hasAttribute(PATCHED_ATTR)) return;
   const computed = getComputedStyle(el).cursor;
-  if (!computed || computed.includes(LIVE_CURSOR_PREFIX)) {
-    // Already pointed at one of our own images (a static rule, or a
-    // previous patch) — nothing to do, but remember so we stop asking.
+  if (!computed) return;
+
+  const { schemeId, files } = useCursorStore.getState();
+  if (schemeId === "none") return;
+
+  const zoom = getCumulativeZoom(el);
+  if (computed.includes(LIVE_CURSOR_PREFIX) && Math.abs(zoom - 1) < 0.001) {
+    // Already using our custom cursor at normal scale — skip
     el.setAttribute(PATCHED_ATTR, "1");
     return;
   }
+
   const fallback = computed.split(",").pop()?.trim();
   const role = fallback && NATIVE_TO_ROLE[fallback];
   if (!role) return;
-  (el as HTMLElement).style.setProperty(
-    "cursor",
-    `var(--cursor-${role}), ${fallback}`,
-    "important",
-  );
+
+  if (Math.abs(zoom - 1) < 0.001) {
+    (el as HTMLElement).style.setProperty(
+      "cursor",
+      `var(--cursor-${role}), ${fallback}`,
+      "important",
+    );
+  } else {
+    const file = files[role] ?? CURSOR_ROLE_MAP[role].file;
+    const cursorVal = `${cursorCss(file, zoom)}, ${fallback}`;
+    (el as HTMLElement).style.setProperty("cursor", cursorVal, "important");
+  }
+
   el.setAttribute(PATCHED_ATTR, "1");
 }
 

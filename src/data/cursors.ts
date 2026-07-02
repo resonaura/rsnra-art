@@ -121,10 +121,19 @@ export function cursorHotspot(file: string): string {
  *  candidates in order and skips ones it can't use (the same mechanism
  *  that makes `url(...) x y, auto` degrade gracefully on a 404), so no
  *  vendor-prefix/feature-detection dance is needed. */
-export function cursorCss(file: string): string {
-  const hotspot = cursorHotspot(file);
+export function cursorCss(file: string, zoom = 1): string {
+  const [hx, hy] = CURSOR_HOTSPOTS[file] ?? [0, 0];
+  const compHx = hx / zoom;
+  const compHy = hy / zoom;
+  const hotspot = `${compHx} ${compHy}`;
+  if (zoom === 1) {
+    return [
+      `image-set(url("${cursorUrl(file)}") 1x, url("${cursorUrl2x(file)}") 2x) ${hotspot}`,
+      `url("${cursorUrl(file)}") ${hotspot}`,
+    ].join(", ");
+  }
   return [
-    `image-set(url("${cursorUrl(file)}") 1x, url("${cursorUrl2x(file)}") 2x) ${hotspot}`,
+    `image-set(url("${cursorUrl(file)}") ${zoom}x, url("${cursorUrl2x(file)}") ${zoom * 2}x) ${hotspot}`,
     `url("${cursorUrl(file)}") ${hotspot}`,
   ].join(", ");
 }

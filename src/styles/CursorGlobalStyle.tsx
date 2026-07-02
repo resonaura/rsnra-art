@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createGlobalStyle } from "styled-components";
 import { CURSOR_ROLE_MAP, cursorCss } from "../data/cursors";
-import { installCursorDomPatcher } from "../lib/cursorDomPatcher";
+import { installCursorDomPatcher, clearPatchedCursors } from "../lib/cursorDomPatcher";
 import { useCursorStore } from "../store/cursorStore";
 
 // Defines --cursor-<role> custom properties on :root plus a handful of
@@ -46,6 +46,10 @@ export function CursorGlobalStyle() {
   const files = useCursorStore((s) => s.files);
 
   useEffect(() => installCursorDomPatcher(), []);
+
+  useEffect(() => {
+    clearPatchedCursors();
+  }, [schemeId, files]);
 
   if (schemeId === "none") return null;
 
