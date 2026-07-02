@@ -567,13 +567,57 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
   const driveNotReady = /^[AD]:\\$/.test(path);
   const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const controlPanelNodes: VfsNode[] = APPLETS.map((applet) => ({
+    name: applet.label,
+    type: "file",
+    created: Date.now(),
+    icon: applet.icon,
+    onOpen: applet.onOpen,
+    disabled: !applet.onOpen,
+  } as any));
+
+  const gamesNodes: VfsNode[] = GAMES.map((game) => ({
+    name: game.label,
+    type: "file",
+    created: Date.now(),
+    icon: game.icon,
+    onOpen: game.onOpen,
+    disabled: game.disabled,
+  } as any));
+
+  const getIcon = (node: VfsNode): string => {
+    if ((node as any).icon) return (node as any).icon;
+    return iconForNode(node);
+  };
+
+  const describeTypeLocal = (node: VfsNode): string => {
+    if (path === "Control Panel") return "Control Panel Extension";
+    if (path === "Games") return "Shortcut";
+    return describeType(node);
+  };
+
+  const formatSizeLocal = (node: VfsNode): string => {
+    if (path === "Control Panel" || path === "Games") return "";
+    return formatSize(node);
+  };
+
+  const formatDateLocal = (node: VfsNode): string => {
+    if (path === "Control Panel" || path === "Games") return "";
+    return formatDate(node);
+  };
+
   const allEntries: VfsNode[] =
-    isRoot || driveNotReady ? [] : (vfs.list(path) ?? []);
+    isRoot || driveNotReady || path === "Control Panel" || path === "Games" ? [] : (vfs.list(path) ?? []);
   const entries = showHidden ? allEntries : allEntries.filter((n) => !n.hidden);
-  const sorted = [...entries].sort((a, b) => {
-    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  const sorted =
+    path === "Control Panel"
+      ? controlPanelNodes
+      : path === "Games"
+        ? gamesNodes
+        : [...entries].sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
 
   // Sync the window title + icon to the current path — just like real Win95 Explorer
   useEffect(() => {
@@ -604,6 +648,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const openNode = (node: VfsNode) => {
+    if (path === "Control Panel" || path === "Games") {
+      const vNode = node as any;
+      if (!vNode.disabled && vNode.onOpen) {
+        vNode.onOpen();
+      }
+      return;
+    }
     const abs = vfs.resolvePath(node.name, path);
     if (!abs) return;
     const preferred = node.type === "file" ? getPreferredApp(node.name) : null;
@@ -1153,7 +1204,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       }}
     >
       <div style={{ position: "relative" }}>
-        <img src={iconForNode(node)} alt="" draggable={false} />
+        <img src={getIcon(node)} alt="" draggable={false} />
         {node.system && <LockGlyph />}
       </div>
       {renaming === node.name ? renameBox() : node.name}
@@ -1170,7 +1221,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       style={{ opacity: nodeOpacity(node) }}
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
-        <img src={iconForNode(node)} alt="" draggable={false} />
+        <img src={getIcon(node)} alt="" draggable={false} />
         {node.system && <LockGlyph />}
       </div>
       <span
@@ -1196,7 +1247,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     >
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>
-          <img src={iconForNode(node)} alt="" draggable={false} />
+          <img src={getIcon(node)} alt="" draggable={false} />
           {node.system && <LockGlyph />}
         </div>
         {renaming === node.name ? (
@@ -1207,9 +1258,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
           </span>
         )}
       </ColName>
-      <ColSize>{formatSize(node)}</ColSize>
-      <ColType>{describeType(node)}</ColType>
-      <ColDate>{formatDate(node)}</ColDate>
+      <ColSize>{formatSizeLocal(node)}</ColSize>
+      <ColType>{describeTypeLocal(node)}</ColType>
+      <ColDate>{formatDateLocal(node)}</ColDate>
     </DetailsRow>
   );
 
@@ -1245,7 +1296,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         }}
         onDrop={handleDropOnBackground}
         contentStyle={
-          isRoot || path === "Control Panel" || path === "Games" || view === "large"
+          isRoot || view === "large"
             ? {
                 padding: 10,
                 display: "flex",
@@ -1256,54 +1307,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
             : { padding: 10, width: "100%" }
         }
       >
-        {path === "Control Panel" ? (
-          APPLETS.map((applet) => (
-            <IconItem
-              key={applet.label}
-              $selected={selected === applet.label}
-              tabIndex={0}
-              $disabled={!applet.onOpen}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelected(applet.label);
-              }}
-              onDoubleClick={applet.onOpen}
-              title={applet.onOpen ? undefined : "Not available in this build"}
-            >
-              <img
-                src={applet.icon}
-                alt=""
-                draggable={false}
-                style={{ opacity: applet.onOpen ? 1 : 0.5 }}
-              />
-              {applet.label}
-            </IconItem>
-          ))
-        ) : path === "Games" ? (
-          GAMES.map((game) => (
-            <IconItem
-              key={game.label}
-              $selected={selected === game.label}
-              tabIndex={0}
-              $disabled={game.disabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelected(game.label);
-              }}
-              onDoubleClick={game.disabled ? undefined : game.onOpen}
-              title={game.disabled ? "Coming soon" : undefined}
-            >
-              <img
-                src={game.icon}
-                alt=""
-                draggable={false}
-                style={{ opacity: game.disabled ? 0.5 : 1 }}
-              />
-              {game.label}
-              {game.disabled && <span style={{ fontSize: 10 }}>(soon)</span>}
-            </IconItem>
-          ))
-        ) : isRoot ? (
+        {isRoot ? (
           DRIVES.map((d) => (
             <IconItem
               key={d.label}
