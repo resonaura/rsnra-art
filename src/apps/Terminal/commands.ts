@@ -5,6 +5,7 @@ import {
   CONTACT_EMAIL,
   LINKS,
 } from "../../data/content";
+import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode, type VfsState } from "../../store/vfsStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -107,7 +108,11 @@ function dirStamp(date: Date): string {
 /** Get file size for dir listing. */
 function fileSize(node: VfsNode): number {
   if (node.type === "dir") return 0;
-  return (node.content?.length ?? 0) || (node.appId ? 32768 : 0);
+  return node.content
+    ? contentByteSize(node.content)
+    : node.appId
+      ? 32768
+      : 0;
 }
 
 // ─── Command handlers ─────────────────────────────────────────────────────

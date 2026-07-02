@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import styled from "styled-components";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { getPreferredApp } from "../../data/fileOpen";
 import { playSound } from "../../lib/audio";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
@@ -9,6 +10,7 @@ import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import type { AppId } from "../../types/window";
 import { ContextMenu, CtxDivider, CtxItem } from "../ContextMenu";
+import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
 import { DesktopContextMenu } from "./DesktopContextMenu";
 import { DesktopIcon } from "./DesktopIcon";
 
@@ -59,6 +61,13 @@ function openLnk(lnk: LnkData) {
 // Open a non-shortcut desktop node in the matching app. Folders open an
 // Explorer window rooted at that folder.
 function openNode(node: VfsNode, abs: string) {
+  if (node.type === "file" && !node.name.toLowerCase().endsWith(".lnk")) {
+    const preferred = getPreferredApp(node.name);
+    if (preferred) {
+      preferred.open(abs, node.name);
+      return;
+    }
+  }
   if (node.type === "dir") {
     openApp("my-computer", { title: node.name, data: { path: abs } });
     return;
@@ -78,7 +87,16 @@ function openNode(node: VfsNode, abs: string) {
     return;
   }
   if (isAudioExt(lower)) {
-    void openVfsAudio(abs);
+    void openVfsAudio(abs).then((played) => {
+      // Not a built-in system sound (e.g. a .wav saved from Sound Recorder
+      // elsewhere in the VFS) — open it for playback/editing there instead.
+      if (!played && lower.endsWith(".wav")) {
+        openApp("sound-recorder", {
+          title: `${node.name} - Sound Recorder`,
+          data: { path: abs },
+        });
+      }
+    });
     return;
   }
   if (
@@ -148,6 +166,7 @@ export function Desktop() {
   const [selected, setSelected] = useState<string | null>(null);
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const [iconCtx, setIconCtx] = useState<IconCtx | null>(null);
+  const [openWithNode, setOpenWithNode] = useState<VfsNode | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
 
@@ -383,6 +402,16 @@ export function Desktop() {
               >
                 Open
               </CtxItem>
+              {!isLnk && node.type === "file" && (
+                <CtxItem
+                  onClick={() => {
+                    setOpenWithNode(node);
+                    setIconCtx(null);
+                  }}
+                >
+                  Open With...
+                </CtxItem>
+              )}
               {!node.system && (
                 <>
                   <CtxDivider />
@@ -409,6 +438,13 @@ export function Desktop() {
             </ContextMenu>
           );
         })()}
+      {openWithNode && (
+        <OpenWithDialog
+          fileName={openWithNode.name}
+          filePath={`${DESKTOP_PATH}\\${openWithNode.name}`}
+          onClose={() => setOpenWithNode(null)}
+        />
+      )}
     </Wrapper>
   );
 }

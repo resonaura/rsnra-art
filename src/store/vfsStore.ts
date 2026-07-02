@@ -818,7 +818,7 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 5,
+      version: 6,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",

@@ -6,6 +6,8 @@ import { AppMenuBar } from "../../components/AppMenuBar";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { getPreferredApp } from "../../data/fileOpen";
+import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
@@ -128,13 +130,20 @@ function search(root: VfsNode, pattern: string): Hit[] {
 
 function describeSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  const bytes = new Blob([node.content ?? ""]).size;
+  const bytes = contentByteSize(node.content);
   if (bytes < 1024) return `${bytes} bytes`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function openHit(hit: Hit): void {
   const n = hit.node;
+  if (n.type === "file") {
+    const preferred = getPreferredApp(n.name);
+    if (preferred) {
+      preferred.open(hit.path, n.name);
+      return;
+    }
+  }
   if (n.type === "dir") {
     openApp("my-computer");
     return;
@@ -156,7 +165,14 @@ function openHit(hit: Hit): void {
     lower.endsWith(".rmi") ||
     lower.endsWith(".ogg")
   ) {
-    void openVfsAudio(hit.path);
+    void openVfsAudio(hit.path).then((played) => {
+      if (!played && lower.endsWith(".wav")) {
+        openApp("sound-recorder", {
+          title: `${n.name} - Sound Recorder`,
+          data: { path: hit.path },
+        });
+      }
+    });
     return;
   }
   if (

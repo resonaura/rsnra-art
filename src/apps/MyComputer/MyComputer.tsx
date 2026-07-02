@@ -3,10 +3,13 @@ import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
+import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { getPreferredApp } from "../../data/fileOpen";
 import { playSound } from "../../lib/audio";
+import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
@@ -56,7 +59,11 @@ function describeType(node: VfsNode): string {
 
 function formatSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  const bytes = node.content?.length ?? (node.appId ? 32768 : 0);
+  const bytes = node.content
+    ? contentByteSize(node.content)
+    : node.appId
+      ? 32768
+      : 0;
   return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
 }
 
@@ -477,6 +484,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
   );
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
+  const [openWithTarget, setOpenWithTarget] = useState<{
+    node: VfsNode;
+    abs: string;
+  } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -522,7 +533,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const openNode = (node: VfsNode) => {
     const abs = vfs.resolvePath(node.name, path);
     if (!abs) return;
-    if (node.type === "dir") {
+    const preferred = node.type === "file" ? getPreferredApp(node.name) : null;
+    if (preferred) {
+      preferred.open(abs, node.name);
+    } else if (node.type === "dir") {
       setPath(abs);
       setSelected(null);
     } else if (node.appId && APPS[node.appId as keyof typeof APPS]) {
@@ -541,7 +555,14 @@ export function MyComputer({ windowId }: { windowId: string }) {
         data: { path: abs },
       });
     } else if (isAudioFile(node.name)) {
-      void openVfsAudio(abs);
+      void openVfsAudio(abs).then((played) => {
+        if (!played && node.name.toLowerCase().endsWith(".wav")) {
+          openApp("sound-recorder", {
+            title: `${node.name} - Sound Recorder`,
+            data: { path: abs },
+          });
+        }
+      });
     } else if (
       node.name.toLowerCase().endsWith(".png") ||
       node.name.toLowerCase().endsWith(".bmp")
@@ -750,6 +771,17 @@ export function MyComputer({ windowId }: { windowId: string }) {
   }[] = ctx?.node
     ? [
         { label: "Open", action: () => openNode(ctx.node!) },
+        ...(ctx.node.type === "file"
+          ? [
+              {
+                label: "Open With...",
+                action: () => {
+                  const abs = vfs.resolvePath(ctx.node!.name, path);
+                  if (abs) setOpenWithTarget({ node: ctx.node!, abs });
+                },
+              },
+            ]
+          : []),
         { label: "", action: () => {}, divider: true },
         {
           label: "Cut",
@@ -1212,6 +1244,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
             ),
           )}
         </ContextMenu>
+      )}
+      {openWithTarget && (
+        <OpenWithDialog
+          fileName={openWithTarget.node.name}
+          filePath={openWithTarget.abs}
+          onClose={() => setOpenWithTarget(null)}
+        />
       )}
     </Layout>
   );

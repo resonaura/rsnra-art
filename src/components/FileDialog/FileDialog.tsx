@@ -4,6 +4,7 @@ import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
+import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 
 // ─── styled helpers ──────────────────────────────────────────────────────────
@@ -209,8 +210,7 @@ function matchesFilter(name: string, filter: FileFilter): boolean {
 /** Format the file size for the listing. */
 function formatSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  if (node.content) return `${(node.content.length / 1024).toFixed(1)} KB`;
-  return "0 KB";
+  return `${(contentByteSize(node.content) / 1024).toFixed(1)} KB`;
 }
 
 export function FileDialog({

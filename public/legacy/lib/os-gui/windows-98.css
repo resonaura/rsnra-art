@@ -1,3 +1,18 @@
+/* Swapped in to match the host app's pixel font instead of the vendored
+   Segoe UI, so these embedded programs read like part of the same desktop. */
+@font-face {
+	font-family: 'ms_sans_serif';
+	src: url('fonts/ms_sans_serif.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+}
+@font-face {
+	font-family: 'ms_sans_serif';
+	src: url('fonts/ms_sans_serif_bold.woff2') format('woff2');
+	font-weight: bold;
+	font-style: normal;
+}
+
 :root {
 	/* These resources are generated. */
 	/* JS: makeThemeCSSFile(renderThemeGraphics(getComputedStyle(document.documentElement))) */
@@ -261,7 +276,7 @@ body > .window-titlebar {
 }
 
 .os-window .window-titlebar, body > .window-titlebar {
-	font-family: 'Segoe UI', sans-serif;
+	font-family: 'ms_sans_serif', 'Segoe UI', sans-serif;
 	font-size: 12px;
 }
 .os-window.rtl .window-titlebar {
@@ -437,7 +452,7 @@ body > .window-titlebar {
 	color: var(--GrayText);
 }
 .menus *, .menu-popup * {
-	font-family: 'Segoe UI', sans-serif;
+	font-family: 'ms_sans_serif', 'Segoe UI', sans-serif;
 	font-size: 12px;
 }
 .menu-button {

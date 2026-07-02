@@ -145,7 +145,7 @@ body,
 
 /* From .menus *, .menu-popup * {} */
 * {
-	font-family: 'Segoe UI', sans-serif;
+	font-family: 'ms_sans_serif', 'Segoe UI', sans-serif;
 	font-size: 12px;
 	cursor: default;
 }

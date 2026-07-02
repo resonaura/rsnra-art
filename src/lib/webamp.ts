@@ -16,6 +16,7 @@
 // Webamp is dynamically imported so its (large) bundle is code-split.
 
 import { useAudioStore } from "../store/audioStore";
+import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 
 export interface VfsFilePickerOpts {
@@ -237,9 +238,19 @@ export async function openWebamp(): Promise<void> {
 
 /** Open a VFS audio file in Webamp. Returns true if it was playable. */
 export async function openVfsAudio(vfsPath: string): Promise<boolean> {
-  const url = vfsAudioUrl(vfsPath);
-  if (!url) return false;
   const name = vfsPath.split("\\").pop() ?? "audio";
-  await playUrl(url, name);
+  const url = vfsAudioUrl(vfsPath);
+  if (url) {
+    await playUrl(url, name);
+    return true;
+  }
+  // Not a bundled system sound — but it might be real audio saved elsewhere
+  // in the VFS (e.g. a .wav from Sound Recorder), stored as a data: URL.
+  // <audio>/Web Audio can play those directly, so hand it to Webamp as-is.
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (!["wav", "mp3", "mid", "midi", "rmi", "ogg"].includes(ext)) return false;
+  const content = useVfsStore.getState().read(vfsPath);
+  if (!content || !content.startsWith("data:audio/")) return false;
+  await playUrl(content, name);
   return true;
 }

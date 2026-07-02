@@ -5,7 +5,7 @@
 }
 
 html {
-	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif,
+	font-family: "ms_sans_serif", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif,
 		"Segoe MDL2 Assets", "Calculator MDL2 Assets";
 	height: 100%;
 	font-size: 15px;
@@ -131,7 +131,7 @@ button:enabled.purple-text {
 }
 
 button {
-	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif,
+	font-family: "ms_sans_serif", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif,
 		"Segoe MDL2 Assets", "Calculator MDL2 Assets";
 		font-weight: 400;
 		font-size: 11px;

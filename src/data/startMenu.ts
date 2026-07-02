@@ -1,10 +1,11 @@
 import { playSound } from "../lib/audio";
-import { openWebamp } from "../lib/webamp";
+import { openVfsAudio, openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
 import { useShallow } from "zustand/react/shallow";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
+import { getPreferredApp } from "./fileOpen";
 
 export interface MenuNode {
   id: string;
@@ -70,8 +71,29 @@ function openFile(abs: string, node: VfsNode) {
     openApp(node.appId as never);
     return;
   }
+  const preferred = getPreferredApp(node.name);
+  if (preferred) {
+    preferred.open(abs, node.name);
+    return;
+  }
   const lower = node.name.toLowerCase();
   if (
+    lower.endsWith(".wav") ||
+    lower.endsWith(".mp3") ||
+    lower.endsWith(".mid") ||
+    lower.endsWith(".midi") ||
+    lower.endsWith(".rmi") ||
+    lower.endsWith(".ogg")
+  ) {
+    void openVfsAudio(abs).then((played) => {
+      if (!played && lower.endsWith(".wav")) {
+        openApp("sound-recorder", {
+          title: `${node.name} - Sound Recorder`,
+          data: { path: abs },
+        });
+      }
+    });
+  } else if (
     lower.endsWith(".txt") ||
     lower.endsWith(".log") ||
     lower.endsWith(".ini")

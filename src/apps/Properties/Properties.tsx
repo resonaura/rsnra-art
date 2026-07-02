@@ -3,6 +3,7 @@ import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { iconForNode } from "../../data/fileIcons";
+import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
@@ -107,10 +108,10 @@ function shortName(name: string): string {
 }
 
 function fileSize(node: VfsNode): number {
-  if (node.type === "file") return new Blob([node.content ?? ""]).size;
+  if (node.type === "file") return contentByteSize(node.content);
   let total = 0;
   const walk = (n: VfsNode) => {
-    if (n.type === "file") total += new Blob([n.content ?? ""]).size;
+    if (n.type === "file") total += contentByteSize(n.content);
     else n.children?.forEach(walk);
   };
   node.children?.forEach(walk);

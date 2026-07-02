@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import styled from "styled-components";
 
 const Frame = styled.iframe`
@@ -12,6 +13,7 @@ interface LegacyIframeAppProps {
   src: string;
   title: string;
   allow?: string;
+  onLoad?: () => void;
 }
 
 /**
@@ -19,7 +21,14 @@ interface LegacyIframeAppProps {
  * (public/legacy/programs/*) inside our own window chrome. Those pages are
  * built to run chromeless in an iframe under a host desktop — no porting
  * needed, just point an iframe at them.
+ *
+ * Forwards a ref to the underlying <iframe> for apps (e.g. Sound Recorder)
+ * that need to reach into the vendored script's same-origin `contentWindow`
+ * to bridge state (like VFS-backed save/open) into a custom host menu bar.
  */
-export function LegacyIframeApp({ src, title, allow }: LegacyIframeAppProps) {
-  return <Frame src={src} title={title} allow={allow} />;
-}
+export const LegacyIframeApp = forwardRef<
+  HTMLIFrameElement,
+  LegacyIframeAppProps
+>(function LegacyIframeApp({ src, title, allow, onLoad }, ref) {
+  return <Frame ref={ref} src={src} title={title} allow={allow} onLoad={onLoad} />;
+});
