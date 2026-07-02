@@ -226,7 +226,6 @@ const ChooserCell = styled.button<{ $chosen: boolean; $gray?: boolean }>`
 
 const CanvasScroll = styled(ScrollArea)`
   flex: 1;
-  background: ${CHECKER} repeat;
   background-size: 8px;
 `;
 
