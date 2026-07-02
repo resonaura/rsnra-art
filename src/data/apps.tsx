@@ -4,11 +4,9 @@ import type { AppId } from "../types/window";
 
 import { Calculator } from "../apps/Calculator/Calculator";
 import { Contact } from "../apps/Contact/Contact";
-import { ControlPanel } from "../apps/ControlPanel/ControlPanel";
 import { DateTime } from "../apps/DateTime/DateTime";
 import { DisplayProperties } from "../apps/DisplayProperties/DisplayProperties";
 import { Find } from "../apps/Find/Find";
-import { GamesFolder } from "../apps/GamesFolder/GamesFolder";
 import { Help } from "../apps/Help/Help";
 import { Minesweeper } from "../apps/Minesweeper/Minesweeper";
 import { MouseProperties } from "../apps/MouseProperties/MouseProperties";
@@ -133,7 +131,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     id: "games-folder",
     title: "Games",
     icon: "/icons/joystick.png",
-    component: asComponent(GamesFolder),
+    component: asComponent(MyComputer),
     width: 440,
     height: 360,
     noPadding: true,
@@ -160,7 +158,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     id: "control-panel",
     title: "Control Panel",
     icon: "/icons/control-panel.png",
-    component: asComponent(ControlPanel),
+    component: asComponent(MyComputer),
     width: 440,
     height: 440,
     noPadding: true,
@@ -316,6 +314,21 @@ export interface OpenAppOverrides {
 }
 
 export function openApp(appId: AppId, overrides?: OpenAppOverrides): string {
+  if (appId === "control-panel") {
+    return openApp("my-computer", {
+      ...overrides,
+      title: overrides?.title ?? "Control Panel",
+      data: { ...overrides?.data, path: "Control Panel" },
+    });
+  }
+  if (appId === "games-folder") {
+    return openApp("my-computer", {
+      ...overrides,
+      title: overrides?.title ?? "Games",
+      data: { ...overrides?.data, path: "Games" },
+    });
+  }
+
   const def = APPS[appId];
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
 

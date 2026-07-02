@@ -429,9 +429,8 @@ const DRIVES: Drive[] = [
   {
     label: "Control Panel",
     icon: "/icons/control-panel.png",
-    target: "",
-    kind: "app",
-    appId: "control-panel",
+    target: "Control Panel",
+    kind: "drive",
   },
   { label: "Printers", icon: "/icons/printers.png", target: "", kind: "app" },
   {
@@ -440,6 +439,76 @@ const DRIVES: Drive[] = [
     target: "",
     kind: "app",
   },
+];
+
+interface AppletItem {
+  label: string;
+  icon: string;
+  onOpen?: () => void;
+}
+const APPLETS: AppletItem[] = [
+  { label: "Accessibility Options", icon: "/icons/w98_access_wheelchair_big.png" },
+  { label: "Add New Hardware", icon: "/icons/w98_hardware.png" },
+  { label: "Add/Remove Programs", icon: "/icons/w98_program_manager.png" },
+  { label: "Automatic Updates", icon: "/icons/w98_windows_update_large.png" },
+  { label: "Date/Time", icon: "/icons/w98_time_and_date.png", onOpen: () => openApp("datetime") },
+  { label: "Dial-Up Networking", icon: "/icons/w98_conn_dialup.png" },
+  {
+    label: "Display",
+    icon: "/icons/w98_display_properties.png",
+    onOpen: () => openApp("display-properties"),
+  },
+  { label: "Folder Options", icon: "/icons/folder-open.png" },
+  { label: "Fonts", icon: "/icons/w98_font_tt.png" },
+  { label: "Gaming Options", icon: "/icons/joystick.png" },
+  { label: "Internet Options", icon: "/icons/w98_internet_options.png" },
+  { label: "Keyboard", icon: "/icons/w98_keyboard.png" },
+  { label: "Modems", icon: "/icons/w98_conn_dialup_alt.png" },
+  { label: "Mouse", icon: "/icons/w98_mouse.png", onOpen: () => openApp("mouse-properties") },
+  { label: "Network", icon: "/icons/w98_network.png" },
+  { label: "ODBC Data Sources (32bit)", icon: "/icons/w98_odbc.png" },
+  { label: "Passwords", icon: "/icons/w98_users_key.png" },
+  { label: "Power Options", icon: "/icons/w98_power_management.png" },
+  { label: "Printers", icon: "/icons/w98_printer_big.png" },
+  { label: "Regional Settings", icon: "/icons/globe.png" },
+  { label: "Scanners and Cameras", icon: "/icons/w98_scanner_camera.png" },
+  { label: "Scheduled Tasks", icon: "/icons/w2k_scheduled_tasks.png" },
+  { label: "Sounds and Multimedia", icon: "/icons/w98_mixer_sound.png" },
+  { label: "System", icon: "/icons/computer.png", onOpen: () => openApp("system-properties") },
+  { label: "Telephony", icon: "/icons/w98_telephony.png" },
+  { label: "Users", icon: "/icons/w98_users.png" },
+];
+
+interface GameItem {
+  label: string;
+  icon: string;
+  onOpen?: () => void;
+  disabled?: boolean;
+}
+const GAMES: GameItem[] = [
+  {
+    label: "Minesweeper",
+    icon: "/icons/minesweeper.png",
+    onOpen: () => openApp("minesweeper"),
+  },
+  {
+    label: "RSNRA Snake",
+    icon: "/icons/joystick.png",
+    onOpen: () => openApp("snake"),
+  },
+  {
+    label: "Solitaire",
+    icon: "/icons/solitaire.png",
+    onOpen: () => openApp("solitaire"),
+  },
+  {
+    label: "3D Pinball",
+    icon: "/icons/pinball.png",
+    onOpen: () => openApp("pinball"),
+  },
+  { label: "Hearts", icon: "/icons/hearts.png", disabled: true },
+  { label: "FreeCell", icon: "/icons/freecell.png", disabled: true },
+  { label: "Spider", icon: "/icons/spider.png", disabled: true },
 ];
 
 interface CtxState {
@@ -509,12 +578,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
   // Sync the window title + icon to the current path — just like real Win95 Explorer
   useEffect(() => {
     updateTitle(windowId, isRoot ? MY_COMPUTER : path);
-    const icon = isRoot
-      ? "/icons/computer.png"
-      : isDriveRoot
-        ? (DRIVES.find((d) => d.target === path)?.icon ??
-          "/icons/disk-drive.png")
-        : "/icons/folder-open.png";
+    let icon = "/icons/folder-open.png";
+    if (isRoot) {
+      icon = "/icons/computer.png";
+    } else if (path === "Control Panel") {
+      icon = "/icons/control-panel.png";
+    } else if (path === "Games") {
+      icon = "/icons/joystick.png";
+    } else if (isDriveRoot) {
+      icon = DRIVES.find((d) => d.target === path)?.icon ?? "/icons/disk-drive.png";
+    }
     updateIcon(windowId, icon);
   }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon]);
 
@@ -573,7 +646,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
   const goUp = () => {
     if (isRoot) return;
-    if (isDriveRoot) {
+    if (isDriveRoot || path === "Control Panel" || path === "Games") {
       setPath(MY_COMPUTER);
       setSelected(null);
       return;
@@ -746,10 +819,17 @@ export function MyComputer({ windowId }: { windowId: string }) {
     }
   };
 
-  const objectCount = isRoot ? DRIVES.length : sorted.length;
+  const objectCount = isRoot
+    ? DRIVES.length
+    : path === "Control Panel"
+      ? APPLETS.length
+      : path === "Games"
+        ? GAMES.length
+        : sorted.length;
 
   // ── context menu ───────────────────────────────────────────────────────
   const openCtx = (e: React.MouseEvent, node: VfsNode | null) => {
+    if (path === "Control Panel" || path === "Games") return;
     e.preventDefault();
     e.stopPropagation();
     if (node) setSelected(node.name);
@@ -810,18 +890,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Paste",
           action: paste,
           disabled:
-            isRoot || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+            isRoot || path === "Control Panel" || path === "Games" || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
         },
         { label: "", action: () => {}, divider: true },
         {
           label: "New Folder",
           action: newFolder,
-          disabled: isRoot || driveNotReady,
+          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
         },
         {
           label: "New Text Document",
           action: newTextFile,
-          disabled: isRoot || driveNotReady,
+          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
         },
       ];
 
@@ -834,7 +914,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   useEffect(() => {
     if (!isFocused) return;
     const onKey = (e: KeyboardEvent) => {
-      if (renaming) return;
+      if (renaming || path === "Control Panel" || path === "Games") return;
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
@@ -861,23 +941,33 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "New Folder",
           action: newFolder,
-          disabled: isRoot || driveNotReady,
+          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
         },
         {
           label: "New Text Document",
           action: newTextFile,
-          disabled: isRoot || driveNotReady,
+          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
         },
         { label: "", divider: true },
         {
           label: "Open",
-          action: () => selectedNode && openNode(selectedNode),
-          disabled: !selectedNode,
+          action: () => {
+            if (path === "Control Panel") {
+              const applet = APPLETS.find((a) => a.label === selected);
+              applet?.onOpen?.();
+            } else if (path === "Games") {
+              const game = GAMES.find((g) => g.label === selected);
+              if (game && !game.disabled) game.onOpen?.();
+            } else if (selectedNode) {
+              openNode(selectedNode);
+            }
+          },
+          disabled: !selected && !selectedNode,
         },
         {
           label: "Delete",
           action: () => selectedNode && deleteNode(selectedNode),
-          disabled: !selectedNode,
+          disabled: !selectedNode || path === "Control Panel" || path === "Games",
         },
         {
           label: "Rename",
@@ -887,12 +977,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
               setRenameVal(selectedNode.name);
             }
           },
-          disabled: !selectedNode,
+          disabled: !selectedNode || path === "Control Panel" || path === "Games",
         },
         {
           label: "Properties",
           action: () => selectedNode && propertiesOf(selectedNode),
-          disabled: !selectedNode,
+          disabled: !selectedNode || path === "Control Panel" || path === "Games",
         },
         { label: "", divider: true },
         { label: "Close", action: () => closeWindow(windowId) },
@@ -906,24 +996,30 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Cut",
           action: () => selectedNode && cutSelected(selectedNode),
-          disabled: !selectedNode || !!selectedNode?.system,
+          disabled: !selectedNode || !!selectedNode?.system || path === "Control Panel" || path === "Games",
         },
         {
           label: "Copy",
           action: () => selectedNode && copySelected(selectedNode),
-          disabled: !selectedNode || !!selectedNode?.system,
+          disabled: !selectedNode || !!selectedNode?.system || path === "Control Panel" || path === "Games",
         },
         {
           label: "Paste",
           action: paste,
-          disabled:
-            isRoot || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
         },
         { label: "", divider: true },
         {
           label: "Select All",
-          action: () =>
-            setSelected(sorted.length ? sorted[sorted.length - 1].name : null),
+          action: () => {
+            if (path === "Control Panel") {
+              setSelected(APPLETS.length ? APPLETS[APPLETS.length - 1].label : null);
+            } else if (path === "Games") {
+              setSelected(GAMES.length ? GAMES[GAMES.length - 1].label : null);
+            } else {
+              setSelected(sorted.length ? sorted[sorted.length - 1].name : null);
+            }
+          },
         },
       ],
     },
@@ -1149,7 +1245,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         }}
         onDrop={handleDropOnBackground}
         contentStyle={
-          isRoot || view === "large"
+          isRoot || path === "Control Panel" || path === "Games" || view === "large"
             ? {
                 padding: 10,
                 display: "flex",
@@ -1160,7 +1256,54 @@ export function MyComputer({ windowId }: { windowId: string }) {
             : { padding: 10, width: "100%" }
         }
       >
-        {isRoot ? (
+        {path === "Control Panel" ? (
+          APPLETS.map((applet) => (
+            <IconItem
+              key={applet.label}
+              $selected={selected === applet.label}
+              tabIndex={0}
+              $disabled={!applet.onOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelected(applet.label);
+              }}
+              onDoubleClick={applet.onOpen}
+              title={applet.onOpen ? undefined : "Not available in this build"}
+            >
+              <img
+                src={applet.icon}
+                alt=""
+                draggable={false}
+                style={{ opacity: applet.onOpen ? 1 : 0.5 }}
+              />
+              {applet.label}
+            </IconItem>
+          ))
+        ) : path === "Games" ? (
+          GAMES.map((game) => (
+            <IconItem
+              key={game.label}
+              $selected={selected === game.label}
+              tabIndex={0}
+              $disabled={game.disabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelected(game.label);
+              }}
+              onDoubleClick={game.disabled ? undefined : game.onOpen}
+              title={game.disabled ? "Coming soon" : undefined}
+            >
+              <img
+                src={game.icon}
+                alt=""
+                draggable={false}
+                style={{ opacity: game.disabled ? 0.5 : 1 }}
+              />
+              {game.label}
+              {game.disabled && <span style={{ fontSize: 10 }}>(soon)</span>}
+            </IconItem>
+          ))
+        ) : isRoot ? (
           DRIVES.map((d) => (
             <IconItem
               key={d.label}
@@ -1212,7 +1355,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
             {sorted.map(renderDetailsRow)}
           </DetailsTable>
         )}
-        {!isRoot && sorted.length === 0 && (
+        {!isRoot && path !== "Control Panel" && path !== "Games" && sorted.length === 0 && (
           <div style={{ fontSize: 12, padding: 16, color: "#888" }}>
             {driveNotReady
               ? "The device is not ready."
