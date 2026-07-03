@@ -81,8 +81,10 @@ const Row = styled(TableRow)<{ $selected?: boolean }>`
     $selected ? theme.headerText : theme.canvasText};
 
   &:hover {
-    background: ${({ theme }) => theme.hoverBackground};
-    color: ${({ theme }) => theme.headerText};
+    background: ${({ $selected, theme }) =>
+      $selected ? theme.hoverBackground : "rgba(0, 0, 0, 0.05)"};
+    color: ${({ $selected, theme }) =>
+      $selected ? theme.headerText : theme.canvasText};
   }
 `;
 
@@ -166,8 +168,21 @@ export function TaskManager(_props: { windowId: string }) {
 
   const selectedProcRow = processRows.find((r) => r.pid === selectedPid);
 
+  const isEndProcessDisabled = useMemo(() => {
+    if (!selectedProcRow) return true;
+    if (selectedProcRow.pid === 340) return false;
+    return !selectedProcRow.windowId;
+  }, [selectedProcRow]);
+
   const endSelectedProcess = () => {
-    if (selectedProcRow?.windowId) closeWindow(selectedProcRow.windowId);
+    if (selectedProcRow) {
+      if (selectedProcRow.pid === 340) {
+        const restartExplorer = useWindowStore.getState().restartExplorer;
+        restartExplorer();
+      } else if (selectedProcRow.windowId) {
+        closeWindow(selectedProcRow.windowId);
+      }
+    }
     setSelectedPid(null);
   };
 
@@ -314,7 +329,7 @@ export function TaskManager(_props: { windowId: string }) {
             <Footer>
               <Button
                 style={{ zoom: ZOOM, width: 96 }}
-                disabled={!selectedProcRow?.windowId}
+                disabled={isEndProcessDisabled}
                 onClick={endSelectedProcess}
               >
                 End Process

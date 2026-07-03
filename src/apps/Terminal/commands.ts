@@ -1013,6 +1013,11 @@ function cmdKill(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
+  if (pid === 340) {
+    useWindowStore.getState().restartExplorer();
+    ctx.print([`SUCCESS: The process "explorer.exe" with PID ${pid} has been terminated.`]);
+    return;
+  }
   const target = useWindowStore.getState().windows.find((w) => w.pid === pid);
   if (!target) {
     ctx.print(

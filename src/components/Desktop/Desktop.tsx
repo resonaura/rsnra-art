@@ -8,6 +8,7 @@ import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
+import { useWindowStore } from "../../store/windowStore";
 import type { AppId } from "../../types/window";
 import { ContextMenu, CtxDivider, CtxItem } from "../ContextMenu";
 import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
@@ -39,10 +40,13 @@ const IconColumn = styled.div`
 const DESKTOP_PATH = "C:\\Windows\\Desktop";
 
 interface LnkData {
-  type: "app" | "url";
+  type: "app" | "url" | "missing";
   target: string;
-  icon: string;
+  icon?: string;
   shortcut?: boolean;
+  title?: string;
+  data?: Record<string, unknown>;
+  file?: string;
 }
 
 function parseLnk(node: VfsNode): LnkData | null {
@@ -54,8 +58,12 @@ function parseLnk(node: VfsNode): LnkData | null {
 }
 
 function openLnk(lnk: LnkData) {
-  if (lnk.type === "app") openApp(lnk.target as AppId);
-  else window.open(lnk.target, "_blank", "noopener,noreferrer");
+  if (lnk.type === "app") {
+    if (lnk.target === "winamp") void openWebamp();
+    else openApp(lnk.target as AppId, { title: lnk.title, data: lnk.data });
+  } else if (lnk.type === "url") {
+    window.open(lnk.target, "_blank", "noopener,noreferrer");
+  }
 }
 
 // Open a non-shortcut desktop node in the matching app. Folders open an
@@ -231,7 +239,7 @@ export function Desktop() {
       <DesktopIcon
         key={node.name}
         label={label}
-        icon={lnk.icon}
+        icon={lnk.icon || "/icons/w2k_shortcut.ico"}
         shortcut={lnk.shortcut}
         selected={selected === node.name}
         renaming={renaming === node.name}
@@ -404,6 +412,41 @@ export function Desktop() {
                 }}
               >
                 Open
+              </CtxItem>
+              <CtxItem
+                onClick={() => {
+                  const targetIcon = lnk?.icon ?? iconForNode(node);
+                  if (isLnk && lnk) {
+                    if (lnk.type === "url") {
+                      useWindowStore.getState().addToQuickLaunch({
+                        title: label,
+                        icon: targetIcon,
+                        type: "lnk",
+                        lnkPath: lnk.target,
+                      });
+                    } else {
+                      useWindowStore.getState().addToQuickLaunch({
+                        title: label,
+                        icon: targetIcon,
+                        type: "app",
+                        appId: lnk.target as any,
+                        data: lnk.data,
+                      });
+                    }
+                  } else {
+                    const preferred = getPreferredApp(node.name);
+                    useWindowStore.getState().addToQuickLaunch({
+                      title: label,
+                      icon: targetIcon,
+                      type: "app",
+                      appId: (node.appId || preferred?.appId || "notepad") as any,
+                      data: { path: abs },
+                    });
+                  }
+                  setIconCtx(null);
+                }}
+              >
+                Add to Quick Launch
               </CtxItem>
               {!isLnk && node.type === "file" && (
                 <CtxItem

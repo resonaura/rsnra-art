@@ -63,6 +63,7 @@ function App() {
   const [booted, setBooted] = useState(false);
   const themeId = useThemeStore((s) => s.themeId);
   const theme = getThemeById(themeId);
+  const desktopRestartCount = useWindowStore((s) => s.desktopRestartCount);
 
   return (
     <ThemeProvider theme={theme}>
@@ -72,7 +73,7 @@ function App() {
         id="rsnra-desktop-root"
         style={{ position: "fixed", inset: 0, overflow: "hidden" }}
       >
-        {!booted ? <BootScreen onDone={() => setBooted(true)} /> : <Desk />}
+        {!booted ? <BootScreen onDone={() => setBooted(true)} /> : <Desk key={desktopRestartCount} />}
       </div>
     </ThemeProvider>
   );

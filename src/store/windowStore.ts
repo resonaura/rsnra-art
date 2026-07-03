@@ -20,6 +20,16 @@ export interface OpenWindowConfig {
   data?: Record<string, unknown>;
 }
 
+export interface QuickLaunchItem {
+  id: string;
+  title: string;
+  icon: string;
+  type: "show-desktop" | "app" | "lnk";
+  appId?: AppId;
+  lnkPath?: string;
+  data?: Record<string, unknown>;
+}
+
 export type PowerState = "on" | "shutting-down" | "off" | "restarting";
 
 interface WindowStoreState {
@@ -32,6 +42,8 @@ interface WindowStoreState {
   // Window ids minimized by the last toggleShowDesktop() call, so a second
   // press restores exactly what was showing (Win2000 Quick Launch behavior).
   showDesktopStash: string[] | null;
+  desktopRestartCount: number;
+  quickLaunchItems: QuickLaunchItem[];
 
   openWindow: (config: OpenWindowConfig) => string;
   closeWindow: (id: string) => void;
@@ -49,6 +61,9 @@ interface WindowStoreState {
   setRunDialogOpen: (open: boolean) => void;
   closeAll: () => void;
   setPowerState: (state: PowerState) => void;
+  restartExplorer: () => void;
+  addToQuickLaunch: (item: Omit<QuickLaunchItem, "id">) => void;
+  removeFromQuickLaunch: (id: string) => void;
 }
 
 export const useWindowStore = create<WindowStoreState>((set, get) => ({
@@ -59,6 +74,12 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   runDialogOpen: false,
   powerState: "on",
   showDesktopStash: null,
+  desktopRestartCount: 0,
+  quickLaunchItems: [
+    { id: "show-desktop", title: "Show Desktop", icon: "/icons/w2k_desktop.ico", type: "show-desktop" },
+    { id: "terminal", title: "MS-DOS Prompt", icon: "/icons/w98_console_prompt.ico", type: "app", appId: "terminal" },
+    { id: "notepad", title: "Notepad", icon: "/icons/w2k_notepad_2.ico", type: "app", appId: "notepad" },
+  ],
 
   openWindow: (config) => {
     const { windows, topZIndex } = get();
@@ -247,6 +268,37 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     set((state) => ({
       windows: state.windows.map((w) => (w.id === id ? { ...w, icon } : w)),
     })),
+  restartExplorer: () => {
+    set((state) => ({
+      desktopRestartCount: state.desktopRestartCount + 1,
+      windows: [],
+      startMenuOpen: false,
+      closeProgramOpen: false,
+      runDialogOpen: false,
+      showDesktopStash: null,
+    }));
+  },
+  addToQuickLaunch: (item) => {
+    const { quickLaunchItems } = get();
+    const exists = quickLaunchItems.some(
+      (q) => (q.type === item.type && q.appId === item.appId && q.lnkPath === item.lnkPath)
+    );
+    if (exists) return;
+
+    const newItem: QuickLaunchItem = {
+      ...item,
+      id: `ql-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    };
+
+    set({
+      quickLaunchItems: [...quickLaunchItems, newItem],
+    });
+  },
+  removeFromQuickLaunch: (id) => {
+    set((state) => ({
+      quickLaunchItems: state.quickLaunchItems.filter((q) => q.id !== id),
+    }));
+  },
 }));
 
 const EMPTY_DATA: Record<string, unknown> = {};

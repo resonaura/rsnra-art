@@ -117,9 +117,10 @@ export function buildProcessRows(
         const memK = Math.max(256, baseMem + dynamicMem + jitter + focusBonus);
 
         const processCpu = w.id === focusedWin?.id ? focusedCpu : 0;
+        const procName = w.appId === "my-computer" ? "explorer.exe" : `${w.appId}.exe`;
 
         return {
-          name: `${w.appId}.exe`,
+          name: procName,
           pid: w.pid,
           memK,
           cpuPct: processCpu,
@@ -133,6 +134,7 @@ export function buildProcessRows(
 /** True for the fixed decorative/self rows — matches taskkill's real
  * behavior of refusing to end protected system processes. */
 export function isProtectedPid(pid: number): boolean {
+  if (pid === 340) return false;
   return (
     pid === REAL_PROCESS_PID || DECORATIVE_PROCESSES.some((p) => p.pid === pid)
   );

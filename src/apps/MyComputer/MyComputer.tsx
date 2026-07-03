@@ -9,6 +9,7 @@ import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { getPreferredApp } from "../../data/fileOpen";
+import { iconForNode } from "../../data/fileIcons";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
@@ -1024,6 +1025,51 @@ export function MyComputer({ windowId }: { windowId: string }) {
               },
             ]
           : []),
+        {
+          label: "Add to Quick Launch",
+          action: () => {
+            const node = ctx.node!;
+            const abs = vfs.resolvePath(node.name, path) || node.name;
+            const isLnk = node.name.toLowerCase().endsWith(".lnk");
+            const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
+            
+            let lnk: any = null;
+            if (isLnk) {
+              try {
+                lnk = JSON.parse(node.content ?? "");
+              } catch {}
+            }
+            
+            const targetIcon = lnk?.icon ?? iconForNode(node);
+            if (isLnk && lnk) {
+              if (lnk.type === "url") {
+                useWindowStore.getState().addToQuickLaunch({
+                  title: label,
+                  icon: targetIcon,
+                  type: "lnk",
+                  lnkPath: lnk.target,
+                });
+              } else {
+                useWindowStore.getState().addToQuickLaunch({
+                  title: label,
+                  icon: targetIcon,
+                  type: "app",
+                  appId: lnk.target as any,
+                  data: lnk.data,
+                });
+              }
+            } else {
+              const preferred = getPreferredApp(node.name);
+              useWindowStore.getState().addToQuickLaunch({
+                title: label,
+                icon: targetIcon,
+                type: "app",
+                appId: (node.appId || preferred?.appId || "notepad") as any,
+                data: { path: abs },
+              });
+            }
+          }
+        },
         { label: "", action: () => {}, divider: true },
         {
           label: "Cut",
