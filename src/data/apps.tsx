@@ -3,6 +3,7 @@ import { useWindowStore } from "../store/windowStore";
 import type { AppId } from "../types/window";
 
 import { Calculator } from "../apps/Calculator/Calculator";
+import { CharMap } from "../apps/CharMap/CharMap";
 import { Contact } from "../apps/Contact/Contact";
 import { DateTime } from "../apps/DateTime/DateTime";
 import { DisplayProperties } from "../apps/DisplayProperties/DisplayProperties";
@@ -23,6 +24,7 @@ import { Social } from "../apps/Social/Social";
 import { Solitaire } from "../apps/Solitaire/Solitaire";
 import { SoundRecorder } from "../apps/SoundRecorder/SoundRecorder";
 import { SystemProperties } from "../apps/SystemProperties/SystemProperties";
+import { TaskManager } from "../apps/TaskManager/TaskManager";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
 
@@ -288,6 +290,30 @@ export const APPS: Record<AppId, AppDefinition> = {
     width: 616,
     height: 500,
     resizable: false,
+    noPadding: true,
+    singleInstance: true,
+  },
+  "task-manager": {
+    id: "task-manager",
+    title: "Windows Task Manager",
+    icon: "/icons/w98_computer_taskmgr.png",
+    component: asComponent(TaskManager),
+    width: 420,
+    height: 420,
+    minWidth: 360,
+    minHeight: 320,
+    noPadding: true,
+    singleInstance: true,
+  },
+  charmap: {
+    id: "charmap",
+    title: "Character Map",
+    icon: "/icons/w98_charmap.png",
+    component: asComponent(CharMap),
+    width: 420,
+    height: 420,
+    minWidth: 380,
+    minHeight: 340,
     noPadding: true,
     singleInstance: true,
   },

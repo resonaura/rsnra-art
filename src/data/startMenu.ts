@@ -157,6 +157,12 @@ export function useStartMenuTree(): MenuNode[] {
               icon: "/icons/sound-recorder.png",
               action: run(() => openApp("sound-recorder")),
             },
+            {
+              id: "charmap",
+              label: "Character Map",
+              icon: "/icons/w98_charmap.png",
+              action: run(() => openApp("charmap")),
+            },
           ],
         },
         {
@@ -261,7 +267,7 @@ export function useStartMenuTree(): MenuNode[] {
     {
       id: "run",
       label: "Run...",
-      icon: "/icons/msdos.png",
+      icon: "/icons/w98_application_hourglass.png",
       action: () => {
         useWindowStore.getState().setRunDialogOpen(true);
         closeStartMenu();

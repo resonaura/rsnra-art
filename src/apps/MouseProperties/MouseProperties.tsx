@@ -8,14 +8,15 @@ import {
   Tab,
   TabBody,
   Tabs,
+  Window,
+  WindowContent,
+  WindowHeader,
 } from "react95";
 import styled from "styled-components";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { Slider95 } from "../../components/Slider95/Slider95";
-import {
-  CURSOR_ROLES,
-  type CursorRoleId,
-} from "../../data/cursors";
+import { CURSOR_ROLES, type CursorRoleId } from "../../data/cursors";
 import { parseAni } from "../../lib/aniParser";
 import { parseCur } from "../../lib/curParser";
 import {
@@ -24,7 +25,6 @@ import {
   useCursorStore,
 } from "../../store/cursorStore";
 import { useWindowStore } from "../../store/windowStore";
-import { useFileDialog } from "../../components/FileDialog/FileDialog";
 
 const Layout = styled.div`
   display: flex;
@@ -115,8 +115,6 @@ const PointersHead = styled.div`
   align-items: center;
 `;
 
-
-
 export function CursorPreview({
   file,
   style,
@@ -150,9 +148,13 @@ export function CursorPreview({
           objectUrls = await Promise.all(
             parsed.frames.map(async (blob, idx) => {
               const frameBuf = await blob.arrayBuffer();
-              const frameParsed = await parseCur(frameBuf, `${file}_frame_${idx}.cur`, shadowEnabled);
+              const frameParsed = await parseCur(
+                frameBuf,
+                `${file}_frame_${idx}.cur`,
+                shadowEnabled,
+              );
               return frameParsed.blobUrl;
-            })
+            }),
           );
 
           let step = 0;
@@ -228,7 +230,8 @@ export function MouseProperties({ windowId }: { windowId: string }) {
   const [rightHanded, setRightHanded] = useState(true);
   const [dblClick, setDblClick] = useState(50);
   const [pointerSpeed, setPointerSpeed] = useState(50);
-  const [localShadowEnabled, setLocalShadowEnabled] = useState(storeShadowEnabled);
+  const [localShadowEnabled, setLocalShadowEnabled] =
+    useState(storeShadowEnabled);
 
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -256,14 +259,29 @@ export function MouseProperties({ windowId }: { windowId: string }) {
     { id: "variations", label: "Variations (system scheme)" },
     { id: "windows-animated", label: "Windows Animated (system scheme)" },
     { id: "windows-black", label: "Windows Black (system scheme)" },
-    { id: "windows-black-xl", label: "Windows Black (extra large) (system scheme)" },
+    {
+      id: "windows-black-xl",
+      label: "Windows Black (extra large) (system scheme)",
+    },
     { id: "windows-black-l", label: "Windows Black (large) (system scheme)" },
     { id: "windows-default", label: "Windows Default (system scheme)" },
-    { id: "windows-inverted-xl", label: "Windows Inverted (extra large) (system scheme)" },
-    { id: "windows-inverted-l", label: "Windows Inverted (large) (system scheme)" },
+    {
+      id: "windows-inverted-xl",
+      label: "Windows Inverted (extra large) (system scheme)",
+    },
+    {
+      id: "windows-inverted-l",
+      label: "Windows Inverted (large) (system scheme)",
+    },
     { id: "windows-inverted", label: "Windows Inverted (system scheme)" },
-    { id: "windows-standard-xl", label: "Windows Standard (extra large) (system scheme)" },
-    { id: "windows-standard-l", label: "Windows Standard (large) (system scheme)" },
+    {
+      id: "windows-standard-xl",
+      label: "Windows Standard (extra large) (system scheme)",
+    },
+    {
+      id: "windows-standard-l",
+      label: "Windows Standard (large) (system scheme)",
+    },
     { id: "windows", label: "Windows Standard" },
   ];
 
@@ -272,12 +290,12 @@ export function MouseProperties({ windowId }: { windowId: string }) {
     ...Object.keys(customSchemes).map((name) => ({ value: name, label: name })),
   ];
 
-
   const isBuiltInScheme = (schemeId: string): boolean => {
     return !!SYSTEM_SCHEMES[schemeId] || schemeId === "none";
   };
 
-  const currentSchemeLabel = selectOptions.find((o) => o.value === scheme)?.label || scheme;
+  const currentSchemeLabel =
+    selectOptions.find((o) => o.value === scheme)?.label || scheme;
 
   const selected = CURSOR_ROLES.find((r) => r.id === selectedRole)!;
 
@@ -327,7 +345,14 @@ export function MouseProperties({ windowId }: { windowId: string }) {
         {tab === "Pointers" && (
           <>
             <SchemeRow>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
                 <div style={{ fontSize: 12, marginBottom: 2 }}>Scheme</div>
                 <Select
                   style={{ zoom: 0.8 }}
@@ -341,10 +366,14 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                     setFiles(nextFiles);
                   }}
                 />
-                <div style={{ display: "flex", gap: 8, marginTop: 4, zoom: 0.8 }}>
+                <div
+                  style={{ display: "flex", gap: 8, marginTop: 4, zoom: 0.8 }}
+                >
                   <Button
                     onClick={() => {
-                      setSaveName(currentSchemeLabel.replace(" (system scheme)", ""));
+                      setSaveName(
+                        currentSchemeLabel.replace(" (system scheme)", ""),
+                      );
                       setShowSaveDialog(true);
                     }}
                   >
@@ -355,7 +384,9 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                     onClick={() => {
                       deleteCustomScheme(scheme);
                       setLocalScheme("windows");
-                      setFiles(SYSTEM_SCHEMES.windows as Record<CursorRoleId, string>);
+                      setFiles(
+                        SYSTEM_SCHEMES.windows as Record<CursorRoleId, string>,
+                      );
                     }}
                   >
                     Delete
@@ -407,7 +438,15 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               ))}
             </List>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, zoom: 0.8 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: 6,
+                zoom: 0.8,
+              }}
+            >
               <Checkbox
                 label="Enable pointer shadow"
                 checked={localShadowEnabled}
@@ -415,7 +454,9 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               />
               <div style={{ display: "flex", gap: 8 }}>
                 <Button
-                  disabled={files[selectedRole] === SYSTEM_SCHEMES.windows[selectedRole]}
+                  disabled={
+                    files[selectedRole] === SYSTEM_SCHEMES.windows[selectedRole]
+                  }
                   onClick={() => {
                     const defFile = SYSTEM_SCHEMES.windows[selectedRole];
                     setFiles((f) => ({ ...f, [selectedRole]: defFile }));
@@ -432,7 +473,10 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                       title: "Browse",
                       initialDir: "C:\\Windows\\Cursors",
                       filters: [
-                        { label: "Cursor Files (*.cur;*.ani)", extensions: ["cur", "ani", "CUR", "ANI"] },
+                        {
+                          label: "Cursor Files (*.cur;*.ani)",
+                          extensions: ["cur", "ani", "CUR", "ANI"],
+                        },
                         { label: "All Files (*.*)", extensions: [] },
                       ],
                     });
@@ -449,22 +493,44 @@ export function MouseProperties({ windowId }: { windowId: string }) {
             </div>
 
             {showSaveDialog && (
-              <div style={{
-                position: "absolute",
-                inset: 0,
-                background: "rgba(0, 0, 0, 0.35)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 30
-              }}>
-                <Window style={{ width: "300px" }}>
-                  <WindowHeader style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0, 0, 0, 0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 30,
+                }}
+              >
+                <Window>
+                  <WindowHeader
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span>Save Scheme</span>
-                    <Button onClick={() => setShowSaveDialog(false)} square size="sm">x</Button>
+                    <Button
+                      onClick={() => setShowSaveDialog(false)}
+                      square
+                      size="sm"
+                    >
+                      x
+                    </Button>
                   </WindowHeader>
-                  <WindowContent style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ fontSize: 12 }}>Save this cursor scheme as:</div>
+                  <WindowContent
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ fontSize: 12 }}>
+                      Save this cursor scheme as:
+                    </div>
                     <input
                       type="text"
                       value={saveName}
@@ -475,11 +541,17 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                         border: "2px solid",
                         borderColor: "#848484 #dfdfdf #dfdfdf #848484",
                         background: "white",
-                        color: "black"
+                        color: "black",
                       }}
                       autoFocus
                     />
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: "8px",
+                      }}
+                    >
                       <Button
                         disabled={!saveName.trim()}
                         onClick={() => {
@@ -492,7 +564,10 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                       >
                         OK
                       </Button>
-                      <Button onClick={() => setShowSaveDialog(false)} style={{ width: "60px" }}>
+                      <Button
+                        onClick={() => setShowSaveDialog(false)}
+                        style={{ width: "60px" }}
+                      >
                         Cancel
                       </Button>
                     </div>

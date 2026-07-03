@@ -12,6 +12,7 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
+import { showMissingFileAlert } from "../../store/alertStore";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -446,38 +447,42 @@ interface AppletItem {
   label: string;
   icon: string;
   onOpen?: () => void;
+  // 8.3-style .cpl filename shown in the "file not found" alert for applets
+  // that aren't implemented yet.
+  file: string;
 }
 const APPLETS: AppletItem[] = [
-  { label: "Accessibility Options", icon: "/icons/w98_access_wheelchair_big.png" },
-  { label: "Add New Hardware", icon: "/icons/w98_hardware.png" },
-  { label: "Add/Remove Programs", icon: "/icons/w98_program_manager.png" },
-  { label: "Automatic Updates", icon: "/icons/w98_windows_update_large.png" },
-  { label: "Date/Time", icon: "/icons/w98_time_and_date.png", onOpen: () => openApp("datetime") },
-  { label: "Dial-Up Networking", icon: "/icons/w98_conn_dialup.png" },
+  { label: "Accessibility Options", icon: "/icons/w98_access_wheelchair_big.png", file: "access.cpl" },
+  { label: "Add New Hardware", icon: "/icons/w98_hardware.png", file: "sysdm.cpl" },
+  { label: "Add/Remove Programs", icon: "/icons/w98_program_manager.png", file: "appwiz.cpl" },
+  { label: "Automatic Updates", icon: "/icons/w98_windows_update_large.png", file: "wuaucpl.cpl" },
+  { label: "Date/Time", icon: "/icons/w98_time_and_date.png", onOpen: () => openApp("datetime"), file: "timedate.cpl" },
+  { label: "Dial-Up Networking", icon: "/icons/w98_conn_dialup.png", file: "rnaui.dll" },
   {
     label: "Display",
     icon: "/icons/w98_display_properties.png",
     onOpen: () => openApp("display-properties"),
+    file: "desk.cpl",
   },
-  { label: "Folder Options", icon: "/icons/folder-open.png" },
-  { label: "Fonts", icon: "/icons/w98_font_tt.png" },
-  { label: "Gaming Options", icon: "/icons/joystick.png" },
-  { label: "Internet Options", icon: "/icons/w98_internet_options.png" },
-  { label: "Keyboard", icon: "/icons/w98_keyboard.png" },
-  { label: "Modems", icon: "/icons/w98_conn_dialup_alt.png" },
-  { label: "Mouse", icon: "/icons/w98_mouse.png", onOpen: () => openApp("mouse-properties") },
-  { label: "Network", icon: "/icons/w98_network.png" },
-  { label: "ODBC Data Sources (32bit)", icon: "/icons/w98_odbc.png" },
-  { label: "Passwords", icon: "/icons/w98_users_key.png" },
-  { label: "Power Options", icon: "/icons/w98_power_management.png" },
-  { label: "Printers", icon: "/icons/w98_printer_big.png" },
-  { label: "Regional Settings", icon: "/icons/globe.png" },
-  { label: "Scanners and Cameras", icon: "/icons/w98_scanner_camera.png" },
-  { label: "Scheduled Tasks", icon: "/icons/w2k_scheduled_tasks.png" },
-  { label: "Sounds and Multimedia", icon: "/icons/w98_mixer_sound.png" },
-  { label: "System", icon: "/icons/computer.png", onOpen: () => openApp("system-properties") },
-  { label: "Telephony", icon: "/icons/w98_telephony.png" },
-  { label: "Users", icon: "/icons/w98_users.png" },
+  { label: "Folder Options", icon: "/icons/folder-open.png", file: "shell32.dll" },
+  { label: "Fonts", icon: "/icons/w98_font_tt.png", file: "fontext.dll" },
+  { label: "Gaming Options", icon: "/icons/joystick.png", file: "joy.cpl" },
+  { label: "Internet Options", icon: "/icons/w98_internet_options.png", file: "inetcpl.cpl" },
+  { label: "Keyboard", icon: "/icons/w98_keyboard.png", file: "main.cpl" },
+  { label: "Modems", icon: "/icons/w98_conn_dialup_alt.png", file: "modem.cpl" },
+  { label: "Mouse", icon: "/icons/w98_mouse.png", onOpen: () => openApp("mouse-properties"), file: "main.cpl" },
+  { label: "Network", icon: "/icons/w98_network.png", file: "netcpl.cpl" },
+  { label: "ODBC Data Sources (32bit)", icon: "/icons/w98_odbc.png", file: "odbccp32.cpl" },
+  { label: "Passwords", icon: "/icons/w98_users_key.png", file: "password.cpl" },
+  { label: "Power Options", icon: "/icons/w98_power_management.png", file: "powercfg.cpl" },
+  { label: "Printers", icon: "/icons/w98_printer_big.png", file: "printers.dll" },
+  { label: "Regional Settings", icon: "/icons/globe.png", file: "intl.cpl" },
+  { label: "Scanners and Cameras", icon: "/icons/w98_scanner_camera.png", file: "sticpl.cpl" },
+  { label: "Scheduled Tasks", icon: "/icons/w2k_scheduled_tasks.png", file: "mstask.dll" },
+  { label: "Sounds and Multimedia", icon: "/icons/w98_mixer_sound.png", file: "mmsys.cpl" },
+  { label: "System", icon: "/icons/computer.png", onOpen: () => openApp("system-properties"), file: "sysdm.cpl" },
+  { label: "Telephony", icon: "/icons/w98_telephony.png", file: "telephon.cpl" },
+  { label: "Users", icon: "/icons/w98_users.png", file: "nwc.cpl" },
 ];
 
 interface GameItem {
@@ -485,31 +490,37 @@ interface GameItem {
   icon: string;
   onOpen?: () => void;
   disabled?: boolean;
+  // .exe shown in the "file not found" alert for games that aren't installed.
+  file: string;
 }
 const GAMES: GameItem[] = [
   {
     label: "Minesweeper",
     icon: "/icons/minesweeper.png",
     onOpen: () => openApp("minesweeper"),
+    file: "winmine.exe",
   },
   {
     label: "RSNRA Snake",
     icon: "/icons/joystick.png",
     onOpen: () => openApp("snake"),
+    file: "snake.exe",
   },
   {
     label: "Solitaire",
     icon: "/icons/solitaire.png",
     onOpen: () => openApp("solitaire"),
+    file: "sol.exe",
   },
   {
     label: "3D Pinball",
     icon: "/icons/pinball.png",
     onOpen: () => openApp("pinball"),
+    file: "pinball.exe",
   },
-  { label: "Hearts", icon: "/icons/hearts.png", disabled: true },
-  { label: "FreeCell", icon: "/icons/freecell.png", disabled: true },
-  { label: "Spider", icon: "/icons/spider.png", disabled: true },
+  { label: "Hearts", icon: "/icons/hearts.png", disabled: true, file: "mshearts.exe" },
+  { label: "FreeCell", icon: "/icons/freecell.png", disabled: true, file: "freecell.exe" },
+  { label: "Spider", icon: "/icons/spider.png", disabled: true, file: "spider.exe" },
 ];
 
 interface CtxState {
@@ -575,6 +586,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     icon: applet.icon,
     onOpen: applet.onOpen,
     disabled: !applet.onOpen,
+    file: applet.file,
   } as any));
 
   const gamesNodes: VfsNode[] = GAMES.map((game) => ({
@@ -584,6 +596,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     icon: game.icon,
     onOpen: game.onOpen,
     disabled: game.disabled,
+    file: game.file,
   } as any));
 
 
@@ -649,6 +662,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
       const vNode = node as any;
       if (!vNode.disabled && vNode.onOpen) {
         vNode.onOpen();
+      } else {
+        showMissingFileAlert(node.name, vNode.file ?? `${node.name}.exe`);
       }
       return;
     }
@@ -1000,12 +1015,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Open",
           action: () => {
-            if (path === "Control Panel") {
-              const applet = APPLETS.find((a) => a.label === selected);
-              applet?.onOpen?.();
-            } else if (path === "Games") {
-              const game = GAMES.find((g) => g.label === selected);
-              if (game && !game.disabled) game.onOpen?.();
+            if (path === "Control Panel" || path === "Games") {
+              const vNode = sorted.find((n) => n.name === selected);
+              if (vNode) openNode(vNode);
             } else if (selectedNode) {
               openNode(selectedNode);
             }

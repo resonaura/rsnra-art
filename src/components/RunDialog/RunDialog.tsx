@@ -73,6 +73,9 @@ const RUN_MAP: Record<string, AppId> = {
   "control-panel": "control-panel",
   "recycle-bin": "recycle-bin",
   bin: "recycle-bin",
+  taskmgr: "task-manager",
+  "task-manager": "task-manager",
+  charmap: "charmap",
 };
 
 export function RunDialog() {
@@ -110,7 +113,7 @@ export function RunDialog() {
         </WindowHeader>
         <WindowContent>
           <Row>
-            <img src="/icons/msdos.png" alt="" />
+            <img src="/icons/w98_application_hourglass.png" alt="" />
             <div style={{ flex: 1 }}>
               <p style={{ margin: "0 0 8px", fontSize: 12 }}>
                 Type the name of an app, and RSNRA.ART will open it for you.

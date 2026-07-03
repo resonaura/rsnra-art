@@ -23,6 +23,9 @@ interface WindowStoreState {
   closeProgramOpen: boolean;
   runDialogOpen: boolean;
   powerState: PowerState;
+  // Window ids minimized by the last toggleShowDesktop() call, so a second
+  // press restores exactly what was showing (Win2000 Quick Launch behavior).
+  showDesktopStash: string[] | null;
 
   openWindow: (config: OpenWindowConfig) => string;
   closeWindow: (id: string) => void;
@@ -30,6 +33,7 @@ interface WindowStoreState {
   toggleMaximize: (id: string) => void;
   focusWindow: (id: string) => void;
   toggleMinimizeFromTaskbar: (id: string) => void;
+  toggleShowDesktop: () => void;
   updateBounds: (id: string, bounds: Partial<Bounds>) => void;
   updateTitle: (id: string, title: string) => void;
   updateIcon: (id: string, icon: string) => void;
@@ -48,6 +52,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   closeProgramOpen: false,
   runDialogOpen: false,
   powerState: "on",
+  showDesktopStash: null,
 
   openWindow: (config) => {
     const { windows, topZIndex } = get();
@@ -182,6 +187,34 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     } else {
       state.focusWindow(id);
     }
+  },
+
+  toggleShowDesktop: () => {
+    const state = get();
+    if (state.showDesktopStash) {
+      const stash = state.showDesktopStash;
+      set({
+        showDesktopStash: null,
+        windows: state.windows.map((w) =>
+          stash.includes(w.id) ? { ...w, isMinimized: false } : w,
+        ),
+      });
+      const last = stash[stash.length - 1];
+      if (last) get().focusWindow(last);
+      return;
+    }
+    const toMinimize = state.windows
+      .filter((w) => !w.isMinimized)
+      .map((w) => w.id);
+    if (toMinimize.length === 0) return;
+    set({
+      showDesktopStash: toMinimize,
+      windows: state.windows.map((w) =>
+        toMinimize.includes(w.id)
+          ? { ...w, isMinimized: true, isFocused: false }
+          : w,
+      ),
+    });
   },
 
   updateBounds: (id, bounds) => {

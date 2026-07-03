@@ -42,10 +42,12 @@ const RenameInput = styled.input`
   border: 1px solid ${({ theme }) => theme.borderDarkest};
 `;
 
-const ShortcutArrow = styled.svg`
+const ShortcutOverlay = styled.img`
   position: absolute;
-  left: -2px;
-  bottom: -2px;
+  inset: 0;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
   pointer-events: none;
 `;
 
@@ -96,20 +98,12 @@ export function DesktopIcon({
       <div style={{ position: "relative" }}>
         <img src={icon} alt="" draggable={false} />
         {shortcut && (
-          <ShortcutArrow
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            shapeRendering="crispEdges"
+          <ShortcutOverlay
+            src="/icons/w2k_shortcut_overlay.png"
+            alt=""
+            draggable={false}
             aria-hidden
-          >
-            <path
-              d="M2 10 L2 6 L4 6 L4 4 L8 4 L8 8 L6 8 L6 10 Z"
-              fill="#fff"
-              stroke="#000"
-              strokeWidth="1"
-            />
-          </ShortcutArrow>
+          />
         )}
       </div>
       {renaming ? (

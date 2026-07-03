@@ -271,6 +271,8 @@ function buildInitialTree(): VfsNode {
       exe("command.com", "terminal"),
       exe("calc.exe", "calculator"),
       exe("sndrec32.exe", "sound-recorder"),
+      exe("taskmgr.exe", "task-manager"),
+      exe("charmap.exe", "charmap"),
       exe("regedit.exe", ""),
       exe("write.exe", ""),
       exe("ping.exe", ""),

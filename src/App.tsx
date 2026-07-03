@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
+import { AlertDialog } from "./components/AlertDialog/AlertDialog";
 import { BootScreen } from "./components/BootScreen/BootScreen";
 import { CloseProgramDialog } from "./components/CloseProgramDialog/CloseProgramDialog";
 import { Desktop } from "./components/Desktop/Desktop";
@@ -30,6 +31,9 @@ function Desk() {
       if (e.ctrlKey && e.altKey && (e.key === "Delete" || e.key === "Del")) {
         e.preventDefault();
         setCloseProgramOpen(true);
+      } else if (e.ctrlKey && e.shiftKey && e.key === "Escape") {
+        e.preventDefault();
+        openApp("task-manager");
       }
     };
     window.addEventListener("keydown", handler);
@@ -49,6 +53,7 @@ function Desk() {
       <CloseProgramDialog />
       <RunDialog />
       <UnsavedChangesDialog />
+      <AlertDialog />
       <WebampHost />
     </>
   );

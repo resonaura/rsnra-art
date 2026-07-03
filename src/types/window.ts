@@ -24,7 +24,9 @@ export type AppId =
   | "calculator"
   | "sound-recorder"
   | "solitaire"
-  | "pinball";
+  | "pinball"
+  | "task-manager"
+  | "charmap";
 
 export interface Bounds {
   x: number;

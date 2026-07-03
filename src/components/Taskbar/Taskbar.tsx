@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { AppBar, Button, Toolbar } from "react95";
 import styled from "styled-components";
+import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
+import { openApp } from "../../data/apps";
 import { focusWebamp } from "../../lib/webamp";
 import { useWindowStore } from "../../store/windowStore";
+import { NetworkTray } from "./NetworkTray";
 import { TaskbarClock } from "./TaskbarClock";
 import { VolumeControl } from "./VolumeControl";
 
@@ -45,6 +49,37 @@ const Divider = styled.div`
   height: 26px;
   border-left: 1px solid ${({ theme }) => theme.borderDark};
   border-right: 1px solid ${({ theme }) => theme.borderLightest};
+`;
+
+const QuickLaunchButton = styled.button`
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+
+  img {
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.borderLightest}
+      ${({ theme }) => theme.borderDark} ${({ theme }) => theme.borderDark}
+      ${({ theme }) => theme.borderLightest};
+  }
+
+  &:active {
+    border-color: ${({ theme }) => theme.borderDark}
+      ${({ theme }) => theme.borderLightest}
+      ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDark};
+  }
 `;
 
 const WindowList = styled(ScrollArea)`
@@ -99,18 +134,32 @@ export function Taskbar() {
   const toggleMinimizeFromTaskbar = useWindowStore(
     (s) => s.toggleMinimizeFromTaskbar,
   );
+  const toggleShowDesktop = useWindowStore((s) => s.toggleShowDesktop);
+  const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null);
 
   return (
-    <Bar>
+    <Bar
+      onContextMenu={(e: React.MouseEvent) => {
+        e.preventDefault();
+        setCtxPos({ x: e.clientX, y: e.clientY });
+      }}
+    >
       <StyledToolbar>
         <StartButton
           id="start-button"
           active={startMenuOpen}
           onClick={() => toggleStartMenu()}
         >
-          <img src="/icons/computer.png" alt="" draggable={false} />
+          <img src="/icons/w98_windows.png" alt="" draggable={false} />
           Start
         </StartButton>
+        <Divider />
+        <QuickLaunchButton
+          title="Show Desktop"
+          onClick={() => toggleShowDesktop()}
+        >
+          <img src="/icons/w98_desktop.png" alt="" draggable={false} />
+        </QuickLaunchButton>
         <Divider />
         <WindowList
           orientation="horizontal"
@@ -140,10 +189,40 @@ export function Taskbar() {
             ))}
         </WindowList>
         <Tray>
+          <NetworkTray />
           <VolumeControl />
           <TaskbarClock />
         </Tray>
       </StyledToolbar>
+      {ctxPos && (
+        <ContextMenu
+          x={ctxPos.x}
+          y={ctxPos.y}
+          onClose={() => setCtxPos(null)}
+        >
+          <CtxItem $disabled>Toolbars</CtxItem>
+          <CtxDivider />
+          <CtxItem
+            onClick={() => {
+              toggleShowDesktop();
+              setCtxPos(null);
+            }}
+          >
+            Show Desktop
+          </CtxItem>
+          <CtxDivider />
+          <CtxItem
+            onClick={() => {
+              openApp("task-manager");
+              setCtxPos(null);
+            }}
+          >
+            Task Manager
+          </CtxItem>
+          <CtxDivider />
+          <CtxItem $disabled>Properties</CtxItem>
+        </ContextMenu>
+      )}
     </Bar>
   );
 }
