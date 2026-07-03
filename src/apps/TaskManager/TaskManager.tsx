@@ -15,11 +15,23 @@ import {
 } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
-import { buildProcessRows } from "../../data/processList";
+import { Icon } from "../../components/Icon/Icon";
+import { buildProcessRows, REAL_PROCESS_NAME } from "../../data/processList";
 import { usePerfStats } from "../../hooks/usePerfStats";
 import { useWindowStore } from "../../store/windowStore";
 
 const ZOOM = 0.8;
+
+function formatMemoryKB(kb: number): string {
+  const bytes = kb * 1024;
+  if (bytes < 1024) return `${bytes} B`;
+  const kbVal = bytes / 1024;
+  if (kbVal < 1024) return `${Math.round(kbVal)} KB`;
+  const mbVal = kbVal / 1024;
+  if (mbVal < 1024) return `${mbVal.toFixed(1)} MB`;
+  const gbVal = mbVal / 1024;
+  return `${gbVal.toFixed(1)} GB`;
+}
 
 const Layout = styled.div`
   display: flex;
@@ -46,9 +58,6 @@ const ListFrame = styled(ScrollArea)`
     ${({ theme }) => theme.borderDarkest};
 `;
 
-// The header row must stay put while the body scrolls underneath it, and
-// carry an opaque background so rows don't show through — same as real
-// Explorer/Task Manager column headers.
 const Th = styled(TableHeadCell)`
   position: sticky;
   top: 0;
@@ -196,7 +205,12 @@ export function TaskManager(_props: { windowId: string }) {
                       onClick={() => setSelectedApp(w.id)}
                       onDoubleClick={() => focusWindow(w.id)}
                     >
-                      <TableDataCell>{w.title}</TableDataCell>
+                      <TableDataCell>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Icon src={w.icon} size={16} />
+                          <span>{w.title}</span>
+                        </div>
+                      </TableDataCell>
                       <TableDataCell>Running</TableDataCell>
                     </Row>
                   ))}
@@ -257,18 +271,43 @@ export function TaskManager(_props: { windowId: string }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortedProcs.map((row) => (
-                    <Row
-                      key={row.pid}
-                      $selected={selectedPid === row.pid}
-                      onClick={() => setSelectedPid(row.pid)}
-                    >
-                      <TableDataCell>{row.name}</TableDataCell>
-                      <TableDataCell>{row.pid}</TableDataCell>
-                      <TableDataCell>{row.cpuPct}%</TableDataCell>
-                      <TableDataCell>{Math.round(row.memK)} K</TableDataCell>
-                    </Row>
-                  ))}
+                  {sortedProcs.map((row) => {
+                    let iconPath = "/icons/w98_executable.ico";
+                    if (row.windowId) {
+                      const w = windows.find((win) => win.id === row.windowId);
+                      if (w) iconPath = w.icon;
+                    } else if (row.pid === 0) {
+                      iconPath = "/icons/w98_standby_monitor_moon.ico";
+                    } else if (row.pid === 4) {
+                      iconPath = "/icons/w2k_my_computer.ico";
+                    } else if (row.name === "explorer.exe") {
+                      iconPath = "/icons/w98_directory_open.ico";
+                    } else if (row.name === REAL_PROCESS_NAME) {
+                      iconPath = "/icons/w98_windows.ico";
+                    } else if (row.name === "winlogon.exe") {
+                      iconPath = "/icons/w98_shut_down_normal.ico";
+                    } else if (row.name === "services.exe") {
+                      iconPath = "/icons/w98_settings_gear.ico";
+                    }
+
+                    return (
+                      <Row
+                        key={row.pid}
+                        $selected={selectedPid === row.pid}
+                        onClick={() => setSelectedPid(row.pid)}
+                      >
+                        <TableDataCell>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <Icon src={iconPath} size={16} />
+                            <span>{row.name}</span>
+                          </div>
+                        </TableDataCell>
+                        <TableDataCell>{row.pid}</TableDataCell>
+                        <TableDataCell>{row.cpuPct}%</TableDataCell>
+                        <TableDataCell>{formatMemoryKB(row.memK)}</TableDataCell>
+                      </Row>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ListFrame>
@@ -325,9 +364,9 @@ export function TaskManager(_props: { windowId: string }) {
                 <span>{navigator.hardwareConcurrency ?? "?"}</span>
                 <span>Processes</span>
                 <span>{processRows.length}</span>
-                <span>Physical Memory (K)</span>
+                <span>Physical Memory</span>
                 <span>
-                  {perf.usedMemMB * 1024} / {perf.limitMemMB * 1024}
+                  {formatMemoryKB(perf.usedMemMB * 1024)} / {formatMemoryKB(perf.limitMemMB * 1024)}
                 </span>
               </div>
             </GroupBox>
@@ -338,7 +377,7 @@ export function TaskManager(_props: { windowId: string }) {
         <span>Processes: {processRows.length}</span>
         <span>CPU Usage: {perf.cpuPct}%</span>
         <span>
-          Mem Usage: {perf.usedMemMB}MB / {perf.limitMemMB}MB
+          Mem Usage: {formatMemoryKB(perf.usedMemMB * 1024)} / {formatMemoryKB(perf.limitMemMB * 1024)}
         </span>
       </StatusBar>
     </Layout>
