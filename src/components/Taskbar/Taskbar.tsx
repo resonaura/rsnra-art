@@ -298,57 +298,106 @@ export function Taskbar() {
     setQlCtx({ x: e.clientX, y: e.clientY, itemId });
   };
 
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   const handleQlDragOver = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("application/x-rsnra-vfs-path")) {
+    const types = Array.from(e.dataTransfer.types || []);
+    if (types.includes("application/x-rsnra-vfs-path") || types.includes("quick-launch-item-id")) {
       e.preventDefault();
-      e.dataTransfer.dropEffect = "link";
+      e.dataTransfer.dropEffect = types.includes("quick-launch-item-id") ? "move" : "link";
       if (!isDragOver) setIsDragOver(true);
+      if (e.target === e.currentTarget) {
+        setDragOverIndex(visibleItems.length);
+      }
     }
   };
 
-  const handleQlDragLeave = () => {
-    setIsDragOver(false);
+  const handleQlDragLeave = (e: React.DragEvent) => {
+    const target = e.relatedTarget as Node | null;
+    if (!target || !e.currentTarget.contains(target)) {
+      setIsDragOver(false);
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleItemDragOver = (idx: number, e: React.DragEvent) => {
+    const types = Array.from(e.dataTransfer.types || []);
+    if (types.includes("application/x-rsnra-vfs-path") || types.includes("quick-launch-item-id")) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = types.includes("quick-launch-item-id") ? "move" : "link";
+      if (!isDragOver) setIsDragOver(true);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      if (relativeX < rect.width / 2) {
+        setDragOverIndex(idx);
+      } else {
+        setDragOverIndex(idx + 1);
+      }
+    }
+  };
+
+  const handleQlItemDragStart = (id: string, e: React.DragEvent) => {
+    e.dataTransfer.setData("quick-launch-item-id", id);
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleQlDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    const draggedItemId = e.dataTransfer.getData("quick-launch-item-id");
     const srcAbs = e.dataTransfer.getData("application/x-rsnra-vfs-path");
-    if (!srcAbs) return;
+    
+    const insertIdx = dragOverIndex !== null ? dragOverIndex : visibleItems.length;
+    setDragOverIndex(null);
 
-    const vfs = useVfsStore.getState();
-    const node = vfs.resolve(srcAbs);
-    if (!node) return;
+    const QL_PATH = "C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch";
 
-    const isLnk = node.name.toLowerCase().endsWith(".lnk");
-    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
-    let targetIcon = isLnk ? null : iconForNode(node);
-    let lnk: any = null;
-    if (isLnk) {
-      try {
-        lnk = JSON.parse(node.content ?? "");
-        targetIcon = lnk?.icon;
-      } catch {}
-    }
+    if (draggedItemId) {
+      // Rearrange existing Quick Launch item
+      useVfsStore.getState().reorderChildren(QL_PATH, draggedItemId, insertIdx);
+    } else if (srcAbs) {
+      // Adding new shortcut from outside
+      const vfs = useVfsStore.getState();
+      const node = vfs.resolve(srcAbs);
+      if (!node) return;
 
-    if (isLnk && lnk) {
-      useWindowStore.getState().addToQuickLaunch({
-        title: label,
-        icon: targetIcon || "/icons/w2k_shortcut.ico",
-        type: lnk.type === "url" ? "lnk" : "app",
-        appId: lnk.target,
-        lnkPath: lnk.target,
-        data: lnk.data,
-      });
-    } else {
-      const preferred = getPreferredApp(node.name);
-      useWindowStore.getState().addToQuickLaunch({
-        title: label,
-        icon: targetIcon || "/icons/w2k_shortcut.ico",
-        type: "app",
-        appId: (node.appId || preferred?.appId || "notepad") as any,
-        data: { path: srcAbs },
-      });
+      const isLnk = node.name.toLowerCase().endsWith(".lnk");
+      const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
+      let targetIcon = isLnk ? null : iconForNode(node);
+      let lnk: any = null;
+      if (isLnk) {
+        try {
+          lnk = JSON.parse(node.content ?? "");
+          targetIcon = lnk?.icon;
+        } catch {}
+      }
+
+      const store = useWindowStore.getState();
+      const finalName = label.toLowerCase().endsWith(".lnk") ? label : `${label}.lnk`;
+
+      if (isLnk && lnk) {
+        store.addToQuickLaunch({
+          title: label,
+          icon: targetIcon || "/icons/w2k_shortcut.ico",
+          type: lnk.type === "url" ? "lnk" : "app",
+          appId: lnk.target,
+          lnkPath: lnk.target,
+          data: lnk.data,
+        });
+      } else {
+        const preferred = getPreferredApp(node.name);
+        store.addToQuickLaunch({
+          title: label,
+          icon: targetIcon || "/icons/w2k_shortcut.ico",
+          type: "app",
+          appId: (node.appId || preferred?.appId || "notepad") as any,
+          data: { path: srcAbs },
+        });
+      }
+
+      // Reorder it immediately to the drop index
+      vfs.reorderChildren(QL_PATH, finalName, insertIdx);
     }
   };
 
@@ -378,17 +427,25 @@ export function Taskbar() {
           onDragLeave={handleQlDragLeave}
           onDrop={handleQlDrop}
         >
-          {visibleItems.map((item) => (
-            <QuickLaunchButton
+          {visibleItems.map((item, idx) => (
+            <div
               key={item.id}
-              title={item.title}
-              onClick={() => handleQuickLaunchClick(item)}
-              onContextMenu={(e) => handleQlContextMenu(e, item.id)}
+              style={{ display: "flex", alignItems: "center", height: "100%" }}
+              onDragOver={(e) => handleItemDragOver(idx, e)}
             >
-              <Icon src={item.icon} size={18} />
-            </QuickLaunchButton>
+              {isDragOver && dragOverIndex === idx && <InsertionIndicator />}
+              <QuickLaunchButton
+                draggable
+                onDragStart={(e) => handleQlItemDragStart(item.id, e)}
+                title={item.title}
+                onClick={() => handleQuickLaunchClick(item)}
+                onContextMenu={(e) => handleQlContextMenu(e, item.id)}
+              >
+                <Icon src={item.icon} size={18} />
+              </QuickLaunchButton>
+            </div>
           ))}
-          {isDragOver && <InsertionIndicator />}
+          {isDragOver && dragOverIndex === visibleItems.length && <InsertionIndicator />}
           {overflowItems.length > 0 && (
             <OverflowWrapper>
               <OverflowButton

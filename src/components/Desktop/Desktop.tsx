@@ -334,10 +334,12 @@ export function Desktop() {
 
   // Sort elements if sortBy is selected
   const sortedItems = useMemo(() => {
-    const items = [...allItems];
-    if (!sortBy) return items;
+    const systemItems = allItems.filter((item) => item.key === "My Computer.lnk" || item.key === "__recycle__");
+    const userItems = allItems.filter((item) => item.key !== "My Computer.lnk" && item.key !== "__recycle__");
+    
+    if (!sortBy) return allItems;
 
-    items.sort((a, b) => {
+    userItems.sort((a, b) => {
       if (sortBy === "name") {
         return a.label.localeCompare(b.label);
       }
@@ -360,7 +362,7 @@ export function Desktop() {
       }
       return 0;
     });
-    return items;
+    return [...systemItems, ...userItems];
   }, [allItems, sortBy]);
 
   // Assign screen positions (either auto-arranged columns or saved dragging coords)

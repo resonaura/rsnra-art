@@ -54,15 +54,42 @@ export const useDesktopStore = create<DesktopStoreState>()(
       lineUpIcons: () =>
         set((state) => {
           const snapped = { ...state.iconPositions };
-          Object.keys(snapped).forEach((key) => {
+          const taken = new Set<string>();
+          
+          // Sort keys by their current coordinates (left-to-right, top-to-bottom)
+          // so icons already further left/top snap to their closest cells first
+          const sortedKeys = Object.keys(snapped).sort((a, b) => {
+            const posA = snapped[a];
+            const posB = snapped[b];
+            if (posA.x !== posB.x) return posA.x - posB.x;
+            return posA.y - posB.y;
+          });
+          
+          sortedKeys.forEach((key) => {
             const pos = snapped[key];
-            const col = Math.round((pos.x - 12) / 90);
-            const row = Math.round((pos.y - 12) / 82);
+            let col = Math.round((pos.x - 12) / 90);
+            let row = Math.round((pos.y - 12) / 82);
+            if (col < 0) col = 0;
+            if (row < 0) row = 0;
+            
+            // Collision resolution: slide down or wrap to next column if slot is taken
+            let c = col;
+            let r = row;
+            while (taken.has(`${c},${r}`)) {
+              r++;
+              if (r >= 8) { // wrap after 8 rows
+                r = 0;
+                c++;
+              }
+            }
+            
+            taken.add(`${c},${r}`);
             snapped[key] = {
-              x: 12 + col * 90,
-              y: 12 + Math.max(0, row) * 82,
+              x: 12 + c * 90,
+              y: 12 + r * 82,
             };
           });
+          
           return { iconPositions: snapped };
         }),
     }),

@@ -61,6 +61,11 @@ export interface VfsState {
     path: string,
     attrs: { hidden?: boolean; readonly?: boolean; archive?: boolean },
   ) => boolean;
+  reorderChildren: (
+    dirPath: string,
+    name: string,
+    targetIndex: number,
+  ) => boolean;
 }
 
 // ─── Path helpers ──────────────────────────────────────────────────────────
@@ -1133,6 +1138,28 @@ export const useVfsStore = create<VfsState>()(
         if (!newRoot) return false;
         set({ root: newRoot });
         return true;
+      },
+
+      reorderChildren: (dirPath, name, targetIndex) => {
+        const abs = normalizePath(dirPath, get().cwd);
+        if (!abs) return false;
+        let success = false;
+        const newRoot = updateNode(get().root, abs, (parent) => {
+          if (parent.type !== "dir" || !parent.children) return null;
+          const idx = parent.children.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
+          if (idx === -1) return null;
+          const child = parent.children[idx];
+          const rest = parent.children.filter((_, i) => i !== idx);
+          const target = Math.max(0, Math.min(targetIndex, rest.length));
+          const newChildren = [...rest.slice(0, target), child, ...rest.slice(target)];
+          success = true;
+          return { ...parent, children: newChildren };
+        });
+        if (newRoot && success) {
+          set({ root: newRoot });
+          return true;
+        }
+        return false;
       },
     }),
     {
