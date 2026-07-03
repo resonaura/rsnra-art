@@ -82,9 +82,9 @@ const EXT_ICONS: Readonly<Record<string, string>> = {
 const SPECIAL_FOLDER_ICONS: Readonly<Record<string, string>> = {
   "windows":           "/icons/w2k_folder_open.ico",
   "program files":     "/icons/w98_directory_open.ico",
-  "my documents":      "/icons/w2k_directory_open.ico",
-  "my pictures":       "/icons/w98_imagePictures.ico",
-  "start menu":        "/icons/w2k_directory_open.ico",
+  "my documents":      "/icons/w2k_my_documents.ico",
+  "my pictures":       "/icons/w98_directory_pictures.ico",
+  "start menu":        "/icons/w2k_folder_open.ico",
   "programs":          "/icons/w2k-programs.ico",
   "accessories":       "/icons/w2k_folder_open.ico",
   "games":             "/icons/w98_joystick.ico",
