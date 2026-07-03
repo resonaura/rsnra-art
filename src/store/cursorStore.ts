@@ -8,8 +8,8 @@ export const SCHEME_FILES: Record<Exclude<CursorSchemeId, "none">, Record<Cursor
   "windows": {
     normal: "arrow_i.cur",
     help: "help_i.cur",
-    workingInBackground: "appstart.ani",
-    busy: "hourglas.ani",
+    workingInBackground: "wait_i.cur",
+    busy: "busy_i.cur",
     precision: "cross_i.cur",
     text: "beam_i.cur",
     handwriting: "pen_i.cur",

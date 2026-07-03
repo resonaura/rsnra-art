@@ -31,8 +31,8 @@ export interface CursorRole {
 export const CURSOR_ROLES: CursorRole[] = [
   { id: "normal", label: "Normal Select", file: "arrow_i.cur", cssCursor: "default" },
   { id: "help", label: "Help Select", file: "help_i.cur", cssCursor: "help" },
-  { id: "workingInBackground", label: "Working In Background", file: "appstart.ani", cssCursor: "progress" },
-  { id: "busy", label: "Busy", file: "hourglas.ani", cssCursor: "wait" },
+  { id: "workingInBackground", label: "Working In Background", file: "wait_i.cur", cssCursor: "progress" },
+  { id: "busy", label: "Busy", file: "busy_i.cur", cssCursor: "wait" },
   { id: "precision", label: "Precision Select", file: "cross_i.cur", cssCursor: "crosshair" },
   { id: "text", label: "Text Select", file: "beam_i.cur", cssCursor: "text" },
   { id: "handwriting", label: "Handwriting", file: "pen_i.cur", cssCursor: "cell" },

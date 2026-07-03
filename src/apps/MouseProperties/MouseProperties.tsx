@@ -13,7 +13,6 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { Slider95 } from "../../components/Slider95/Slider95";
 import {
-  CURSOR_GALLERY,
   CURSOR_ROLES,
   type CursorRoleId,
 } from "../../data/cursors";
@@ -25,6 +24,7 @@ import {
   type CursorSchemeId,
 } from "../../store/cursorStore";
 import { useWindowStore } from "../../store/windowStore";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
 
 const Layout = styled.div`
   display: flex;
@@ -115,54 +115,6 @@ const PointersHead = styled.div`
   align-items: center;
 `;
 
-const BrowseOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-`;
-
-const BrowsePanel = styled(GroupBox)`
-  width: 92%;
-  height: 82%;
-  display: flex;
-  flex-direction: column;
-  background: ${({ theme }) => theme.material};
-`;
-
-const Gallery = styled(ScrollArea)`
-  flex: 1;
-  min-height: 0;
-  background: white;
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
-`;
-
-const GalleryItem = styled.button<{ $active: boolean }>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 60px;
-  padding: 4px 2px;
-  border: 1px dotted transparent;
-  background: ${({ theme, $active }) =>
-    $active ? theme.hoverBackground : "transparent"};
-  cursor: pointer;
-  font-size: 10px;
-  overflow: hidden;
-
-  img {
-    width: 32px;
-    height: 32px;
-    image-rendering: pixelated;
-  }
-`;
 
 const SCHEMES: { id: CursorSchemeId; label: string }[] = [
   { id: "none", label: "(None)" },
@@ -269,10 +221,11 @@ export function MouseProperties({ windowId }: { windowId: string }) {
   const [scheme, setLocalScheme] = useState<CursorSchemeId>(storeScheme);
   const [files, setFiles] = useState<Record<CursorRoleId, string>>(storeFiles);
   const [selectedRole, setSelectedRole] = useState<CursorRoleId>("normal");
-  const [browsing, setBrowsing] = useState(false);
   const [rightHanded, setRightHanded] = useState(true);
   const [dblClick, setDblClick] = useState(50);
   const [pointerSpeed, setPointerSpeed] = useState(50);
+
+  const { showFileDialog, dialog: fileDialogEl } = useFileDialog();
 
   const apply = () => {
     setScheme(scheme);
@@ -407,49 +360,28 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               </Button>
               <Button
                 disabled={scheme === "none"}
-                onClick={() => setBrowsing(true)}
+                onClick={async () => {
+                  const path = await showFileDialog({
+                    mode: "open",
+                    title: "Browse",
+                    initialDir: "C:\\Windows\\Cursors",
+                    filters: [
+                      { label: "Cursor Files (*.cur;*.ani)", extensions: ["cur", "ani", "CUR", "ANI"] },
+                      { label: "All Files (*.*)", extensions: [] },
+                    ],
+                  });
+                  if (path) {
+                    const filename = path.split("\\").pop()!;
+                    setFiles((f) => ({ ...f, [selectedRole]: filename }));
+                  }
+                }}
                 style={{ flex: 1 }}
               >
                 Browse...
               </Button>
             </PointersHead>
 
-            {browsing && (
-              <BrowseOverlay>
-                <BrowsePanel label={`Browse — ${selected.label}`}>
-                  <Gallery
-                    contentStyle={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 4,
-                      padding: 6,
-                      alignContent: "flex-start",
-                    }}
-                  >
-                    {CURSOR_GALLERY.map((file) => (
-                      <GalleryItem
-                        key={file}
-                        $active={files[selectedRole] === file}
-                        title={file}
-                        onClick={() => {
-                          setFiles((f) => ({ ...f, [selectedRole]: file }));
-                          setBrowsing(false);
-                        }}
-                      >
-                        <CursorPreview
-                          file={file}
-                          style={{ width: 32, height: 32 }}
-                        />
-                        <span>{file.replace(/\.(CUR|ANI)$/i, "")}</span>
-                      </GalleryItem>
-                    ))}
-                  </Gallery>
-                  <BtnRow>
-                    <Button onClick={() => setBrowsing(false)}>Cancel</Button>
-                  </BtnRow>
-                </BrowsePanel>
-              </BrowseOverlay>
-            )}
+            {fileDialogEl}
           </>
         )}
 

@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
+import { parseAni } from "../../lib/aniParser";
+import { parseCur } from "../../lib/curParser";
 import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 
@@ -211,6 +213,82 @@ function matchesFilter(name: string, filter: FileFilter): boolean {
 function formatSize(node: VfsNode): string {
   if (node.type === "dir") return "";
   return `${(contentByteSize(node.content) / 1024).toFixed(1)} KB`;
+}
+
+function isCursorFile(node: VfsNode): boolean {
+  if (node.type !== "file") return false;
+  const lower = node.name.toLowerCase();
+  return lower.endsWith(".cur") || lower.endsWith(".ani");
+}
+
+/** Renders a preview from a VFS cursor node (.cur or .ani whose content is a data URL). */
+function CursorFilePreview({ node }: { node: VfsNode }) {
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!node.content || !node.content.startsWith("data:")) return;
+    const filename = node.name.toLowerCase();
+    let active = true;
+
+    const run = async () => {
+      try {
+        const res = await fetch(node.content!);
+        const buf = await res.arrayBuffer();
+        if (!active) return;
+
+        if (filename.endsWith(".ani")) {
+          const parsed = await parseAni(buf);
+          if (!active) return;
+          const urls = parsed.frames.map((b) => URL.createObjectURL(b));
+          let step = 0;
+          let timerId: any;
+          const tick = () => {
+            if (!active) return;
+            const fi = parsed.seq ? parsed.seq[step] : step;
+            if (fi >= 0 && fi < urls.length) setFrameUrl(urls[fi]);
+            const dur = parsed.rate[step] || 100;
+            step = (step + 1) % (parsed.seq ? parsed.seq.length : urls.length);
+            timerId = setTimeout(tick, dur);
+          };
+          tick();
+          cleanupRef.current = () => {
+            active = false;
+            clearTimeout(timerId);
+            urls.forEach((u) => URL.revokeObjectURL(u));
+          };
+        } else if (filename.endsWith(".cur")) {
+          const parsed = await parseCur(buf, node.name);
+          if (!active) return;
+          setFrameUrl(parsed.blobUrl);
+          cleanupRef.current = () => {
+            active = false;
+            if (parsed.blobUrl.startsWith("blob:")) URL.revokeObjectURL(parsed.blobUrl);
+          };
+        }
+      } catch (e) {
+        console.error("CursorFilePreview error:", e);
+      }
+    };
+
+    run();
+    return () => {
+      active = false;
+      cleanupRef.current?.();
+    };
+  }, [node]);
+
+  if (!frameUrl) {
+    return <img src={iconForNode(node)} alt="" style={{ width: 16, height: 16, imageRendering: "pixelated" }} />;
+  }
+  return (
+    <img
+      src={frameUrl}
+      alt=""
+      draggable={false}
+      style={{ width: 16, height: 16, imageRendering: "pixelated", objectFit: "contain" }}
+    />
+  );
 }
 
 export function FileDialog({
@@ -457,7 +535,9 @@ export function FileDialog({
                 onClick={() => handleEntryClick(node)}
                 onDoubleClick={() => handleEntryDoubleClick(node)}
               >
-                <img src={iconForNode(node)} alt="" />
+                {isCursorFile(node)
+                  ? <CursorFilePreview node={node} />
+                  : <img src={iconForNode(node)} alt="" />}
                 {renaming === node.name ? (
                   <InlineRenameInput
                     autoFocus

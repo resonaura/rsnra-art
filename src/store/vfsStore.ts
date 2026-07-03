@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { BIO_TEXT, LINKS } from "../data/content";
+import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type VfsNodeType = "dir" | "file";
@@ -342,7 +343,7 @@ function buildInitialTree(): VfsNode {
       ),
       dir("Temp", [], true),
       dir("Help", [file("windows.hlp", { system: true })], true),
-      dir("Cursors", [], true),
+      dir("Cursors", CURSORS_VFS_NODES, true),
       // System sounds — the real Windows Me/95 .wav files, browsable at
       // C:\Windows\Media just like in real Windows.
       dir(
@@ -822,7 +823,7 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 6,
+      version: 7,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",

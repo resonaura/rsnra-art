@@ -116,13 +116,108 @@ export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<C
         imgData.data[pixelIdx + 3] = view.getUint8(idx + 3); // A
       }
     }
+  } else if (biBitCount === 4) {
+    // 4-bit paletted CUR
+    const biClrUsed = view.getUint32(imageOffset + 32, true);
+    const numColors = biClrUsed === 0 ? 16 : biClrUsed;
+    const colorTableOffset = imageOffset + biSize;
+    const palette: { r: number; g: number; b: number }[] = [];
+    for (let i = 0; i < numColors; i++) {
+      const base = colorTableOffset + i * 4;
+      palette.push({
+        b: view.getUint8(base),
+        g: view.getUint8(base + 1),
+        r: view.getUint8(base + 2),
+      });
+    }
+    // XOR plane stride: each row of 4bpp pixels is ceil(width/2) bytes, padded to 4
+    const xorStride = Math.floor((realWidth / 2 + 3) & ~3);
+    const xorOffset = colorTableOffset + numColors * 4;
+    const andStride = Math.floor((realWidth + 31) / 32) * 4;
+    const andOffset = xorOffset + xorStride * realHeight;
+
+    for (let y = 0; y < realHeight; y++) {
+      const bmpRow = realHeight - 1 - y;
+      const xorRowOffset = xorOffset + bmpRow * xorStride;
+      const andRowOffset = andOffset + bmpRow * andStride;
+
+      for (let x = 0; x < realWidth; x++) {
+        const nibbleByte = view.getUint8(xorRowOffset + Math.floor(x / 2));
+        const paletteIdx = (x % 2 === 0) ? ((nibbleByte >> 4) & 0xf) : (nibbleByte & 0xf);
+        const andByteIdx = Math.floor(x / 8);
+        const andBit = (view.getUint8(andRowOffset + andByteIdx) >> (7 - (x % 8))) & 1;
+
+        const pixelIdx = (y * realWidth + x) * 4;
+        if (andBit === 0) {
+          const color = palette[paletteIdx] ?? { r: 0, g: 0, b: 0 };
+          imgData.data[pixelIdx] = color.r;
+          imgData.data[pixelIdx + 1] = color.g;
+          imgData.data[pixelIdx + 2] = color.b;
+          imgData.data[pixelIdx + 3] = 255;
+        } else {
+          imgData.data[pixelIdx] = 0;
+          imgData.data[pixelIdx + 1] = 0;
+          imgData.data[pixelIdx + 2] = 0;
+          imgData.data[pixelIdx + 3] = 0;
+        }
+      }
+    }
+  } else if (biBitCount === 8) {
+
+    // 8-bit paletted CUR — read palette size from biClrUsed
+    const biClrUsed = view.getUint32(imageOffset + 32, true);
+    const numColors = biClrUsed === 0 ? 256 : biClrUsed;
+    const colorTableOffset = imageOffset + biSize;
+    const palette: { r: number; g: number; b: number }[] = [];
+    for (let i = 0; i < numColors; i++) {
+      const base = colorTableOffset + i * 4;
+      palette.push({
+        b: view.getUint8(base),
+        g: view.getUint8(base + 1),
+        r: view.getUint8(base + 2),
+      });
+    }
+    // XOR plane stride: pad to 4 bytes
+    const xorStride = ((realWidth + 3) & ~3);
+    const xorOffset = colorTableOffset + numColors * 4;
+    const andStride = Math.floor((realWidth + 31) / 32) * 4;
+    const andOffset = xorOffset + xorStride * realHeight;
+
+    for (let y = 0; y < realHeight; y++) {
+      const bmpRow = realHeight - 1 - y;
+      const xorRowOffset = xorOffset + bmpRow * xorStride;
+      const andRowOffset = andOffset + bmpRow * andStride;
+
+      for (let x = 0; x < realWidth; x++) {
+        const paletteIdx = view.getUint8(xorRowOffset + x);
+        const andByteIdx = Math.floor(x / 8);
+        const andBit = (view.getUint8(andRowOffset + andByteIdx) >> (7 - (x % 8))) & 1;
+
+        const pixelIdx = (y * realWidth + x) * 4;
+        if (andBit === 0) {
+          // Opaque pixel from palette
+          const color = palette[paletteIdx] ?? { r: 0, g: 0, b: 0 };
+          imgData.data[pixelIdx] = color.r;
+          imgData.data[pixelIdx + 1] = color.g;
+          imgData.data[pixelIdx + 2] = color.b;
+          imgData.data[pixelIdx + 3] = 255;
+        } else {
+          // Transparent (AND=1, XOR=0 or inversion)
+          imgData.data[pixelIdx] = 0;
+          imgData.data[pixelIdx + 1] = 0;
+          imgData.data[pixelIdx + 2] = 0;
+          imgData.data[pixelIdx + 3] = 0;
+        }
+      }
+    }
   } else {
-    // Fallback for 4-bit, 8-bit, 24-bit
+    // Fallback for 4-bit, 24-bit
     return {
       blobUrl: `/cursors/${filename}`,
       hotspot: [hotspotX, hotspotY]
     };
   }
+
 
   ctx.putImageData(imgData, 0, 0);
 
