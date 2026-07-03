@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { CURSOR_ROLES, type CursorRoleId } from "../data/cursors";
+import { type CursorRoleId } from "../data/cursors";
 
 // Helper to parse comma-separated values from Windows Registry
 function parseRegistryScheme(regStr: string): Record<string, string> {

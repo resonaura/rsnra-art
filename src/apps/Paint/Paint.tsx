@@ -37,8 +37,6 @@ import {
   type SpanPlot,
 } from "./raster";
 
-const CANVAS_W = 580;
-const CANVAS_H = 380;
 const MAGNIFICATIONS = [1, 2, 4, 8] as const;
 const LINE_WIDTHS = [1, 2, 3, 4, 5];
 const ERASER_SIZES = [4, 6, 8, 10];

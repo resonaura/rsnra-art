@@ -24,12 +24,9 @@ const Banner = styled.div`
   flex-shrink: 0;
   background: ${({ theme }) => {
     const bg = theme.headerBackground as string;
-    // If the theme already supplies a gradient, use it directly (rotated 180°).
     if (bg.includes("gradient")) {
-      // Convert "to right" → "to bottom" for the vertical banner orientation.
       return bg.replace("to right", "to bottom");
     }
-    // Solid colour: build a dark→colour gradient for visual depth.
     return `linear-gradient(180deg, color-mix(in srgb, ${bg} 55%, #000) 0%, ${bg} 60%, color-mix(in srgb, ${bg} 70%, #fff) 100%)`;
   }};
   position: relative;
@@ -53,27 +50,28 @@ const BannerLabel = styled.div`
   padding: 10px 0;
 `;
 
-export function StartMenu() {
-  const open = useWindowStore((s) => s.startMenuOpen);
-  const setOpen = useWindowStore((s) => s.setStartMenuOpen);
+/**
+ * The actual content of the Start Menu — split into its own component so that
+ * `useStartMenuTree` (which subscribes to VFS) is ONLY active when the menu is
+ * open. When closed, this component is unmounted and no VFS subscriptions exist
+ * for the menu tree, eliminating spurious re-renders.
+ */
+function StartMenuPanel({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const tree = useStartMenuTree();
 
   useEffect(() => {
-    if (!open) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (ref.current && !ref.current.contains(target)) {
         const startButton = document.getElementById("start-button");
         if (startButton?.contains(target)) return;
-        setOpen(false);
+        onClose();
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open, setOpen]);
-
-  if (!open) return null;
+  }, [onClose]);
 
   return (
     <Positioned ref={ref} id="start-menu-root">
@@ -83,4 +81,15 @@ export function StartMenu() {
       <MenuTree nodes={tree} />
     </Positioned>
   );
+}
+
+export function StartMenu() {
+  const open = useWindowStore((s) => s.startMenuOpen);
+  const setOpen = useWindowStore((s) => s.setStartMenuOpen);
+
+  if (!open) return null;
+
+  // StartMenuPanel is only mounted when open=true, so useStartMenuTree's
+  // VFS subscription only exists while the menu is actually visible.
+  return <StartMenuPanel onClose={() => setOpen(false)} />;
 }

@@ -1,5 +1,6 @@
-import { useShallow } from "zustand/react/shallow";
+import { useMemo } from "react";
 import { playSound } from "../lib/audio";
+
 import { dirIcon, iconForNode } from "./fileIcons";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
 import { showMissingFileAlert } from "../store/alertStore";
@@ -9,6 +10,7 @@ import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 import { getPreferredApp } from "./fileOpen";
 import { lnkIcon, openLnk, parseLnk } from "./shortcuts";
+
 
 export interface MenuNode {
   id: string;
@@ -182,90 +184,120 @@ function openFile(abs: string, node: VfsNode) {
  *   Any .lnk files or subdirectories the user adds/removes there are reflected
  *   immediately — no code changes needed.
  *
- * Top-level items (Documents, Settings, Find, Help, Run, Shut Down) are OS-level
- * items that don't live in Programs; they appear above with a separator before
- * Shut Down, exactly like real Windows 95.
+ * Subscriptions are scoped to only the VFS nodes we actually render, so an
+ * unrelated file write (e.g. saving a Paint canvas) does NOT trigger a
+ * Start Menu re-render.
  */
 export function useStartMenuTree(): MenuNode[] {
-  const vfs = useVfsStore(useShallow((s) => ({ root: s.root, list: s.list })));
+  // With immutable VFS, each mutation creates new node objects along the
+  // changed path. Subscribing to the specific folder node means we only
+  // re-render when that exact folder's contents change.
+  const programsNode = useVfsStore((s) => {
+    const win = s.root.children?.find(
+      (c) => c.name.toLowerCase() === "windows",
+    );
+    const sm = win?.children?.find(
+      (c) => c.name.toLowerCase() === "start menu",
+    );
+    return sm?.children?.find(
+      (c) => c.name.toLowerCase() === "programs",
+    ) ?? null;
+  });
 
-  // Programs: read from C:\Windows\Start Menu\Programs
-  const programsChildren = vfsDirToMenuNodes(
-    "C:\\Windows\\Start Menu\\Programs",
-    vfs,
+  const docsNode = useVfsStore((s) =>
+    s.root.children?.find(
+      (c) => c.name.toLowerCase() === "my documents",
+    ) ?? null,
   );
 
-  // Documents: built from C:\My Documents live content
-  const docs = docChildren("C:\\My Documents", vfs);
+  // list() reads the store on demand; wrap in getState() so it doesn't create
+  // an extra subscription.
+  const listFn = useVfsStore.getState().list;
 
-  return [
-    {
-      id: "programs",
-      label: "Programs",
-      icon: "/icons/w2k-programs.ico",
-      children: programsChildren,
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      icon: "/icons/w2k_documents.ico",
-      iconScale: 1.33,
-      children: docs,
-    },
-    {
-      id: "settings",
-      label: "Settings",
-      icon: "/icons/w2k_settings.ico",
-      iconScale: 1.33,
-      children: [
-        {
-          id: "control-panel",
-          label: "Control Panel",
-          icon: "/icons/w2k_control_panel.ico",
-          action: run(() => openApp("control-panel")),
-        },
-      ],
-    },
-    {
-      id: "find",
-      label: "Find",
-      icon: "/icons/w2k_search2.ico",
-      iconScale: 1.33,
-      children: [
-        {
-          id: "find-files",
-          label: "Files or Folders...",
-          icon: "/icons/w2k_search2.ico",
-          iconScale: 1.33,
-          action: run(() => openApp("find")),
-        },
-      ],
-    },
-    {
-      id: "help",
-      label: "Help",
-      icon: "/icons/w2k_help.ico",
-      iconScale: 1.33,
-      action: run(() => openApp("help")),
-    },
-    {
-      id: "run",
-      label: "Run...",
-      icon: "/icons/w2k_run.ico",
-      iconScale: 1.33,
-      action: () => {
-        useWindowStore.getState().setRunDialogOpen(true);
-        closeStartMenu();
+  const programsChildren = useMemo(
+    () => vfsDirToMenuNodes("C:\\Windows\\Start Menu\\Programs", { list: listFn }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [programsNode],          // recompute only when the Programs folder changes
+  );
+
+  const docs = useMemo(
+    () => docChildren("C:\\My Documents", { list: listFn }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [docsNode],              // recompute only when My Documents changes
+  );
+
+  // The static top-level items never change — stable reference via useMemo.
+  return useMemo(
+    () => [
+      {
+        id: "programs",
+        label: "Programs",
+        icon: "/icons/w2k-programs.ico",
+        children: programsChildren,
       },
-    },
-    // Separator before Shut Down — just like real Windows 95
-    { id: "__sep__", label: "", separator: true },
-    {
-      id: "shut-down",
-      label: "Shut Down...",
-      icon: "/icons/w2k_shutdown.ico",
-      iconScale: 1.33,
-      action: requestShutdown,
-    },
-  ];
+      {
+        id: "documents",
+        label: "Documents",
+        icon: "/icons/w2k_documents.ico",
+        iconScale: 1.33,
+        children: docs,
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        icon: "/icons/w2k_settings.ico",
+        iconScale: 1.33,
+        children: [
+          {
+            id: "control-panel",
+            label: "Control Panel",
+            icon: "/icons/w2k_control_panel.ico",
+            action: run(() => openApp("control-panel")),
+          },
+        ],
+      },
+      {
+        id: "find",
+        label: "Find",
+        icon: "/icons/w2k_search2.ico",
+        iconScale: 1.33,
+        children: [
+          {
+            id: "find-files",
+            label: "Files or Folders...",
+            icon: "/icons/w2k_search2.ico",
+            iconScale: 1.33,
+            action: run(() => openApp("find")),
+          },
+        ],
+      },
+      {
+        id: "help",
+        label: "Help",
+        icon: "/icons/w2k_help.ico",
+        iconScale: 1.33,
+        action: run(() => openApp("help")),
+      },
+      {
+        id: "run",
+        label: "Run...",
+        icon: "/icons/w2k_run.ico",
+        iconScale: 1.33,
+        action: () => {
+          useWindowStore.getState().setRunDialogOpen(true);
+          closeStartMenu();
+        },
+      },
+      // Separator before Shut Down — just like real Windows 95
+      { id: "__sep__", label: "", separator: true },
+      {
+        id: "shut-down",
+        label: "Shut Down...",
+        icon: "/icons/w2k_shutdown.ico",
+        iconScale: 1.33,
+        action: requestShutdown,
+      },
+    ],
+    [programsChildren, docs],
+  );
 }

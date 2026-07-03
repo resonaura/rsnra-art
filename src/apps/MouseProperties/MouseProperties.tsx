@@ -109,11 +109,7 @@ const PreviewBox = styled.div`
   }
 `;
 
-const PointersHead = styled.div`
-  display: flex;
-  gap: 10px;
-  align-items: center;
-`;
+
 
 export function CursorPreview({
   file,
@@ -297,7 +293,7 @@ export function MouseProperties({ windowId }: { windowId: string }) {
   const currentSchemeLabel =
     selectOptions.find((o) => o.value === scheme)?.label || scheme;
 
-  const selected = CURSOR_ROLES.find((r) => r.id === selectedRole)!;
+
 
   return (
     <Layout>

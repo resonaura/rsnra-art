@@ -295,7 +295,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   },
   "task-manager": {
     id: "task-manager",
-    title: "Windows Task Manager",
+    title: "Task Manager",
     icon: "/icons/w98_computer_taskmgr.ico",
     component: asComponent(TaskManager),
     width: 420,

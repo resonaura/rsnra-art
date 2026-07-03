@@ -134,21 +134,24 @@ export function Desktop() {
   const showHidden = useFilePrefsStore((s) => s.showHidden);
   const recycledCount = useVfsStore((s) => s.recycled.length);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
-  const vfsRoot = useVfsStore((s) => s.root);
-  const renameFile = useVfsStore((s) => s.rename);
-  const mkdir = useVfsStore((s) => s.mkdir);
-  const writeFile = useVfsStore((s) => s.writeFile);
-  const moveToRecycleBin = useVfsStore((s) => s.moveToRecycleBin);
+  // Subscribe only to the Desktop folder node itself, not the whole root.
+  // This way unrelated VFS mutations (saving files elsewhere) don't re-render the desktop.
+  const desktopNode = useVfsStore(
+    (s) => {
+      const winNode = s.root.children?.find(
+        (c) => c.name.toLowerCase() === "windows" && c.type === "dir",
+      );
+      return winNode?.children?.find(
+        (c) => c.name.toLowerCase() === "desktop" && c.type === "dir",
+      ) ?? null;
+    },
+  );
 
-  const desktopNodes = useMemo(() => {
-    const windows = vfsRoot.children?.find(
-      (c) => c.name.toLowerCase() === "windows" && c.type === "dir",
-    );
-    const desktop = windows?.children?.find(
-      (c) => c.name.toLowerCase() === "desktop" && c.type === "dir",
-    );
-    return desktop?.children ?? EMPTY;
-  }, [vfsRoot]);
+  const desktopNodes = useMemo(
+    () => desktopNode?.children ?? EMPTY,
+    [desktopNode],
+  );
+
 
   // System .lnk shortcuts render first (My Computer, etc.), then the Recycle
   // Bin, then everything else the user has put on the desktop — folders,
@@ -194,7 +197,7 @@ export function Desktop() {
     ) {
       newName += ".lnk";
     }
-    renameFile(`${DESKTOP_PATH}\\${renaming}`, newName);
+    useVfsStore.getState().rename(`${DESKTOP_PATH}\\${renaming}`, newName);
     setRenaming(null);
     if (selected === renaming) setSelected(newName);
   };
@@ -203,7 +206,7 @@ export function Desktop() {
     let name = "New Folder";
     let i = 1;
     while (vfsExists(desktopNodes, name)) name = `New Folder (${++i})`;
-    mkdir(`${DESKTOP_PATH}\\${name}`);
+    useVfsStore.getState().mkdir(`${DESKTOP_PATH}\\${name}`);
     setSelected(name);
     setRenaming(name);
     setRenameVal(name);
@@ -214,7 +217,7 @@ export function Desktop() {
     let i = 1;
     while (vfsExists(desktopNodes, name))
       name = `New Text Document (${++i}).txt`;
-    writeFile(`${DESKTOP_PATH}\\${name}`, "");
+    useVfsStore.getState().writeFile(`${DESKTOP_PATH}\\${name}`, "");
     setSelected(name);
     setRenaming(name);
     setRenameVal(name);
@@ -426,7 +429,7 @@ export function Desktop() {
                   </CtxItem>
                   <CtxItem
                     onClick={() => {
-                      moveToRecycleBin(abs);
+                      useVfsStore.getState().moveToRecycleBin(abs);
                       if (selected === node.name) setSelected(null);
                       setIconCtx(null);
                     }}

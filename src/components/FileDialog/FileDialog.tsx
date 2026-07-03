@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
-import { iconForNode } from "../../data/fileIcons";
 import { FileIcon } from "../FileIcon/FileIcon";
+
 import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 

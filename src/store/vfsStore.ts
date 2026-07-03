@@ -181,6 +181,99 @@ function uniqueCopyName(parent: VfsNode, name: string): string {
   return candidate;
 }
 
+// ─── Immutable path-copy helpers ──────────────────────────────────────────────
+// Rather than mutating VFS nodes in place, every mutation creates new node
+// objects along the path from root to the changed node (structural sharing).
+// Unchanged siblings keep their existing object references, which lets React
+// selectors that subscribe to a specific node detect real changes via ===.
+
+type NodeUpdater = (node: VfsNode) => VfsNode | null;
+
+/**
+ * Walk `absPath` inside `root`, apply `updater` to the target node, and return
+ * a new root where every ancestor of the target is a fresh object (so
+ * reference-equality checks on any ancestor will see the change).
+ *
+ * Returns null if the path doesn't exist or `updater` returns null (abort).
+ */
+function updateNode(
+  root: VfsNode,
+  absPath: string,
+  updater: NodeUpdater,
+): VfsNode | null {
+  const parts = splitAbs(absPath);
+
+  function walk(cur: VfsNode, depth: number): VfsNode | null {
+    if (depth === parts.length) {
+      // We're at the target node — apply the updater.
+      return updater(cur);
+    }
+    if (cur.type !== "dir" || !cur.children) return null;
+    const part = parts[depth];
+    const idx = cur.children.findIndex(
+      (c) => c.name.toLowerCase() === part.toLowerCase(),
+    );
+    if (idx === -1) return null;
+    const newChild = walk(cur.children[idx], depth + 1);
+    if (newChild === null) return null;
+    const newChildren = [...cur.children];
+    newChildren[idx] = newChild;
+    return { ...cur, children: newChildren };
+  }
+
+  return walk(root, 0);
+}
+
+/**
+ * Insert `newNode` into the directory at `parentAbsPath`, returning a new root.
+ * Returns null if the parent doesn't exist or is not a directory.
+ */
+function insertNode(
+  root: VfsNode,
+  parentAbsPath: string,
+  newNode: VfsNode,
+): VfsNode | null {
+  // parentAbsPath === "C:\\" means insert directly into root's children
+  if (parentAbsPath.replace(/\\+$/, "").toUpperCase() === "C:") {
+    return { ...root, children: [...(root.children ?? []), newNode] };
+  }
+  return updateNode(root, parentAbsPath, (parent) => {
+    if (parent.type !== "dir") return null;
+    return { ...parent, children: [...(parent.children ?? []), newNode] };
+  });
+}
+
+/**
+ * Remove the node at `absPath` from its parent, returning a new root.
+ */
+function removeNode(root: VfsNode, absPath: string): VfsNode | null {
+  const parts = splitAbs(absPath);
+  if (parts.length === 0) return null;
+  const name = parts[parts.length - 1];
+  const parentParts = parts.slice(0, -1);
+  const parentAbs =
+    parentParts.length === 0 ? "C:\\" : "C:" + SEP + parentParts.join(SEP);
+
+  if (parentParts.length === 0) {
+    return {
+      ...root,
+      children: (root.children ?? []).filter(
+        (c) => c.name.toLowerCase() !== name.toLowerCase(),
+      ),
+    };
+  }
+  return updateNode(root, parentAbs, (parent) => {
+    if (parent.type !== "dir") return null;
+    return {
+      ...parent,
+      children: (parent.children ?? []).filter(
+        (c) => c.name.toLowerCase() !== name.toLowerCase(),
+      ),
+    };
+  });
+}
+
+
 let _id = 0;
 const now = () => Date.now() + _id++;
 const dir = (
@@ -737,12 +830,11 @@ export const useVfsStore = create<VfsState>()(
         if (findNode(get().root, abs)) return false;
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
-        const parentPath = "C:" + SEP + parts.slice(0, -1).join(SEP);
-        const parent =
-          parts.length === 1 ? get().root : findNode(get().root, parentPath);
-        if (!parent || parent.type !== "dir" || !parent.children) return false;
-        parent.children.push(dir(name, [], false));
-        set({ root: { ...get().root } });
+        const parentPath =
+          parts.length === 1 ? "C:\\" : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        const newRoot = insertNode(get().root, parentPath, dir(name, [], false));
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -752,20 +844,28 @@ export const useVfsStore = create<VfsState>()(
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
           if (existing.system || existing.readonly) return false;
-          existing.content = content;
-          existing.archive = true;
-          set({ root: { ...get().root } });
+          // Replace file node immutably
+          const newRoot = updateNode(get().root, abs, (node) => ({
+            ...node,
+            content,
+            archive: true,
+          }));
+          if (!newRoot) return false;
+          set({ root: newRoot });
           return true;
         }
         if (existing) return false; // a dir already there
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
-        const parentPath = "C:" + SEP + parts.slice(0, -1).join(SEP);
-        const parent =
-          parts.length === 1 ? get().root : findNode(get().root, parentPath);
-        if (!parent || parent.type !== "dir" || !parent.children) return false;
-        parent.children.push(file(name, { content, system: false }));
-        set({ root: { ...get().root } });
+        const parentPath =
+          parts.length === 1 ? "C:\\" : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        const newRoot = insertNode(
+          get().root,
+          parentPath,
+          file(name, { content, system: false }),
+        );
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -774,10 +874,9 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.system || ref.node.readonly) return false;
-        ref.parent.children = ref.parent.children!.filter(
-          (c) => c !== ref.node,
-        );
-        set({ root: { ...get().root } });
+        const newRoot = removeNode(get().root, abs);
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -786,15 +885,14 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.system || ref.node.readonly) return false;
-        ref.parent.children = ref.parent.children!.filter(
-          (c) => c !== ref.node,
-        );
+        const newRoot = removeNode(get().root, abs);
+        if (!newRoot) return false;
         const item: RecycledItem = {
           node: ref.node,
           originalPath: abs,
           deletedAt: Date.now(),
         };
-        set({ root: { ...get().root }, recycled: [...get().recycled, item] });
+        set({ root: newRoot, recycled: [...get().recycled, item] });
         return true;
       },
 
@@ -809,22 +907,27 @@ export const useVfsStore = create<VfsState>()(
           parts.length === 1
             ? "C:\\"
             : "C:" + SEP + parts.slice(0, -1).join(SEP);
-        let parent = findNode(get().root, parentPath);
-        if (!parent || parent.type !== "dir" || !parent.children) {
-          // fallback: restore to My Documents
-          parent = findNode(get().root, "C:\\My Documents");
-          if (!parent || parent.type !== "dir" || !parent.children)
-            return false;
-        }
+
+        // Check collision at restore path
+        const parentNode =
+          findNode(get().root, parentPath) ??
+          findNode(get().root, "C:\\My Documents");
+        if (!parentNode || parentNode.type !== "dir") return false;
         if (
-          parent.children.some(
+          (parentNode.children ?? []).some(
             (c) => c.name.toLowerCase() === item.node.name.toLowerCase(),
           )
         )
           return false;
-        parent.children.push(item.node);
+
+        const targetParent =
+          findNode(get().root, parentPath) !== null
+            ? parentPath
+            : "C:\\My Documents";
+        const newRoot = insertNode(get().root, targetParent, item.node);
+        if (!newRoot) return false;
         set({
-          root: { ...get().root },
+          root: newRoot,
           recycled: get().recycled.filter((r) => r !== item),
         });
         return true;
@@ -856,11 +959,12 @@ export const useVfsStore = create<VfsState>()(
           )
         )
           return false;
-        ref.parent.children = ref.parent.children!.filter(
-          (c) => c !== ref.node,
-        );
-        dest.children.push(ref.node);
-        set({ root: { ...get().root } });
+        // Remove from source then insert at dest
+        let newRoot = removeNode(get().root, srcAbs);
+        if (!newRoot) return false;
+        newRoot = insertNode(newRoot, destAbs, ref.node);
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -872,7 +976,6 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const node = findNode(get().root, srcAbs);
         if (!node) return false;
-        // Refuse to copy a folder into itself or one of its descendants.
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         if (
@@ -881,8 +984,9 @@ export const useVfsStore = create<VfsState>()(
           )
         )
           return false;
-        dest.children.push(cloneNode(node));
-        set({ root: { ...get().root } });
+        const newRoot = insertNode(get().root, destAbs, cloneNode(node));
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -899,8 +1003,9 @@ export const useVfsStore = create<VfsState>()(
         const newName = uniqueCopyName(dest, node.name);
         const clone = cloneNode(node);
         clone.name = newName;
-        dest.children.push(clone);
-        set({ root: { ...get().root } });
+        const newRoot = insertNode(get().root, destAbs, clone);
+        if (!newRoot) return null;
+        set({ root: newRoot });
         return newName;
       },
 
@@ -915,17 +1020,21 @@ export const useVfsStore = create<VfsState>()(
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         // No-op if dropped back into its own parent.
-        const srcParentAbs = splitAbs(srcAbs).slice(0, -1).join(SEP) || "C:\\";
+        const srcParts = splitAbs(srcAbs);
+        const srcParentAbs =
+          srcParts.length <= 1
+            ? "C:\\"
+            : "C:" + SEP + srcParts.slice(0, -1).join(SEP);
         if (srcParentAbs.toLowerCase() === destAbs.toLowerCase()) {
           return ref.node.name;
         }
         const newName = uniqueCopyName(dest, ref.node.name);
-        ref.parent.children = ref.parent.children!.filter(
-          (c) => c !== ref.node,
-        );
-        ref.node.name = newName;
-        dest.children.push(ref.node);
-        set({ root: { ...get().root } });
+        const movedNode = { ...ref.node, name: newName };
+        let newRoot = removeNode(get().root, srcAbs);
+        if (!newRoot) return null;
+        newRoot = insertNode(newRoot, destAbs, movedNode);
+        if (!newRoot) return null;
+        set({ root: newRoot });
         return newName;
       },
 
@@ -941,8 +1050,12 @@ export const useVfsStore = create<VfsState>()(
           )
         )
           return false;
-        ref.node.name = newName;
-        set({ root: { ...get().root } });
+        const newRoot = updateNode(get().root, abs, (node) => ({
+          ...node,
+          name: newName,
+        }));
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
 
@@ -960,16 +1073,20 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const node = findNode(get().root, abs);
         if (!node || node.system) return false;
-        if ("hidden" in attrs) node.hidden = attrs.hidden;
-        if ("readonly" in attrs) node.readonly = attrs.readonly;
-        if ("archive" in attrs) node.archive = attrs.archive;
-        set({ root: { ...get().root } });
+        const newRoot = updateNode(get().root, abs, (n) => ({
+          ...n,
+          ...(("hidden" in attrs) && { hidden: attrs.hidden }),
+          ...(("readonly" in attrs) && { readonly: attrs.readonly }),
+          ...(("archive" in attrs) && { archive: attrs.archive }),
+        }));
+        if (!newRoot) return false;
+        set({ root: newRoot });
         return true;
       },
     }),
     {
       name: "rsnra95-vfs",
-      version: 7,
+      version: 8,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",

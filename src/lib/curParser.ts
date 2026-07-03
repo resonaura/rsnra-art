@@ -17,11 +17,9 @@ export async function parseCur(buffer: ArrayBuffer, filename: string, shadowEnab
   }
 
   // First image directory entry
-  const width = view.getUint8(6) || 32;
   const height = view.getUint8(7) || 32;
   const hotspotX = view.getUint16(10, true);
   const hotspotY = view.getUint16(12, true);
-  const bytesInRes = view.getUint32(14, true);
   const imageOffset = view.getUint32(18, true);
 
   // BMP Header

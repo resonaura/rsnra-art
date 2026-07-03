@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createGlobalStyle } from "styled-components";
+import { useShallow } from "zustand/react/shallow";
 import { CURSOR_ROLE_MAP, cursorCss } from "../data/cursors";
 import { installCursorDomPatcher, clearPatchedCursors } from "../lib/cursorDomPatcher";
 import { useCursorStore } from "../store/cursorStore";
@@ -35,29 +36,32 @@ const StyledCursors = createGlobalStyle<{ $c: Record<string, string> }>`
 
 export function CursorGlobalStyle() {
   const schemeId = useCursorStore((s) => s.schemeId);
-  const files = useCursorStore((s) => s.files);
+  const files = useCursorStore(useShallow((s) => s.files));
   const shadowEnabled = useCursorStore((s) => s.shadowEnabled);
-  const [ready, setReady] = useState(false);
+  const [loadedScheme, setLoadedScheme] = useState<string | null>(null);
 
   useEffect(() => installCursorDomPatcher(), []);
 
   useEffect(() => {
-    setReady(false);
     initActiveSchemeCursors(files, shadowEnabled).then(() => {
       clearPatchedCursors();
-      setReady(true);
+      setLoadedScheme(schemeId);
     });
   }, [schemeId, files, shadowEnabled]);
 
-  if (schemeId === "none" || !ready) return null;
+  if (schemeId === "none") return null;
 
-  const vars = Object.fromEntries(
-    Object.entries(files).map(([role, file]) => [role, cursorCss(file)]),
-  );
-  for (const role of Object.keys(CURSOR_ROLE_MAP)) {
-    const def = CURSOR_ROLE_MAP[role as keyof typeof CURSOR_ROLE_MAP];
-    vars[role] ??= cursorCss(def.file);
-  }
+  const vars = useMemo(() => {
+    const v = Object.fromEntries(
+      Object.entries(files).map(([role, file]) => [role, cursorCss(file)]),
+    );
+    for (const role of Object.keys(CURSOR_ROLE_MAP)) {
+      const def = CURSOR_ROLE_MAP[role as keyof typeof CURSOR_ROLE_MAP];
+      v[role] ??= cursorCss(def.file);
+    }
+    return v;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, loadedScheme]);
 
   return <StyledCursors $c={vars} />;
 }
