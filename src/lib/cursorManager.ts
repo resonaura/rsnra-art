@@ -30,7 +30,7 @@ async function fetchCurHotspot(url: string): Promise<[number, number]> {
   return [0, 0];
 }
 
-export async function prefetchHotspot(file: string, url: string): Promise<[number, number]> {
+export async function prefetchHotspot(file: string, url: string, shadowEnabled = true): Promise<[number, number]> {
   if (file.endsWith(".ani") || file.endsWith(".ANI")) {
     if (aniHotspotCache[file]) return aniHotspotCache[file];
     return [0, 0];
@@ -41,7 +41,7 @@ export async function prefetchHotspot(file: string, url: string): Promise<[numbe
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const buffer = await res.arrayBuffer();
-    const parsed = await parseCur(buffer, file);
+    const parsed = await parseCur(buffer, file, shadowEnabled);
     curHotspotCache[file] = parsed.hotspot;
     curBlobUrlCache[file] = parsed.blobUrl;
     return parsed.hotspot;
@@ -64,7 +64,7 @@ export function getResolvedCursorUrl(file: string): string {
   return curBlobUrlCache[file] || `/cursors/${file}`;
 }
 
-export async function startAni(file: string, url: string): Promise<[number, number]> {
+export async function startAni(file: string, url: string, shadowEnabled = true): Promise<[number, number]> {
   if (activeAnimations[file]) {
     return activeAnimations[file].hotspot;
   }
@@ -75,7 +75,13 @@ export async function startAni(file: string, url: string): Promise<[number, numb
     const buffer = await res.arrayBuffer();
     const parsed = await parseAni(buffer);
 
-    const frameUrls = parsed.frames.map((blob) => URL.createObjectURL(blob));
+    const frameUrls = await Promise.all(
+      parsed.frames.map(async (blob, idx) => {
+        const frameBuf = await blob.arrayBuffer();
+        const frameParsed = await parseCur(frameBuf, `${file}_frame_${idx}.cur`, shadowEnabled);
+        return frameParsed.blobUrl;
+      })
+    );
     aniHotspotCache[file] = parsed.hotspot;
 
     const state: AniState = {
@@ -141,7 +147,7 @@ export function clearCurBlobCache() {
   Object.keys(curHotspotCache).forEach((key) => delete curHotspotCache[key]);
 }
 
-export async function initActiveSchemeCursors(files: Record<string, string>) {
+export async function initActiveSchemeCursors(files: Record<string, string>, shadowEnabled = true) {
   stopAllAnimations();
   clearCurBlobCache();
 
@@ -149,9 +155,9 @@ export async function initActiveSchemeCursors(files: Record<string, string>) {
     const isAni = file.endsWith(".ani") || file.endsWith(".ANI");
     const url = `/cursors/${file}`;
     if (isAni) {
-      await startAni(file, url);
+      await startAni(file, url, shadowEnabled);
     } else {
-      await prefetchHotspot(file, url);
+      await prefetchHotspot(file, url, shadowEnabled);
     }
   });
 

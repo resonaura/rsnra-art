@@ -19,9 +19,9 @@ import {
 import { parseAni } from "../../lib/aniParser";
 import { parseCur } from "../../lib/curParser";
 import {
-  SCHEME_FILES,
+  SYSTEM_SCHEMES,
+  getSchemeFiles,
   useCursorStore,
-  type CursorSchemeId,
 } from "../../store/cursorStore";
 import { useWindowStore } from "../../store/windowStore";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
@@ -116,13 +116,6 @@ const PointersHead = styled.div`
 `;
 
 
-const SCHEMES: { id: CursorSchemeId; label: string }[] = [
-  { id: "none", label: "(None)" },
-  { id: "windows", label: "Windows Standard" },
-  { id: "3d-gold", label: "3D Gold" },
-  { id: "3d-silver", label: "3D Silver" },
-  { id: "3d-white", label: "3D White" },
-];
 
 export function CursorPreview({
   file,
@@ -133,6 +126,7 @@ export function CursorPreview({
   style?: any;
   className?: string;
 }) {
+  const shadowEnabled = useCursorStore((s) => s.shadowEnabled);
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,7 +147,13 @@ export function CursorPreview({
           const parsed = await parseAni(buffer);
           if (!active) return;
 
-          objectUrls = parsed.frames.map((blob) => URL.createObjectURL(blob));
+          objectUrls = await Promise.all(
+            parsed.frames.map(async (blob, idx) => {
+              const frameBuf = await blob.arrayBuffer();
+              const frameParsed = await parseCur(frameBuf, `${file}_frame_${idx}.cur`, shadowEnabled);
+              return frameParsed.blobUrl;
+            })
+          );
 
           let step = 0;
           const tick = () => {
@@ -170,7 +170,7 @@ export function CursorPreview({
 
           tick();
         } else {
-          const parsed = await parseCur(buffer, file);
+          const parsed = await parseCur(buffer, file, shadowEnabled);
           if (!active) return;
           setFrameUrl(parsed.blobUrl);
           objectUrls.push(parsed.blobUrl);
@@ -191,7 +191,7 @@ export function CursorPreview({
         }
       });
     };
-  }, [file]);
+  }, [file, shadowEnabled]);
 
   if (!frameUrl)
     return (
@@ -213,26 +213,71 @@ export function MouseProperties({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const storeScheme = useCursorStore((s) => s.schemeId);
   const storeFiles = useCursorStore((s) => s.files);
+  const storeShadowEnabled = useCursorStore((s) => s.shadowEnabled);
   const setScheme = useCursorStore((s) => s.setScheme);
   const setRoleFile = useCursorStore((s) => s.setRoleFile);
-  const resetRoleFile = useCursorStore((s) => s.resetRoleFile);
+  const setShadowEnabled = useCursorStore((s) => s.setShadowEnabled);
+  const saveCustomScheme = useCursorStore((s) => s.saveCustomScheme);
+  const deleteCustomScheme = useCursorStore((s) => s.deleteCustomScheme);
+  const customSchemes = useCursorStore((s) => s.customSchemes);
 
   const [tab, setTab] = useState("Buttons");
-  const [scheme, setLocalScheme] = useState<CursorSchemeId>(storeScheme);
+  const [scheme, setLocalScheme] = useState<string>(storeScheme);
   const [files, setFiles] = useState<Record<CursorRoleId, string>>(storeFiles);
   const [selectedRole, setSelectedRole] = useState<CursorRoleId>("normal");
   const [rightHanded, setRightHanded] = useState(true);
   const [dblClick, setDblClick] = useState(50);
   const [pointerSpeed, setPointerSpeed] = useState(50);
+  const [localShadowEnabled, setLocalShadowEnabled] = useState(storeShadowEnabled);
+
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveName, setSaveName] = useState("");
 
   const { showFileDialog, dialog: fileDialogEl } = useFileDialog();
 
   const apply = () => {
     setScheme(scheme);
+    setShadowEnabled(localShadowEnabled);
     for (const role of CURSOR_ROLES) {
       setRoleFile(role.id, files[role.id]);
     }
   };
+
+  const BUILTIN_SCHEMES = [
+    { id: "none", label: "(None)" },
+    { id: "3d-bronze", label: "3D-Bronze (system scheme)" },
+    { id: "3d-white", label: "3D-White (system scheme)" },
+    { id: "conductor", label: "Conductor (system scheme)" },
+    { id: "dinosaur", label: "Dinosaur (system scheme)" },
+    { id: "hands-1", label: "Hands 1 (system scheme)" },
+    { id: "hands-2", label: "Hands 2 (system scheme)" },
+    { id: "magnified", label: "Magnified (system scheme)" },
+    { id: "old-fashioned", label: "Old Fashioned (system scheme)" },
+    { id: "variations", label: "Variations (system scheme)" },
+    { id: "windows-animated", label: "Windows Animated (system scheme)" },
+    { id: "windows-black", label: "Windows Black (system scheme)" },
+    { id: "windows-black-xl", label: "Windows Black (extra large) (system scheme)" },
+    { id: "windows-black-l", label: "Windows Black (large) (system scheme)" },
+    { id: "windows-default", label: "Windows Default (system scheme)" },
+    { id: "windows-inverted-xl", label: "Windows Inverted (extra large) (system scheme)" },
+    { id: "windows-inverted-l", label: "Windows Inverted (large) (system scheme)" },
+    { id: "windows-inverted", label: "Windows Inverted (system scheme)" },
+    { id: "windows-standard-xl", label: "Windows Standard (extra large) (system scheme)" },
+    { id: "windows-standard-l", label: "Windows Standard (large) (system scheme)" },
+    { id: "windows", label: "Windows Standard" },
+  ];
+
+  const selectOptions = [
+    ...BUILTIN_SCHEMES.map((s) => ({ value: s.id, label: s.label })),
+    ...Object.keys(customSchemes).map((name) => ({ value: name, label: name })),
+  ];
+
+
+  const isBuiltInScheme = (schemeId: string): boolean => {
+    return !!SYSTEM_SCHEMES[schemeId] || schemeId === "none";
+  };
+
+  const currentSchemeLabel = selectOptions.find((o) => o.value === scheme)?.label || scheme;
 
   const selected = CURSOR_ROLES.find((r) => r.id === selectedRole)!;
 
@@ -282,24 +327,40 @@ export function MouseProperties({ windowId }: { windowId: string }) {
         {tab === "Pointers" && (
           <>
             <SchemeRow>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ fontSize: 12, marginBottom: 2 }}>Scheme</div>
                 <Select
                   style={{ zoom: 0.8 }}
                   value={scheme}
-                  options={SCHEMES.map((s) => ({
-                    label: s.label,
-                    value: s.id,
-                  }))}
+                  options={selectOptions}
                   width="100%"
                   onChange={(opt) => {
-                    const nextScheme = opt.value as CursorSchemeId;
+                    const nextScheme = opt.value as string;
                     setLocalScheme(nextScheme);
-                    if (nextScheme !== "none") {
-                      setFiles(SCHEME_FILES[nextScheme]);
-                    }
+                    const nextFiles = getSchemeFiles(nextScheme, customSchemes);
+                    setFiles(nextFiles);
                   }}
                 />
+                <div style={{ display: "flex", gap: 8, marginTop: 4, zoom: 0.8 }}>
+                  <Button
+                    onClick={() => {
+                      setSaveName(currentSchemeLabel.replace(" (system scheme)", ""));
+                      setShowSaveDialog(true);
+                    }}
+                  >
+                    Save As...
+                  </Button>
+                  <Button
+                    disabled={isBuiltInScheme(scheme)}
+                    onClick={() => {
+                      deleteCustomScheme(scheme);
+                      setLocalScheme("windows");
+                      setFiles(SYSTEM_SCHEMES.windows as Record<CursorRoleId, string>);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
               <PreviewBox>
                 {scheme !== "none" && (
@@ -311,7 +372,7 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               </PreviewBox>
             </SchemeRow>
 
-            <div style={{ fontSize: 12 }}>Customize:</div>
+            <div style={{ fontSize: 12, marginTop: 6 }}>Customize:</div>
             <List contentStyle={{ display: "flex", flexDirection: "column" }}>
               {CURSOR_ROLES.map((r) => (
                 <Row
@@ -330,7 +391,7 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                       {r.label}
                     </span>
                     {scheme !== "none" &&
-                      files[r.id] === SCHEME_FILES.windows[r.id] && (
+                      files[r.id] === SYSTEM_SCHEMES.windows[r.id] && (
                         <span style={{ color: "#888", fontSize: 10 }}>
                           (Default)
                         </span>
@@ -346,40 +407,99 @@ export function MouseProperties({ windowId }: { windowId: string }) {
               ))}
             </List>
 
-            <PointersHead style={{ zoom: 0.8 }}>
-              <Button
-                disabled={scheme === "none"}
-                onClick={() => {
-                  const s = scheme === "none" ? "windows" : scheme;
-                  const defFile = SCHEME_FILES[s][selectedRole];
-                  setFiles((f) => ({ ...f, [selectedRole]: defFile }));
-                }}
-                style={{ flex: 1 }}
-              >
-                Use Default
-              </Button>
-              <Button
-                disabled={scheme === "none"}
-                onClick={async () => {
-                  const path = await showFileDialog({
-                    mode: "open",
-                    title: "Browse",
-                    initialDir: "C:\\Windows\\Cursors",
-                    filters: [
-                      { label: "Cursor Files (*.cur;*.ani)", extensions: ["cur", "ani", "CUR", "ANI"] },
-                      { label: "All Files (*.*)", extensions: [] },
-                    ],
-                  });
-                  if (path) {
-                    const filename = path.split("\\").pop()!;
-                    setFiles((f) => ({ ...f, [selectedRole]: filename }));
-                  }
-                }}
-                style={{ flex: 1 }}
-              >
-                Browse...
-              </Button>
-            </PointersHead>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, zoom: 0.8 }}>
+              <Checkbox
+                label="Enable pointer shadow"
+                checked={localShadowEnabled}
+                onChange={(e: any) => setLocalShadowEnabled(e.target.checked)}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button
+                  disabled={files[selectedRole] === SYSTEM_SCHEMES.windows[selectedRole]}
+                  onClick={() => {
+                    const defFile = SYSTEM_SCHEMES.windows[selectedRole];
+                    setFiles((f) => ({ ...f, [selectedRole]: defFile }));
+                  }}
+                  style={{ width: 100 }}
+                >
+                  Use Default
+                </Button>
+                <Button
+                  disabled={scheme === "none"}
+                  onClick={async () => {
+                    const path = await showFileDialog({
+                      mode: "open",
+                      title: "Browse",
+                      initialDir: "C:\\Windows\\Cursors",
+                      filters: [
+                        { label: "Cursor Files (*.cur;*.ani)", extensions: ["cur", "ani", "CUR", "ANI"] },
+                        { label: "All Files (*.*)", extensions: [] },
+                      ],
+                    });
+                    if (path) {
+                      const filename = path.split("\\").pop()!;
+                      setFiles((f) => ({ ...f, [selectedRole]: filename }));
+                    }
+                  }}
+                  style={{ width: 100 }}
+                >
+                  Browse...
+                </Button>
+              </div>
+            </div>
+
+            {showSaveDialog && (
+              <div style={{
+                position: "absolute",
+                inset: 0,
+                background: "rgba(0, 0, 0, 0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 30
+              }}>
+                <Window style={{ width: "300px" }}>
+                  <WindowHeader style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Save Scheme</span>
+                    <Button onClick={() => setShowSaveDialog(false)} square size="sm">x</Button>
+                  </WindowHeader>
+                  <WindowContent style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ fontSize: 12 }}>Save this cursor scheme as:</div>
+                    <input
+                      type="text"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      style={{
+                        padding: "4px",
+                        fontSize: "12px",
+                        border: "2px solid",
+                        borderColor: "#848484 #dfdfdf #dfdfdf #848484",
+                        background: "white",
+                        color: "black"
+                      }}
+                      autoFocus
+                    />
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                      <Button
+                        disabled={!saveName.trim()}
+                        onClick={() => {
+                          const trimmed = saveName.trim();
+                          saveCustomScheme(trimmed, files);
+                          setLocalScheme(trimmed);
+                          setShowSaveDialog(false);
+                        }}
+                        style={{ width: "60px" }}
+                      >
+                        OK
+                      </Button>
+                      <Button onClick={() => setShowSaveDialog(false)} style={{ width: "60px" }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </WindowContent>
+                </Window>
+              </div>
+            )}
 
             {fileDialogEl}
           </>

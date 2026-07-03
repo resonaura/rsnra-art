@@ -36,17 +36,18 @@ const StyledCursors = createGlobalStyle<{ $c: Record<string, string> }>`
 export function CursorGlobalStyle() {
   const schemeId = useCursorStore((s) => s.schemeId);
   const files = useCursorStore((s) => s.files);
+  const shadowEnabled = useCursorStore((s) => s.shadowEnabled);
   const [ready, setReady] = useState(false);
 
   useEffect(() => installCursorDomPatcher(), []);
 
   useEffect(() => {
     setReady(false);
-    initActiveSchemeCursors(files).then(() => {
+    initActiveSchemeCursors(files, shadowEnabled).then(() => {
       clearPatchedCursors();
       setReady(true);
     });
-  }, [schemeId, files]);
+  }, [schemeId, files, shadowEnabled]);
 
   if (schemeId === "none" || !ready) return null;
 

@@ -38,8 +38,7 @@ const REPEAT_INTERVAL = 60; // ms between repeated scrolls
  * 1×1 checkerboard pattern used on the scrollbar track — identical to the
  * pattern previously defined in main.css.
  */
-const TRACK_BG =
-  'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAyIDIiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+CjxtZXRhZGF0YT5NYWRlIHdpdGggUGl4ZWxzIHRvIFN2ZyBodHRwczovL2NvZGVwZW4uaW8vc2hzaGF3L3Blbi9YYnh2Tmo8L21ldGFkYXRhPgo8cGF0aCBzdHJva2U9IiNjMGMwYzAiIGQ9Ik0wIDBoMU0xIDFoMSIgLz4KPC9zdmc+")';
+const TRACK_BG = "var(--checker)";
 
 // ── arrow glyphs (pixel-art SVGs, same paths as the old CSS data-URIs) ───────
 

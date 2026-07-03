@@ -1,8 +1,8 @@
+import { useShallow } from "zustand/react/shallow";
 import { playSound } from "../lib/audio";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
-import { useShallow } from "zustand/react/shallow";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 import { getPreferredApp } from "./fileOpen";
@@ -124,7 +124,7 @@ export function useStartMenuTree(): MenuNode[] {
           children: [
             {
               id: "terminal",
-              label: "MS-DOS Prompt",
+              label: "Command Prompt",
               icon: "/icons/terminal.png",
               action: run(() => openApp("terminal")),
             },

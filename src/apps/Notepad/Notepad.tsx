@@ -47,7 +47,7 @@ const Layout = styled.div`
 const EditorScroll = styled(ScrollArea)`
   flex: 1;
   min-height: 0;
-  background: white;
+  background: ${({ theme }) => theme.canvas};
 `;
 
 const TextArea = styled.textarea<{ $noWrap?: boolean }>`
@@ -59,8 +59,8 @@ const TextArea = styled.textarea<{ $noWrap?: boolean }>`
   padding: 8px;
   font-size: 13px;
   line-height: 1.4;
-  background: white;
-  color: #000;
+  background: ${({ theme }) => theme.canvas};
+  color: ${({ theme }) => theme.canvasText};
   overflow: hidden;
 
   ${({ $noWrap }) =>

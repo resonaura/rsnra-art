@@ -7,6 +7,7 @@ import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { getPreferredApp } from "../../data/fileOpen";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
@@ -206,7 +207,7 @@ const AddressField = styled(Frame)`
 
 const IconGrid = styled(ScrollArea)`
   flex: 1;
-  background: white;
+  background: ${({ theme }) => theme.canvas};
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest}
@@ -585,10 +586,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
     disabled: game.disabled,
   } as any));
 
-  const getIcon = (node: VfsNode): string => {
-    if ((node as any).icon) return (node as any).icon;
-    return iconForNode(node);
-  };
 
   const describeTypeLocal = (node: VfsNode): string => {
     if (path === "Control Panel") return "Control Panel Extension";
@@ -1204,7 +1201,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       }}
     >
       <div style={{ position: "relative" }}>
-        <img src={getIcon(node)} alt="" draggable={false} />
+        <FileIcon node={node} />
         {node.system && <LockGlyph />}
       </div>
       {renaming === node.name ? renameBox() : node.name}
@@ -1221,7 +1218,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       style={{ opacity: nodeOpacity(node) }}
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
-        <img src={getIcon(node)} alt="" draggable={false} />
+        <FileIcon node={node} />
         {node.system && <LockGlyph />}
       </div>
       <span
@@ -1247,7 +1244,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     >
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>
-          <img src={getIcon(node)} alt="" draggable={false} />
+          <FileIcon node={node} />
           {node.system && <LockGlyph />}
         </div>
         {renaming === node.name ? (

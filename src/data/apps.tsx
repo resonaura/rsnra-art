@@ -99,7 +99,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   },
   terminal: {
     id: "terminal",
-    title: "MS-DOS Prompt",
+    title: "Command Prompt",
     icon: "/icons/terminal.png",
     component: asComponent(TerminalApp),
     width: 600,

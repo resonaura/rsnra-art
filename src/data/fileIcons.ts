@@ -25,7 +25,7 @@ const EXT_ICONS: Record<string, string> = {
 };
 
 const FOLDER_OPEN = "/icons/folder-open.png";
-const DEFAULT_FILE = "/icons/file-txt.png";
+const DEFAULT_FILE = "/icons/w98_document.png";
 
 export function extIcon(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";

@@ -59,8 +59,7 @@ const sunken = css`
 // Classic Win98 transparency checkerboard (2x2 grayscale PNG), identical to
 // jspaint's os-gui --checker. Applied to the selected tool, current colors and
 // the canvas area background, exactly like jspaint's classic.css.
-const CHECKER =
-  'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAG0lEQVQYV2P8/////4MHDzIwHjhw4L+9vT0DAHAFCj6esq3FAAAAAElFTkSuQmCC")';
+const CHECKER = "var(--checker)";
 
 const Root = styled.div`
   position: relative;

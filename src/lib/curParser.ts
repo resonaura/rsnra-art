@@ -3,7 +3,7 @@ export interface CurData {
   hotspot: [number, number];
 }
 
-export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<CurData> {
+export async function parseCur(buffer: ArrayBuffer, filename: string, shadowEnabled = true): Promise<CurData> {
   const view = new DataView(buffer);
 
   // Header
@@ -12,6 +12,7 @@ export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<C
   const count = view.getUint16(4, true);
 
   if (reserved !== 0 || type !== 2 || count === 0) {
+    console.warn(`[parseCur] Invalid header for ${filename}: reserved=${reserved} type=${type} count=${count}`);
     throw new Error("Invalid CUR file");
   }
 
@@ -154,10 +155,14 @@ export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<C
           imgData.data[pixelIdx + 1] = color.g;
           imgData.data[pixelIdx + 2] = color.b;
           imgData.data[pixelIdx + 3] = 255;
+        } else if (paletteIdx !== 0) {
+          // AND=1, XOR!=0 → screen inversion, render as white
+          imgData.data[pixelIdx] = 255;
+          imgData.data[pixelIdx + 1] = 255;
+          imgData.data[pixelIdx + 2] = 255;
+          imgData.data[pixelIdx + 3] = 255;
         } else {
-          imgData.data[pixelIdx] = 0;
-          imgData.data[pixelIdx + 1] = 0;
-          imgData.data[pixelIdx + 2] = 0;
+          // AND=1, XOR=0 → fully transparent
           imgData.data[pixelIdx + 3] = 0;
         }
       }
@@ -201,11 +206,14 @@ export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<C
           imgData.data[pixelIdx + 1] = color.g;
           imgData.data[pixelIdx + 2] = color.b;
           imgData.data[pixelIdx + 3] = 255;
+        } else if (paletteIdx !== 0) {
+          // AND=1, XOR!=0 → screen inversion, render as white
+          imgData.data[pixelIdx] = 255;
+          imgData.data[pixelIdx + 1] = 255;
+          imgData.data[pixelIdx + 2] = 255;
+          imgData.data[pixelIdx + 3] = 255;
         } else {
-          // Transparent (AND=1, XOR=0 or inversion)
-          imgData.data[pixelIdx] = 0;
-          imgData.data[pixelIdx + 1] = 0;
-          imgData.data[pixelIdx + 2] = 0;
+          // AND=1, XOR=0 → fully transparent
           imgData.data[pixelIdx + 3] = 0;
         }
       }
@@ -220,6 +228,21 @@ export async function parseCur(buffer: ArrayBuffer, filename: string): Promise<C
 
 
   ctx.putImageData(imgData, 0, 0);
+
+  if (shadowEnabled) {
+    // Apply a very soft, light drop-shadow baked directly into the canvas
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = realWidth;
+    tempCanvas.height = realHeight;
+    const tempCtx = tempCanvas.getContext("2d")!;
+    tempCtx.putImageData(imgData, 0, 0);
+
+    ctx.clearRect(0, 0, realWidth, realHeight);
+    ctx.filter = "drop-shadow(1px 1px 0.5px rgba(0, 0, 0, 0.15))";
+    ctx.drawImage(tempCanvas, 0, 0);
+    ctx.filter = "none";
+  }
+
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) {
