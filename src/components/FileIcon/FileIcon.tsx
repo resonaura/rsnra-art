@@ -4,6 +4,7 @@ import { parseAni } from "../../lib/aniParser";
 import { parseCur } from "../../lib/curParser";
 import { type VfsNode } from "../../store/vfsStore";
 import { useCursorStore } from "../../store/cursorStore";
+import { Icon } from "../Icon/Icon";
 
 export function isCursorFile(node: VfsNode): boolean {
   if (node.type !== "file") return false;
@@ -13,11 +14,12 @@ export function isCursorFile(node: VfsNode): boolean {
 
 interface FileIconProps {
   node: VfsNode;
+  size?: number;
   style?: React.CSSProperties;
   className?: string;
 }
 
-export function FileIcon({ node, style, className }: FileIconProps) {
+export function FileIcon({ node, size = 32, style, className }: FileIconProps) {
   const shadowEnabled = useCursorStore((s) => s.shadowEnabled);
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -98,11 +100,11 @@ export function FileIcon({ node, style, className }: FileIconProps) {
 
   if (!isCursorFile(node) || !frameUrl) {
     return (
-      <img
+      <Icon
         src={defaultIcon}
-        alt=""
+        size={size}
         draggable={false}
-        style={{ imageRendering: "pixelated", ...style }}
+        style={style}
         className={className}
       />
     );

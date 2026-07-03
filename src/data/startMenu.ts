@@ -1,11 +1,13 @@
 import { useShallow } from "zustand/react/shallow";
 import { playSound } from "../lib/audio";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
+import { showMissingFileAlert } from "../store/alertStore";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 import { getPreferredApp } from "./fileOpen";
+import { GAMES } from "./games";
 
 export interface MenuNode {
   id: string;
@@ -51,14 +53,14 @@ function docChildren(
       nodes.push({
         id: abs,
         label: node.name,
-        icon: "/icons/folder-open.png",
+        icon: "/icons/w2k_directory_open.ico",
         children: docChildren(abs, vfs),
       });
     } else {
       nodes.push({
         id: abs,
         label: node.name,
-        icon: "/icons/notepad-file.png",
+        icon: "/icons/w2k_text_file.ico",
         action: run(() => openFile(abs, node)),
       });
     }
@@ -115,23 +117,23 @@ export function useStartMenuTree(): MenuNode[] {
     {
       id: "programs",
       label: "Programs",
-      icon: "/icons/w2k-programs.png",
+      icon: "/icons/w2k-programs.ico",
       children: [
         {
           id: "accessories",
           label: "Accessories",
-          icon: "/icons/folder-open.png",
+          icon: "/icons/w2k_folder_open.ico",
           children: [
             {
               id: "terminal",
               label: "Command Prompt",
-              icon: "/icons/terminal.png",
+              icon: "/icons/w98_console_prompt.ico",
               action: run(() => openApp("terminal")),
             },
             {
               id: "notepad",
               label: "Notepad",
-              icon: "/icons/notepad.png",
+              icon: "/icons/w2k_notepad_2.ico",
               action: run(() =>
                 openApp("notepad", {
                   title: "bio.txt - Notepad",
@@ -142,132 +144,104 @@ export function useStartMenuTree(): MenuNode[] {
             {
               id: "paint",
               label: "Paint",
-              icon: "/icons/paint.png",
+              icon: "/icons/w2k_paint.ico",
               action: run(() => openApp("paint")),
             },
             {
               id: "calculator",
               label: "Calculator",
-              icon: "/icons/calculator.png",
+              icon: "/icons/w98_calculator.ico",
               action: run(() => openApp("calculator")),
             },
             {
               id: "sound-recorder",
               label: "Sound Recorder",
-              icon: "/icons/sound-recorder.png",
+              icon: "/icons/w98_cassette_tape.ico",
               action: run(() => openApp("sound-recorder")),
             },
             {
               id: "charmap",
               label: "Character Map",
-              icon: "/icons/w98_charmap.png",
+              icon: "/icons/w98_charmap.ico",
               action: run(() => openApp("charmap")),
             },
           ],
         },
         {
-          id: "winamp",
-          label: "Winamp",
-          icon: "/icons/winamp.png",
-          action: run(() => openWebamp()),
-        },
-        {
           id: "games",
           label: "Games",
-          icon: "/icons/joystick.png",
-          children: [
-            {
-              id: "minesweeper",
-              label: "Minesweeper",
-              icon: "/icons/minesweeper.png",
-              action: run(() => openApp("minesweeper")),
-            },
-            {
-              id: "snake",
-              label: "RSNRA Snake",
-              icon: "/icons/joystick.png",
-              action: run(() => openApp("snake")),
-            },
-            {
-              id: "solitaire",
-              label: "Solitaire",
-              icon: "/icons/solitaire.png",
-              action: run(() => openApp("solitaire")),
-            },
-            {
-              id: "pinball",
-              label: "3D Pinball",
-              icon: "/icons/pinball.png",
-              action: run(() => openApp("pinball")),
-            },
-          ],
+          icon: "/icons/w98_joystick.ico",
+          // Mirrors the actual C:\...\Games folder (src/data/games.ts) —
+          // including entries with nothing installed, which fail with the
+          // same "file missing or corrupted" alert as double-clicking them
+          // in My Computer, instead of just being grayed out.
+          children: GAMES.map((g) => ({
+            id: `game-${g.label}`,
+            label: g.label,
+            icon: g.icon,
+            action: run(() =>
+              g.onOpen && !g.disabled
+                ? g.onOpen()
+                : showMissingFileAlert(g.label, g.file),
+            ),
+          })),
         },
         {
-          id: "my-computer",
-          label: "My Computer",
-          icon: "/icons/computer.png",
-          action: run(() => openApp("my-computer")),
+          id: "winamp",
+          label: "Winamp",
+          icon: "/icons/WinAMP_7.ico",
+          action: run(() => openWebamp()),
         },
       ],
     },
     {
       id: "documents",
       label: "Documents",
-      icon: "/icons/documents.png",
+      icon: "/icons/w2k_documents.ico",
       iconScale: 1.33,
       children: docs,
     },
     {
       id: "settings",
       label: "Settings",
-      icon: "/icons/settings.png",
+      icon: "/icons/w2k_settings.ico",
       iconScale: 1.33,
       children: [
         {
           id: "control-panel",
           label: "Control Panel",
-          icon: "/icons/control-panel.png",
+          icon: "/icons/w2k_control_panel.ico",
           action: run(() => openApp("control-panel")),
-        },
-        {
-          id: "taskbar-settings",
-          label: "Taskbar...",
-          icon: "/icons/settings.png",
-          disabled: true,
         },
       ],
     },
     {
       id: "find",
       label: "Find",
-      icon: "/icons/find.png",
+      icon: "/icons/w2k_search2.ico",
       iconScale: 1.33,
       children: [
         {
           id: "find-files",
           label: "Files or Folders...",
-          icon: "/icons/find.png",
+          icon: "/icons/w2k_search2.ico",
+          iconScale: 1.33,
           action: run(() => openApp("find")),
-        },
-        {
-          id: "find-computer",
-          label: "Computer...",
-          icon: "/icons/computer.png",
-          disabled: true,
         },
       ],
     },
     {
       id: "help",
       label: "Help",
-      icon: "/icons/help.png",
+      icon: "/icons/w2k_help.ico",
       iconScale: 1.33,
       action: run(() => openApp("help")),
     },
     {
       id: "run",
       label: "Run...",
-      icon: "/icons/w98_application_hourglass.png",
+      icon: "/icons/w2k_run.ico",
+      iconScale: 1.33,
       action: () => {
         useWindowStore.getState().setRunDialogOpen(true);
         closeStartMenu();
@@ -276,7 +250,7 @@ export function useStartMenuTree(): MenuNode[] {
     {
       id: "shut-down",
       label: "Shut Down...",
-      icon: "/icons/battery.png",
+      icon: "/icons/w2k_shutdown.ico",
       iconScale: 1.33,
       action: requestShutdown,
     },

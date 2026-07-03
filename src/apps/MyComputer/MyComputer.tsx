@@ -3,12 +3,13 @@ import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
+import { FileIcon } from "../../components/FileIcon/FileIcon";
+import { Icon } from "../../components/Icon/Icon";
 import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
-import { iconForNode } from "../../data/fileIcons";
-import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { getPreferredApp } from "../../data/fileOpen";
+import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
@@ -410,34 +411,39 @@ interface Drive {
 const DRIVES: Drive[] = [
   {
     label: "3½ Floppy (A:)",
-    icon: "/icons/floppy.png",
+    icon: "/icons/w2k_floppy_2.ico",
     target: "A:\\",
     kind: "drive",
     notReady: true,
   },
   {
     label: "Local Disk (C:)",
-    icon: "/icons/disk-drive.png",
+    icon: "/icons/w2k_hard_drive.ico",
     target: "C:\\",
     kind: "drive",
   },
   {
     label: "Audio CD (D:)",
-    icon: "/icons/music-cd.png",
+    icon: "/icons/w2k_cd_audio.ico",
     target: "D:\\",
     kind: "drive",
     notReady: true,
   },
   {
     label: "Control Panel",
-    icon: "/icons/control-panel.png",
+    icon: "/icons/w2k_control_panel.ico",
     target: "Control Panel",
     kind: "drive",
   },
-  { label: "Printers", icon: "/icons/printers.png", target: "", kind: "app" },
+  {
+    label: "Printers",
+    icon: "/icons/w2k_printers.ico",
+    target: "",
+    kind: "app",
+  },
   {
     label: "Dial-Up Networking",
-    icon: "/icons/folder-open.png",
+    icon: "/icons/w2k_folder_open.ico",
     target: "",
     kind: "app",
   },
@@ -452,75 +458,120 @@ interface AppletItem {
   file: string;
 }
 const APPLETS: AppletItem[] = [
-  { label: "Accessibility Options", icon: "/icons/w98_access_wheelchair_big.png", file: "access.cpl" },
-  { label: "Add New Hardware", icon: "/icons/w98_hardware.png", file: "sysdm.cpl" },
-  { label: "Add/Remove Programs", icon: "/icons/w98_program_manager.png", file: "appwiz.cpl" },
-  { label: "Automatic Updates", icon: "/icons/w98_windows_update_large.png", file: "wuaucpl.cpl" },
-  { label: "Date/Time", icon: "/icons/w98_time_and_date.png", onOpen: () => openApp("datetime"), file: "timedate.cpl" },
-  { label: "Dial-Up Networking", icon: "/icons/w98_conn_dialup.png", file: "rnaui.dll" },
+  {
+    label: "Accessibility Options",
+    icon: "/icons/w98_access_wheelchair_big.ico",
+    file: "access.cpl",
+  },
+  {
+    label: "Add New Hardware",
+    icon: "/icons/w98_hardware.ico",
+    file: "sysdm.cpl",
+  },
+  {
+    label: "Add/Remove Programs",
+    icon: "/icons/w98_program_manager.ico",
+    file: "appwiz.cpl",
+  },
+  {
+    label: "Automatic Updates",
+    icon: "/icons/w98_windows_update_large.ico",
+    file: "wuaucpl.cpl",
+  },
+  {
+    label: "Date/Time",
+    icon: "/icons/w98_time_and_date.ico",
+    onOpen: () => openApp("datetime"),
+    file: "timedate.cpl",
+  },
+  {
+    label: "Dial-Up Networking",
+    icon: "/icons/w98_conn_dialup.ico",
+    file: "rnaui.dll",
+  },
   {
     label: "Display",
-    icon: "/icons/w98_display_properties.png",
+    icon: "/icons/w98_display_properties.ico",
     onOpen: () => openApp("display-properties"),
     file: "desk.cpl",
   },
-  { label: "Folder Options", icon: "/icons/folder-open.png", file: "shell32.dll" },
-  { label: "Fonts", icon: "/icons/w98_font_tt.png", file: "fontext.dll" },
-  { label: "Gaming Options", icon: "/icons/joystick.png", file: "joy.cpl" },
-  { label: "Internet Options", icon: "/icons/w98_internet_options.png", file: "inetcpl.cpl" },
-  { label: "Keyboard", icon: "/icons/w98_keyboard.png", file: "main.cpl" },
-  { label: "Modems", icon: "/icons/w98_conn_dialup_alt.png", file: "modem.cpl" },
-  { label: "Mouse", icon: "/icons/w98_mouse.png", onOpen: () => openApp("mouse-properties"), file: "main.cpl" },
-  { label: "Network", icon: "/icons/w98_network.png", file: "netcpl.cpl" },
-  { label: "ODBC Data Sources (32bit)", icon: "/icons/w98_odbc.png", file: "odbccp32.cpl" },
-  { label: "Passwords", icon: "/icons/w98_users_key.png", file: "password.cpl" },
-  { label: "Power Options", icon: "/icons/w98_power_management.png", file: "powercfg.cpl" },
-  { label: "Printers", icon: "/icons/w98_printer_big.png", file: "printers.dll" },
-  { label: "Regional Settings", icon: "/icons/globe.png", file: "intl.cpl" },
-  { label: "Scanners and Cameras", icon: "/icons/w98_scanner_camera.png", file: "sticpl.cpl" },
-  { label: "Scheduled Tasks", icon: "/icons/w2k_scheduled_tasks.png", file: "mstask.dll" },
-  { label: "Sounds and Multimedia", icon: "/icons/w98_mixer_sound.png", file: "mmsys.cpl" },
-  { label: "System", icon: "/icons/computer.png", onOpen: () => openApp("system-properties"), file: "sysdm.cpl" },
-  { label: "Telephony", icon: "/icons/w98_telephony.png", file: "telephon.cpl" },
-  { label: "Users", icon: "/icons/w98_users.png", file: "nwc.cpl" },
-];
-
-interface GameItem {
-  label: string;
-  icon: string;
-  onOpen?: () => void;
-  disabled?: boolean;
-  // .exe shown in the "file not found" alert for games that aren't installed.
-  file: string;
-}
-const GAMES: GameItem[] = [
   {
-    label: "Minesweeper",
-    icon: "/icons/minesweeper.png",
-    onOpen: () => openApp("minesweeper"),
-    file: "winmine.exe",
+    label: "Folder Options",
+    icon: "/icons/w98_directory_open.ico",
+    file: "shell32.dll",
+  },
+  { label: "Fonts", icon: "/icons/w98_font_tt.ico", file: "fontext.dll" },
+  { label: "Gaming Options", icon: "/icons/w98_joystick.ico", file: "joy.cpl" },
+  {
+    label: "Internet Options",
+    icon: "/icons/w98_internet_options.ico",
+    file: "inetcpl.cpl",
+  },
+  { label: "Keyboard", icon: "/icons/w98_keyboard.ico", file: "main.cpl" },
+  {
+    label: "Modems",
+    icon: "/icons/w98_conn_dialup_alt.ico",
+    file: "modem.cpl",
   },
   {
-    label: "RSNRA Snake",
-    icon: "/icons/joystick.png",
-    onOpen: () => openApp("snake"),
-    file: "snake.exe",
+    label: "Mouse",
+    icon: "/icons/w98_mouse.ico",
+    onOpen: () => openApp("mouse-properties"),
+    file: "main.cpl",
+  },
+  { label: "Network", icon: "/icons/w98_network.ico", file: "netcpl.cpl" },
+  {
+    label: "ODBC Data Sources (32bit)",
+    icon: "/icons/w98_odbc.ico",
+    file: "odbccp32.cpl",
   },
   {
-    label: "Solitaire",
-    icon: "/icons/solitaire.png",
-    onOpen: () => openApp("solitaire"),
-    file: "sol.exe",
+    label: "Passwords",
+    icon: "/icons/w98_users_key.ico",
+    file: "password.cpl",
   },
   {
-    label: "3D Pinball",
-    icon: "/icons/pinball.png",
-    onOpen: () => openApp("pinball"),
-    file: "pinball.exe",
+    label: "Power Options",
+    icon: "/icons/w98_power_management.ico",
+    file: "powercfg.cpl",
   },
-  { label: "Hearts", icon: "/icons/hearts.png", disabled: true, file: "mshearts.exe" },
-  { label: "FreeCell", icon: "/icons/freecell.png", disabled: true, file: "freecell.exe" },
-  { label: "Spider", icon: "/icons/spider.png", disabled: true, file: "spider.exe" },
+  {
+    label: "Printers",
+    icon: "/icons/w98_printer_big.ico",
+    file: "printers.dll",
+  },
+  {
+    label: "Regional Settings",
+    icon: "/icons/w98_entire_network_globe.ico",
+    file: "intl.cpl",
+  },
+  {
+    label: "Scanners and Cameras",
+    icon: "/icons/w98_scanner_camera.ico",
+    file: "sticpl.cpl",
+  },
+  {
+    label: "Scheduled Tasks",
+    icon: "/icons/w2k_scheduled_tasks.ico",
+    file: "mstask.dll",
+  },
+  {
+    label: "Sounds and Multimedia",
+    icon: "/icons/w98_mixer_sound.ico",
+    file: "mmsys.cpl",
+  },
+  {
+    label: "System",
+    icon: "/icons/w2k_computer.ico",
+    onOpen: () => openApp("system-properties"),
+    file: "sysdm.cpl",
+  },
+  {
+    label: "Telephony",
+    icon: "/icons/w98_telephony.ico",
+    file: "telephon.cpl",
+  },
+  { label: "Users", icon: "/icons/w98_users.ico", file: "nwc.cpl" },
 ];
 
 interface CtxState {
@@ -574,31 +625,49 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("large");
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<"name" | "size" | "type" | "date">(
+    "name",
+  );
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const toggleSort = (key: typeof sortKey) => {
+    if (key === sortKey) setSortDir((d) => (d * -1) as 1 | -1);
+    else {
+      setSortKey(key);
+      setSortDir(1);
+    }
+  };
+  const sortArrow = (key: typeof sortKey) =>
+    sortKey === key ? (sortDir === 1 ? " ▲" : " ▼") : "";
 
   const isRoot = path === MY_COMPUTER;
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
   const driveNotReady = /^[AD]:\\$/.test(path);
   const showHidden = useFilePrefsStore((s) => s.showHidden);
-  const controlPanelNodes: VfsNode[] = APPLETS.map((applet) => ({
-    name: applet.label,
-    type: "file",
-    created: Date.now(),
-    icon: applet.icon,
-    onOpen: applet.onOpen,
-    disabled: !applet.onOpen,
-    file: applet.file,
-  } as any));
+  const controlPanelNodes: VfsNode[] = APPLETS.map(
+    (applet) =>
+      ({
+        name: applet.label,
+        type: "file",
+        created: Date.now(),
+        icon: applet.icon,
+        onOpen: applet.onOpen,
+        disabled: !applet.onOpen,
+        file: applet.file,
+      }) as any,
+  );
 
-  const gamesNodes: VfsNode[] = GAMES.map((game) => ({
-    name: game.label,
-    type: "file",
-    created: Date.now(),
-    icon: game.icon,
-    onOpen: game.onOpen,
-    disabled: game.disabled,
-    file: game.file,
-  } as any));
-
+  const gamesNodes: VfsNode[] = GAMES.map(
+    (game) =>
+      ({
+        name: game.label,
+        type: "file",
+        created: Date.now(),
+        icon: game.icon,
+        onOpen: game.onOpen,
+        disabled: game.disabled,
+        file: game.file,
+      }) as any,
+  );
 
   const describeTypeLocal = (node: VfsNode): string => {
     if (path === "Control Panel") return "Control Panel Extension";
@@ -617,8 +686,30 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const allEntries: VfsNode[] =
-    isRoot || driveNotReady || path === "Control Panel" || path === "Games" ? [] : (vfs.list(path) ?? []);
+    isRoot || driveNotReady || path === "Control Panel" || path === "Games"
+      ? []
+      : (vfs.list(path) ?? []);
   const entries = showHidden ? allEntries : allEntries.filter((n) => !n.hidden);
+
+  const sortValue = (n: VfsNode): string | number => {
+    switch (sortKey) {
+      case "size":
+        return n.type === "dir"
+          ? -1
+          : n.content
+            ? contentByteSize(n.content)
+            : n.appId
+              ? 32768
+              : 0;
+      case "type":
+        return describeTypeLocal(n);
+      case "date":
+        return n.created;
+      default:
+        return n.name.toLowerCase();
+    }
+  };
+
   const sorted =
     path === "Control Panel"
       ? controlPanelNodes
@@ -626,21 +717,29 @@ export function MyComputer({ windowId }: { windowId: string }) {
         ? gamesNodes
         : [...entries].sort((a, b) => {
             if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-            return a.name.localeCompare(b.name);
+            const av = sortValue(a);
+            const bv = sortValue(b);
+            const base =
+              typeof av === "number" && typeof bv === "number"
+                ? av - bv
+                : String(av).localeCompare(String(bv));
+            return base * sortDir;
           });
 
   // Sync the window title + icon to the current path — just like real Win95 Explorer
   useEffect(() => {
     updateTitle(windowId, isRoot ? MY_COMPUTER : path);
-    let icon = "/icons/folder-open.png";
+    let icon = "/icons/w98_directory_open.ico";
     if (isRoot) {
-      icon = "/icons/computer.png";
+      icon = "/icons/w2k_my_computer.ico";
     } else if (path === "Control Panel") {
-      icon = "/icons/control-panel.png";
+      icon = "/icons/w2k_control_panel.ico";
     } else if (path === "Games") {
-      icon = "/icons/joystick.png";
+      icon = "/icons/w98_joystick.ico";
     } else if (isDriveRoot) {
-      icon = DRIVES.find((d) => d.target === path)?.icon ?? "/icons/disk-drive.png";
+      icon =
+        DRIVES.find((d) => d.target === path)?.icon ??
+        "/icons/w98_hard_disk_drive.ico";
     }
     updateIcon(windowId, icon);
   }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon]);
@@ -953,18 +1052,31 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Paste",
           action: paste,
           disabled:
-            isRoot || path === "Control Panel" || path === "Games" || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady ||
+            !clipboard.mode ||
+            !clipboard.sourcePath,
         },
         { label: "", action: () => {}, divider: true },
         {
           label: "New Folder",
           action: newFolder,
-          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
+          disabled:
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady,
         },
         {
           label: "New Text Document",
           action: newTextFile,
-          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
+          disabled:
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady,
         },
       ];
 
@@ -1004,12 +1116,20 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "New Folder",
           action: newFolder,
-          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
+          disabled:
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady,
         },
         {
           label: "New Text Document",
           action: newTextFile,
-          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady,
+          disabled:
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady,
         },
         { label: "", divider: true },
         {
@@ -1027,7 +1147,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Delete",
           action: () => selectedNode && deleteNode(selectedNode),
-          disabled: !selectedNode || path === "Control Panel" || path === "Games",
+          disabled:
+            !selectedNode || path === "Control Panel" || path === "Games",
         },
         {
           label: "Rename",
@@ -1037,12 +1158,14 @@ export function MyComputer({ windowId }: { windowId: string }) {
               setRenameVal(selectedNode.name);
             }
           },
-          disabled: !selectedNode || path === "Control Panel" || path === "Games",
+          disabled:
+            !selectedNode || path === "Control Panel" || path === "Games",
         },
         {
           label: "Properties",
           action: () => selectedNode && propertiesOf(selectedNode),
-          disabled: !selectedNode || path === "Control Panel" || path === "Games",
+          disabled:
+            !selectedNode || path === "Control Panel" || path === "Games",
         },
         { label: "", divider: true },
         { label: "Close", action: () => closeWindow(windowId) },
@@ -1056,28 +1179,46 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Cut",
           action: () => selectedNode && cutSelected(selectedNode),
-          disabled: !selectedNode || !!selectedNode?.system || path === "Control Panel" || path === "Games",
+          disabled:
+            !selectedNode ||
+            !!selectedNode?.system ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         {
           label: "Copy",
           action: () => selectedNode && copySelected(selectedNode),
-          disabled: !selectedNode || !!selectedNode?.system || path === "Control Panel" || path === "Games",
+          disabled:
+            !selectedNode ||
+            !!selectedNode?.system ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         {
           label: "Paste",
           action: paste,
-          disabled: isRoot || path === "Control Panel" || path === "Games" || driveNotReady || !clipboard.mode || !clipboard.sourcePath,
+          disabled:
+            isRoot ||
+            path === "Control Panel" ||
+            path === "Games" ||
+            driveNotReady ||
+            !clipboard.mode ||
+            !clipboard.sourcePath,
         },
         { label: "", divider: true },
         {
           label: "Select All",
           action: () => {
             if (path === "Control Panel") {
-              setSelected(APPLETS.length ? APPLETS[APPLETS.length - 1].label : null);
+              setSelected(
+                APPLETS.length ? APPLETS[APPLETS.length - 1].label : null,
+              );
             } else if (path === "Games") {
               setSelected(GAMES.length ? GAMES[GAMES.length - 1].label : null);
             } else {
-              setSelected(sorted.length ? sorted[sorted.length - 1].name : null);
+              setSelected(
+                sorted.length ? sorted[sorted.length - 1].name : null,
+              );
             }
           },
         },
@@ -1230,7 +1371,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       style={{ opacity: nodeOpacity(node) }}
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
-        <FileIcon node={node} />
+        <FileIcon node={node} size={16} />
         {node.system && <LockGlyph />}
       </div>
       <span
@@ -1256,7 +1397,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     >
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>
-          <FileIcon node={node} />
+          <FileIcon node={node} size={16} />
           {node.system && <LockGlyph />}
         </div>
         {renaming === node.name ? (
@@ -1347,7 +1488,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
                 outline: dragOverKey === d.label ? "1px solid #fff" : undefined,
               }}
             >
-              <img src={d.icon} alt="" draggable={false} />
+              <Icon src={d.icon} size={32} />
               {d.label}
             </IconItem>
           ))
@@ -1360,21 +1501,44 @@ export function MyComputer({ windowId }: { windowId: string }) {
         ) : (
           <DetailsTable>
             <DetailsHeaderRow>
-              <ColName>Name</ColName>
-              <ColSize>Size</ColSize>
-              <ColType>Type</ColType>
-              <ColDate>Modified</ColDate>
+              <ColName
+                style={{ cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("name")}
+              >
+                Name{sortArrow("name")}
+              </ColName>
+              <ColSize
+                style={{ cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("size")}
+              >
+                Size{sortArrow("size")}
+              </ColSize>
+              <ColType
+                style={{ cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("type")}
+              >
+                Type{sortArrow("type")}
+              </ColType>
+              <ColDate
+                style={{ cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("date")}
+              >
+                Modified{sortArrow("date")}
+              </ColDate>
             </DetailsHeaderRow>
             {sorted.map(renderDetailsRow)}
           </DetailsTable>
         )}
-        {!isRoot && path !== "Control Panel" && path !== "Games" && sorted.length === 0 && (
-          <div style={{ fontSize: 12, padding: 16, color: "#888" }}>
-            {driveNotReady
-              ? "The device is not ready."
-              : "This folder is empty."}
-          </div>
-        )}
+        {!isRoot &&
+          path !== "Control Panel" &&
+          path !== "Games" &&
+          sorted.length === 0 && (
+            <div style={{ fontSize: 12, padding: 16, color: "#888" }}>
+              {driveNotReady
+                ? "The device is not ready."
+                : "This folder is empty."}
+            </div>
+          )}
       </IconGrid>
 
       <StatusBarEl variant="status">

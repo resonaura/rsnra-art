@@ -172,8 +172,8 @@ export function Desktop() {
 
   const recycleBinIcon =
     recycledCount > 0
-      ? "/icons/recycle-bin-full.png"
-      : "/icons/recycle-bin-empty.png";
+      ? "/icons/w2k_recycle_bin_full.ico"
+      : "/icons/w2k_recycle_bin_empty.ico";
 
   const closeAll = () => {
     setBgMenu(null);

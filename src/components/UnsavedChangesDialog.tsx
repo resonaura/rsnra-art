@@ -86,7 +86,7 @@ export function UnsavedChangesDialog() {
         <WindowContent>
           <Body>
             <WarnIcon
-              src="/icons/w2k_warning.png"
+              src="/icons/w2k_warning.ico"
               alt="Warning"
               draggable={false}
             />

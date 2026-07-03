@@ -15,7 +15,7 @@ const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "notepad",
     label: "Notepad",
-    icon: "/icons/notepad.png",
+    icon: "/icons/w2k_notepad_2.ico",
     extensions: ["txt", "log", "ini"],
     open: (path, name) =>
       openApp("notepad", { title: `${name} - Notepad`, data: { path } }),
@@ -23,7 +23,7 @@ const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "paint",
     label: "Paint",
-    icon: "/icons/paint.png",
+    icon: "/icons/w2k_paint.ico",
     extensions: ["png", "bmp"],
     open: (path, name) =>
       openApp("paint", { title: `${name} - Paint`, data: { path } }),
@@ -31,7 +31,7 @@ const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "sound-recorder",
     label: "Sound Recorder",
-    icon: "/icons/sound-recorder.png",
+    icon: "/icons/w98_cassette_tape.ico",
     extensions: ["wav"],
     open: (path, name) =>
       openApp("sound-recorder", {
@@ -42,7 +42,7 @@ const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "winamp",
     label: "Winamp",
-    icon: "/icons/winamp.png",
+    icon: "/icons/WinAMP_7.ico",
     extensions: ["wav", "mp3", "mid", "midi", "rmi", "ogg"],
     open: (path) => void openVfsAudio(path),
   },

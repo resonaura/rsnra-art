@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { Icon } from '../Icon/Icon';
 import type { MenuNode } from '../../data/startMenu';
 
 const List = styled.ul<{ $nested?: boolean }>`
@@ -86,10 +87,9 @@ export function MenuTree({ nodes, nested }: MenuTreeProps) {
           >
             {node.icon && (
               <span className="icon-wrap">
-                <img
+                <Icon
                   src={node.icon}
-                  alt=""
-                  draggable={false}
+                  size={22}
                   style={
                     node.iconScale
                       ? { transform: `scale(${node.iconScale})` }

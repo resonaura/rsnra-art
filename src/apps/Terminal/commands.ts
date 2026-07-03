@@ -5,8 +5,10 @@ import {
   CONTACT_EMAIL,
   LINKS,
 } from "../../data/content";
+import { buildProcessRows, isProtectedPid } from "../../data/processList";
 import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode, type VfsState } from "../../store/vfsStore";
+import { useWindowStore } from "../../store/windowStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type LineKind = "echo" | "output" | "error";
@@ -968,6 +970,63 @@ function cmdStart(args: string[], ctx: CmdContext) {
   }
 }
 
+function cmdTasklist(_args: string[], ctx: CmdContext) {
+  const windows = useWindowStore.getState().windows;
+  const rows = buildProcessRows(windows, 0);
+  ctx.print([
+    "Image Name                    PID Mem Usage",
+    "========================= ====== ==========",
+    ...rows.map(
+      (r) =>
+        `${r.name.padEnd(25)} ${String(r.pid).padStart(6)} ${`${Math.round(r.memK)} K`.padStart(10)}`,
+    ),
+  ]);
+}
+
+function cmdKill(args: string[], ctx: CmdContext) {
+  // Accept both taskkill-style ("kill /PID 1234") and Unix-style
+  // ("kill 1234", "kill -9 1234") invocations.
+  const rest = args.filter((a) => a.toLowerCase() !== "/pid" && a !== "-9" && a !== "-f");
+  const pidArg = rest[0];
+  if (!pidArg) {
+    ctx.print(
+      ["ERROR: Invalid syntax. Usage: kill <pid>  (or: kill /PID <pid>)"],
+      "error",
+    );
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const pid = parseInt(pidArg, 10);
+  if (Number.isNaN(pid)) {
+    ctx.print([`ERROR: Invalid argument/option - '${pidArg}'.`], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  if (isProtectedPid(pid)) {
+    ctx.print(
+      [
+        `ERROR: The process with PID ${pid} could not be terminated.`,
+        "Reason: Access is denied.",
+      ],
+      "error",
+    );
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const target = useWindowStore.getState().windows.find((w) => w.pid === pid);
+  if (!target) {
+    ctx.print(
+      [`ERROR: The process "${pid}" not found.`],
+      "error",
+    );
+    ctx.setErrorLevel(128);
+    return;
+  }
+  const name = `${target.appId}.exe`;
+  useWindowStore.getState().closeWindow(target.id);
+  ctx.print([`SUCCESS: The process "${name}" with PID ${pid} has been terminated.`]);
+}
+
 function cmdTitle(args: string[], ctx: CmdContext) {
   const title = args.join(" ");
   if (title) ctx.setTitle(title);
@@ -1527,6 +1586,9 @@ const REGISTRY: Record<string, CmdHandler> = {
   title: cmdTitle,
   color: cmdColor,
   prompt: cmdPrompt,
+  tasklist: cmdTasklist,
+  kill: cmdKill,
+  taskkill: cmdKill,
   // Info
   about: cmdAbout,
   links: cmdLinks,
@@ -1611,6 +1673,15 @@ const HELP_TOPICS: Record<string, string[]> = {
   ],
   set: ["SET [var=value]", "  Sets or displays environment variables."],
   start: ["START <program>", "  Starts a program in a new window."],
+  tasklist: [
+    "TASKLIST",
+    "  Lists every running process with its real PID and memory usage.",
+  ],
+  kill: [
+    "KILL <pid>   (TASKKILL /PID <pid>)",
+    "  Terminates the process with the given PID.",
+    "  System/decorative PIDs refuse with 'Access is denied', same as real taskkill.",
+  ],
   cls: ["CLS / CLEAR", "  Clears the screen."],
   ver: ["VER", "  Shows the Windows version."],
   vol: ["VOL", "  Shows the volume label."],

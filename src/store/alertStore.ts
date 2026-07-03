@@ -12,7 +12,7 @@ interface AlertState {
   close: () => void;
 }
 
-const DEFAULT_ICON = "/icons/w98_msg_error.png";
+const DEFAULT_ICON = "/icons/w98_msg_error.ico";
 
 export const useAlertStore = create<AlertState>((set) => ({
   open: false,

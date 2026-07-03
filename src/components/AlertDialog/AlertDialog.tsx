@@ -3,6 +3,7 @@ import { Button, Window, WindowContent, WindowHeader } from "react95";
 import styled from "styled-components";
 import { playSound } from "../../lib/audio";
 import { useAlertStore } from "../../store/alertStore";
+import { Icon } from "../Icon/Icon";
 
 const Overlay = styled.div`
   position: fixed;
@@ -25,7 +26,7 @@ const Body = styled(WindowContent)`
   padding: 0;
 `;
 
-const AlertIcon = styled.img`
+const AlertIcon = styled(Icon)`
   width: 32px;
   height: 32px;
   image-rendering: pixelated;

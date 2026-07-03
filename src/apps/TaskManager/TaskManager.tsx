@@ -15,6 +15,7 @@ import {
 } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
+import { buildProcessRows } from "../../data/processList";
 import { usePerfStats } from "../../hooks/usePerfStats";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -45,12 +46,35 @@ const ListFrame = styled(ScrollArea)`
     ${({ theme }) => theme.borderDarkest};
 `;
 
+// The header row must stay put while the body scrolls underneath it, and
+// carry an opaque background so rows don't show through — same as real
+// Explorer/Task Manager column headers.
+const Th = styled(TableHeadCell)`
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  cursor: pointer;
+  user-select: none;
+  background: ${({ theme }) => theme.material};
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) => theme.hoverBackground};
+    color: ${({ theme }) => theme.headerText};
+  }
+`;
+
 const Row = styled(TableRow)<{ $selected?: boolean }>`
   cursor: pointer;
   background: ${({ $selected, theme }) =>
-    $selected ? theme.hoverBackground : "transparent"} !important;
+    $selected ? theme.hoverBackground : "transparent"};
   color: ${({ $selected, theme }) =>
-    $selected ? theme.headerText : "inherit"};
+    $selected ? theme.headerText : theme.canvasText};
+
+  &:hover {
+    background: ${({ theme }) => theme.hoverBackground};
+    color: ${({ theme }) => theme.headerText};
+  }
 `;
 
 const Footer = styled.div`
@@ -67,27 +91,23 @@ const StatusBar = styled.div`
   border-top: 1px solid ${({ theme }) => theme.borderDark};
 `;
 
-// The real process behind everything on this desktop is this one browser
-// tab. Everything below it is theatre — a Win98 process list needs more
-// than one row — so those rows always read 0% CPU / a small fixed memory
-// footprint rather than faking motion with random jitter.
-const REAL_PROCESS = "rsnra-art.exe";
-const DECORATIVE_PROCESSES: { name: string; pid: number; memK: number }[] = [
-  { name: "System Idle Process", pid: 0, memK: 16 },
-  { name: "System", pid: 4, memK: 212 },
-  { name: "smss.exe", pid: 168, memK: 348 },
-  { name: "csrss.exe", pid: 196, memK: 1024 },
-  { name: "winlogon.exe", pid: 224, memK: 692 },
-  { name: "services.exe", pid: 252, memK: 1188 },
-  { name: "explorer.exe", pid: 340, memK: 3072 },
-];
+type SortDir = 1 | -1;
+interface SortState<K extends string> {
+  key: K;
+  dir: SortDir;
+}
 
-interface ProcRow {
-  name: string;
-  pid: number;
-  cpuPct: number;
-  memK: number;
-  windowId?: string;
+function useSort<K extends string>(initial: SortState<K>) {
+  const [sort, setSort] = useState<SortState<K>>(initial);
+  const toggle = (key: K) =>
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as SortDir } : { key, dir: 1 }));
+  const arrow = (key: K) => (sort.key === key ? (sort.dir === 1 ? " ▲" : " ▼") : "");
+  return { sort, toggle, arrow };
+}
+
+function cmp(a: string | number, b: string | number, dir: SortDir): number {
+  if (typeof a === "number" && typeof b === "number") return (a - b) * dir;
+  return String(a).localeCompare(String(b)) * dir;
 }
 
 export function TaskManager(_props: { windowId: string }) {
@@ -98,34 +118,33 @@ export function TaskManager(_props: { windowId: string }) {
 
   const [tab, setTab] = useState("Applications");
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
-  const [selectedProc, setSelectedProc] = useState<string | null>(null);
+  const [selectedPid, setSelectedPid] = useState<number | null>(null);
 
   const perf = usePerfStats();
 
-  const processRows: ProcRow[] = useMemo(() => {
-    const idleCpu = Math.max(0, 100 - perf.cpuPct);
-    return [
-      ...DECORATIVE_PROCESSES.map((p) => ({
-        ...p,
-        cpuPct: p.name === "System Idle Process" ? idleCpu : 0,
-      })),
-      {
-        name: REAL_PROCESS,
-        pid: 512,
-        cpuPct: perf.cpuPct,
-        memK: perf.usedMemMB * 1024,
-      },
-      ...windows.map(
-        (w, i): ProcRow => ({
-          name: `${w.appId}.exe`,
-          pid: 1000 + i * 4,
-          cpuPct: 0,
-          memK: 1800,
-          windowId: w.id,
-        }),
-      ),
-    ];
-  }, [windows, perf.cpuPct, perf.usedMemMB]);
+  const appSort = useSort<"title" | "status">({ key: "title", dir: 1 });
+  const procSort = useSort<"name" | "pid" | "cpu" | "mem">({ key: "cpu", dir: -1 });
+
+  const sortedApps = useMemo(() => {
+    const list = [...windows];
+    list.sort((a, b) =>
+      appSort.sort.key === "title"
+        ? cmp(a.title, b.title, appSort.sort.dir)
+        : cmp("Running", "Running", appSort.sort.dir),
+    );
+    return list;
+  }, [windows, appSort.sort]);
+
+  const processRows = useMemo(
+    () => buildProcessRows(windows, perf.cpuPct),
+    [windows, perf.cpuPct],
+  );
+
+  const sortedProcs = useMemo(() => {
+    const key = procSort.sort.key;
+    const field = key === "name" ? "name" : key === "pid" ? "pid" : key === "cpu" ? "cpuPct" : "memK";
+    return [...processRows].sort((a, b) => cmp(a[field], b[field], procSort.sort.dir));
+  }, [processRows, procSort.sort]);
 
   const endSelectedApp = () => {
     if (selectedApp) closeWindow(selectedApp);
@@ -136,10 +155,11 @@ export function TaskManager(_props: { windowId: string }) {
     if (selectedApp) focusWindow(selectedApp);
   };
 
+  const selectedProcRow = processRows.find((r) => r.pid === selectedPid);
+
   const endSelectedProcess = () => {
-    const row = processRows.find((r) => r.name === selectedProc);
-    if (row?.windowId) closeWindow(row.windowId);
-    setSelectedProc(null);
+    if (selectedProcRow?.windowId) closeWindow(selectedProcRow.windowId);
+    setSelectedPid(null);
   };
 
   return (
@@ -160,12 +180,16 @@ export function TaskManager(_props: { windowId: string }) {
               <Table style={{ zoom: ZOOM, width: "100%" }}>
                 <TableHead>
                   <TableRow>
-                    <TableHeadCell>Task</TableHeadCell>
-                    <TableHeadCell>Status</TableHeadCell>
+                    <Th onClick={() => appSort.toggle("title")}>
+                      Task{appSort.arrow("title")}
+                    </Th>
+                    <Th onClick={() => appSort.toggle("status")}>
+                      Status{appSort.arrow("status")}
+                    </Th>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {windows.map((w) => (
+                  {sortedApps.map((w) => (
                     <Row
                       key={w.id}
                       $selected={selectedApp === w.id}
@@ -218,18 +242,26 @@ export function TaskManager(_props: { windowId: string }) {
               <Table style={{ zoom: ZOOM, width: "100%" }}>
                 <TableHead>
                   <TableRow>
-                    <TableHeadCell>Image Name</TableHeadCell>
-                    <TableHeadCell>PID</TableHeadCell>
-                    <TableHeadCell>CPU</TableHeadCell>
-                    <TableHeadCell>Mem Usage</TableHeadCell>
+                    <Th onClick={() => procSort.toggle("name")}>
+                      Image Name{procSort.arrow("name")}
+                    </Th>
+                    <Th onClick={() => procSort.toggle("pid")}>
+                      PID{procSort.arrow("pid")}
+                    </Th>
+                    <Th onClick={() => procSort.toggle("cpu")}>
+                      CPU{procSort.arrow("cpu")}
+                    </Th>
+                    <Th onClick={() => procSort.toggle("mem")}>
+                      Mem Usage{procSort.arrow("mem")}
+                    </Th>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {processRows.map((row) => (
+                  {sortedProcs.map((row) => (
                     <Row
-                      key={row.name + row.pid}
-                      $selected={selectedProc === row.name}
-                      onClick={() => setSelectedProc(row.name)}
+                      key={row.pid}
+                      $selected={selectedPid === row.pid}
+                      onClick={() => setSelectedPid(row.pid)}
                     >
                       <TableDataCell>{row.name}</TableDataCell>
                       <TableDataCell>{row.pid}</TableDataCell>
@@ -243,12 +275,7 @@ export function TaskManager(_props: { windowId: string }) {
             <Footer>
               <Button
                 style={{ zoom: ZOOM, width: 96 }}
-                disabled={
-                  !selectedProc ||
-                  !processRows.find(
-                    (r) => r.name === selectedProc && r.windowId,
-                  )
-                }
+                disabled={!selectedProcRow?.windowId}
                 onClick={endSelectedProcess}
               >
                 End Process

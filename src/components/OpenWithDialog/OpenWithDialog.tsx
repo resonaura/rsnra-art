@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Checkbox, Window, WindowContent, WindowHeader } from "react95";
 import styled from "styled-components";
 import { candidatesFor, type OpenWithApp } from "../../data/fileOpen";
+import { Icon } from "../Icon/Icon";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 
 const Overlay = styled.div`
@@ -115,7 +116,7 @@ export function OpenWithDialog({
                 onClick={() => setSelected(app)}
                 onDoubleClick={confirm}
               >
-                <img src={app.icon} alt="" draggable={false} />
+                <Icon src={app.icon} size={32} />
                 <span>{app.label}</span>
               </IconItem>
             ))}

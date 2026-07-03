@@ -1,6 +1,7 @@
 import { Frame, GroupBox } from "react95";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { BAND_LOCATION, BAND_NAME } from "../../data/content";
 import { useWindowStore } from "../../store/windowStore";
@@ -61,12 +62,10 @@ export function Help({ windowId }: { windowId: string }) {
         }}
       >
         <InfoFrame variant="field">
-          <img
-            src="/icons/computer.png"
-            alt=""
-            width={48}
-            height={48}
-            style={{ imageRendering: "pixelated" }}
+          <Icon
+            src="/icons/w2k_my_computer.ico"
+            size={48}
+            style={{ width: 48, height: 48 }}
           />
           <div>
             <h3 style={{ margin: "0 0 4px" }}>RSNRA.ART</h3>

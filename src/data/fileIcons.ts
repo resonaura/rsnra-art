@@ -4,28 +4,28 @@ import { APPS } from "./apps";
 // Map a file extension to its Win95-style icon. Drives/folders are handled by
 // the caller; this is for files. Executables with an appId use the app icon.
 const EXT_ICONS: Record<string, string> = {
-  txt: "/icons/file-txt.png",
-  log: "/icons/file-txt.png",
-  ini: "/icons/file-ini.png",
-  inf: "/icons/file-ini.png",
-  hlp: "/icons/file-hlp.png",
-  fon: "/icons/file-font.png",
-  bmp: "/icons/file-bmp.png",
-  png: "/icons/file-bmp.png",
-  jpg: "/icons/file-img.png",
-  jpeg: "/icons/file-img.png",
-  gif: "/icons/file-img.png",
-  bat: "/icons/file-bat.png",
-  com: "/icons/msdos.png",
-  dll: "/icons/file-dll.png",
-  exe: "/icons/msdos.png",
-  wav: "/icons/sound.png",
-  mid: "/icons/sound.png",
-  rmi: "/icons/sound.png",
+  txt: "/icons/w98_file_lines.ico",
+  log: "/icons/w98_file_lines.ico",
+  ini: "/icons/w2k_ini_&_inf.ico",
+  inf: "/icons/w2k_ini_&_inf.ico",
+  hlp: "/icons/w2k_help.ico",
+  fon: "/icons/w2k_font_2.ico",
+  bmp: "/icons/w98_imagOthe.ico",
+  png: "/icons/w98_imagPNG.ico",
+  jpg: "/icons/w98_imagJPEG.ico",
+  jpeg: "/icons/w98_imagJPEG.ico",
+  gif: "/icons/w98_imagGIF.ico",
+  bat: "/icons/w2k_ms-dos_batch_file.ico",
+  com: "/icons/w98_executable_script.ico",
+  dll: "/icons/w2k_ini_&_inf.ico",
+  exe: "/icons/w98_executable.ico",
+  wav: "/icons/w2k_wave_sound.ico",
+  mid: "/icons/w2k_midi_sequence.ico",
+  rmi: "/icons/w2k_midi_sequence.ico",
 };
 
-const FOLDER_OPEN = "/icons/folder-open.png";
-const DEFAULT_FILE = "/icons/w98_document.png";
+const FOLDER_OPEN = "/icons/w2k_folder_open.ico";
+const DEFAULT_FILE = "/icons/w2k_unknown_filetype";
 
 export function extIcon(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";

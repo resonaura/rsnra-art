@@ -10,6 +10,7 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { requestShutdown } from "../../data/startMenu";
 import { useWindowStore } from "../../store/windowStore";
+import { Icon } from "../Icon/Icon";
 
 const Overlay = styled.div`
   position: fixed;
@@ -93,7 +94,7 @@ export function CloseProgramDialog() {
           </Intro>
           <ListFrame orientation="vertical">
             <Row $selected={false}>
-              <img src="/icons/computer.png" alt="" />
+              <Icon src="/icons/w2k_my_computer.ico" size={16} />
               RSNRA.ART Desktop (system)
             </Row>
             {windows.map((w) => (
@@ -103,7 +104,7 @@ export function CloseProgramDialog() {
                 onClick={() => setSelected(w.id)}
                 onDoubleClick={() => closeWindow(w.id)}
               >
-                <img src={w.icon} alt="" />
+                <Icon src={w.icon} size={16} />
                 {w.title}
                 {w.isMinimized ? " (minimized)" : ""}
               </Row>

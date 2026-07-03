@@ -4,6 +4,12 @@ import type { AppId, Bounds, WindowInstance } from "../types/window";
 let idCounter = 0;
 const genId = () => `win-${++idCounter}-${Date.now().toString(36)}`;
 
+// Real Windows PIDs are (almost always) multiples of 4. Start above the
+// fixed decorative/system PIDs in src/data/processList.ts so a freshly
+// opened app never collides with them.
+let pidCounter = 1000;
+const genPid = () => (pidCounter += 4);
+
 export interface OpenWindowConfig {
   appId: AppId;
   title: string;
@@ -88,6 +94,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     const nextZ = topZIndex + 1;
     const instance: WindowInstance = {
       id,
+      pid: genPid(),
       appId: config.appId,
       title: config.title,
       icon: config.icon,

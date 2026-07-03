@@ -293,7 +293,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "my-computer",
-              icon: "/icons/computer.png",
+              icon: "/icons/w2k_my_computer.ico",
             }),
             system: true,
           }),
@@ -301,7 +301,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.music,
-              icon: "/icons/music-cd.png",
+              icon: "/icons/w98_cd_audio_cd.ico",
               shortcut: true,
             }),
             system: false,
@@ -310,7 +310,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.tiktok,
-              icon: "/icons/globe.png",
+              icon: "/icons/w98_entire_network_globe.ico",
               shortcut: true,
             }),
             system: false,
@@ -319,7 +319,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.instagram,
-              icon: "/icons/globe-map.png",
+              icon: "/icons/w98_globe_map.ico",
               shortcut: true,
             }),
             system: false,
@@ -328,7 +328,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "contact",
-              icon: "/icons/contact-card.png",
+              icon: "/icons/w98_address_book_card.ico",
             }),
             system: false,
           }),
@@ -336,7 +336,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "games-folder",
-              icon: "/icons/joystick.png",
+              icon: "/icons/w98_joystick.ico",
             }),
             system: false,
           }),

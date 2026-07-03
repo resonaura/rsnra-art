@@ -3,6 +3,7 @@ import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { iconForNode } from "../../data/fileIcons";
+import { Icon } from "../../components/Icon/Icon";
 import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
@@ -184,7 +185,7 @@ export function Properties({ windowId }: { windowId: string }) {
           <>
             <Header style={{ zoom: 0.9 }}>
               <IconBox variant="field">
-                <img src={iconForNode(node)} alt="" draggable={false} />
+                <Icon src={iconForNode(node)} size={32} />
               </IconBox>
               <Title>{name}</Title>
             </Header>

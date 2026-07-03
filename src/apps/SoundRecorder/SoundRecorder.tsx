@@ -332,7 +332,7 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
             <WindowContent>
               <DialogBody>
                 <WarnIcon
-                  src="/icons/w2k_warning.png"
+                  src="/icons/w2k_warning.ico"
                   alt="Warning"
                   draggable={false}
                 />

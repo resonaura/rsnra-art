@@ -10,6 +10,7 @@ import styled from "styled-components";
 import { openApp } from "../../data/apps";
 import { useWindowStore } from "../../store/windowStore";
 import type { AppId } from "../../types/window";
+import { Icon } from "../Icon/Icon";
 
 const Overlay = styled.div`
   position: fixed;
@@ -113,7 +114,11 @@ export function RunDialog() {
         </WindowHeader>
         <WindowContent>
           <Row>
-            <img src="/icons/w98_application_hourglass.png" alt="" />
+            <Icon
+              src="/icons/w2k_run.ico"
+              size={64}
+              style={{ minWidth: "fit-content", width: 64, height: 64 }}
+            />
             <div style={{ flex: 1 }}>
               <p style={{ margin: "0 0 8px", fontSize: 12 }}>
                 Type the name of an app, and RSNRA.ART will open it for you.

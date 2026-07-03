@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { APPS } from "../../data/apps";
+import { Icon } from "../Icon/Icon";
 import { CURSOR_ROLE_MAP, cursorCss } from "../../data/cursors";
 import { useCursorStore } from "../../store/cursorStore";
 import { useUnsavedStore } from "../../store/unsavedStore";
@@ -174,7 +175,7 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
           }}
         >
           <HeaderTitle style={{ fontSize: "12px" }}>
-            <img src={win.icon} alt="" draggable={false} />
+            <Icon src={win.icon} size={16} />
             <span>{win.title}</span>
           </HeaderTitle>
           <HeaderButtons>

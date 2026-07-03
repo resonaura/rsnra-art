@@ -3,6 +3,7 @@ import { Button, Separator, TextField } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
@@ -281,7 +282,11 @@ export function Find({ windowId }: { windowId: string }) {
                 onDoubleClick={() => openHit(h)}
               >
                 <ColName>
-                  <img src={iconForNode(h.node)} alt="" draggable={false} />
+                  <Icon
+                    src={iconForNode(h.node)}
+                    size={16}
+                    style={{ width: 16, height: 16, flexShrink: 0 }}
+                  />
                   {h.node.name}
                 </ColName>
                 <ColFolder>{h.folder}</ColFolder>

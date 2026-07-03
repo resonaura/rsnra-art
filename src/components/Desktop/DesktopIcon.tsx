@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { Icon } from "../Icon/Icon";
 
 const IconButton = styled.button<{ $selected: boolean }>`
   position: relative;
@@ -42,7 +43,7 @@ const RenameInput = styled.input`
   border: 1px solid ${({ theme }) => theme.borderDarkest};
 `;
 
-const ShortcutOverlay = styled.img`
+const ShortcutOverlay = styled(Icon)`
   position: absolute;
   inset: 0;
   width: 32px;
@@ -96,10 +97,10 @@ export function DesktopIcon({
       onContextMenu={onContextMenu}
     >
       <div style={{ position: "relative" }}>
-        <img src={icon} alt="" draggable={false} />
+        <Icon src={icon} size={32} />
         {shortcut && (
           <ShortcutOverlay
-            src="/icons/w2k_shortcut_overlay.png"
+            src="/icons/w2k_shortcut_overlay.ico"
             alt=""
             draggable={false}
             aria-hidden

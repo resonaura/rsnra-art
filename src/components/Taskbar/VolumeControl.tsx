@@ -3,21 +3,16 @@ import { Checkbox } from "react95";
 import styled from "styled-components";
 import { unlockAudio } from "../../lib/audio";
 import { useAudioStore } from "../../store/audioStore";
+import { Icon } from "../Icon/Icon";
 import { Slider95 } from "../Slider95/Slider95";
 
-const Icon = styled.button`
+const IconButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   padding: 0;
-
-  img {
-    width: 16px;
-    height: 16px;
-    image-rendering: pixelated;
-  }
 
   &:active {
     outline: 1px dotted #000;
@@ -84,20 +79,19 @@ export function VolumeControl() {
 
   return (
     <div ref={ref} style={{ display: "flex", alignItems: "center" }}>
-      <Icon
+      <IconButton
         title={muted ? "Volume (Muted)" : `Volume: ${pct}%`}
         onClick={() => {
           unlockAudio();
           setOpen((o) => !o);
         }}
       >
-        <img
-          src="/icons/sound.png"
-          alt=""
-          draggable={false}
+        <Icon
+          src="/icons/w98_loudspeaker_rays.ico"
+          size={16}
           style={{ opacity: muted || volume === 0 ? 0.5 : 1 }}
         />
-      </Icon>
+      </IconButton>
       {open && (
         <Popup>
           <Title>Volume Control</Title>

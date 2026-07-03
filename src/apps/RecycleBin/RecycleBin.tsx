@@ -2,6 +2,7 @@ import { useState } from "react";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ContextMenu, CtxItem } from "../../components/ContextMenu";
+import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { playSound } from "../../lib/audio";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
@@ -188,12 +189,10 @@ export function RecycleBin({ windowId }: { windowId: string }) {
       <Body>
         {isEmpty ? (
           <EmptyState>
-            <img
-              src="/icons/recycle-bin-empty.png"
-              alt=""
-              width={48}
-              height={48}
-              style={{ imageRendering: "pixelated" }}
+            <Icon
+              src="/icons/w2k_recycle_bin_empty.ico"
+              size={48}
+              style={{ width: 48, height: 48 }}
             />
             <p style={{ margin: 0 }}>The Recycle Bin is empty.</p>
           </EmptyState>
@@ -220,17 +219,16 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                   onContextMenu={(e) => openCtx(e, item)}
                 >
                   <Td>
-                    <img
+                    <Icon
                       src={
                         item.node.type === "dir"
-                          ? "/icons/folder.png"
-                          : "/icons/file-txt.png"
+                          ? "/icons/w2k_folder_closed.ico"
+                          : "/icons/w98_file_lines.ico"
                       }
-                      alt=""
-                      width={16}
-                      height={16}
+                      size={16}
                       style={{
-                        imageRendering: "pixelated",
+                        width: 16,
+                        height: 16,
                         verticalAlign: "middle",
                         marginRight: 6,
                       }}

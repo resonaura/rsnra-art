@@ -37,6 +37,7 @@ export interface Bounds {
 
 export interface WindowInstance {
   id: string;
+  pid: number;
   appId: AppId;
   title: string;
   icon: string;

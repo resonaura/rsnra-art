@@ -7,6 +7,7 @@ import { TASKBAR_HEIGHT } from "../../constants";
 import { openApp } from "../../data/apps";
 import { focusWebamp } from "../../lib/webamp";
 import { useWindowStore } from "../../store/windowStore";
+import { Icon } from "../Icon/Icon";
 import { NetworkTray } from "./NetworkTray";
 import { TaskbarClock } from "./TaskbarClock";
 import { VolumeControl } from "./VolumeControl";
@@ -150,7 +151,7 @@ export function Taskbar() {
           active={startMenuOpen}
           onClick={() => toggleStartMenu()}
         >
-          <img src="/icons/w98_windows.png" alt="" draggable={false} />
+          <Icon src="/icons/w98_windows.ico" size={18} />
           Start
         </StartButton>
         <Divider />
@@ -158,7 +159,7 @@ export function Taskbar() {
           title="Show Desktop"
           onClick={() => toggleShowDesktop()}
         >
-          <img src="/icons/w98_desktop.png" alt="" draggable={false} />
+          <Icon src="/icons/w2k_desktop.ico" size={18} />
         </QuickLaunchButton>
         <Divider />
         <WindowList
@@ -183,7 +184,7 @@ export function Taskbar() {
                     : toggleMinimizeFromTaskbar(w.id)
                 }
               >
-                <img src={w.icon} alt="" draggable={false} />
+                <Icon src={w.icon} size={16} />
                 <span>{w.title}</span>
               </WindowButton>
             ))}
@@ -195,11 +196,7 @@ export function Taskbar() {
         </Tray>
       </StyledToolbar>
       {ctxPos && (
-        <ContextMenu
-          x={ctxPos.x}
-          y={ctxPos.y}
-          onClose={() => setCtxPos(null)}
-        >
+        <ContextMenu x={ctxPos.x} y={ctxPos.y} onClose={() => setCtxPos(null)}>
           <CtxItem $disabled>Toolbars</CtxItem>
           <CtxDivider />
           <CtxItem
