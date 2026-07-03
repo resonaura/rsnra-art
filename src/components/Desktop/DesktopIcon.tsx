@@ -65,6 +65,9 @@ interface DesktopIconProps {
   onRenameChange?: (v: string) => void;
   onRenameCommit?: () => void;
   onRenameCancel?: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
 export function DesktopIcon({
@@ -80,6 +83,9 @@ export function DesktopIcon({
   onRenameChange,
   onRenameCommit,
   onRenameCancel,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: DesktopIconProps) {
   return (
     <IconButton
@@ -95,6 +101,9 @@ export function DesktopIcon({
         if (e.key === "Enter") onOpen();
       }}
       onContextMenu={onContextMenu}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       <div style={{ position: "relative" }}>
         <Icon src={icon} size={32} />

@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppBar, Button, Toolbar } from "react95";
 import styled from "styled-components";
 import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { openApp } from "../../data/apps";
+import { iconForNode } from "../../data/fileIcons";
+import { getPreferredApp } from "../../data/fileOpen";
 import { focusWebamp, openWebamp } from "../../lib/webamp";
 import { useWindowStore } from "../../store/windowStore";
+import { useVfsStore } from "../../store/vfsStore";
 import { Icon } from "../Icon/Icon";
 import { NetworkTray } from "./NetworkTray";
 import { TaskbarClock } from "./TaskbarClock";
@@ -83,10 +86,43 @@ const QuickLaunchButton = styled.button`
   }
 `;
 
-const QuickLaunchArea = styled.div`
+const QuickLaunchArea = styled.div<{ $dragOver: boolean }>`
   display: flex;
   align-items: center;
   gap: 2px;
+  padding: 2px;
+  background: ${({ $dragOver }) => ($dragOver ? "rgba(0,0,0,0.05)" : "transparent")};
+  border: 1px dashed ${({ $dragOver }) => ($dragOver ? "rgba(0,0,0,0.2)" : "transparent")};
+  border-radius: 2px;
+  transition: background 0.15s ease;
+`;
+
+const InsertionIndicator = styled.div`
+  width: 2px;
+  height: 18px;
+  background: black;
+  position: relative;
+  margin: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    left: -2px;
+    width: 6px;
+    height: 2px;
+    background: black;
+  }
+
+  &::before {
+    top: 0;
+  }
+
+  &::after {
+    bottom: 0;
+  }
 `;
 
 const OverflowButton = styled(QuickLaunchButton)`
@@ -115,14 +151,14 @@ const UpwardDropdown = styled.div`
   display: flex;
   flex-direction: column;
   padding: 2px;
-  min-width: 150px;
+  min-width: 110px; /* Narrow dropdown matching classical Windows */
 `;
 
 const DropdownItem = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
   color: ${({ theme }) => theme.materialText};
@@ -200,12 +236,40 @@ export function Taskbar() {
     (s) => s.toggleMinimizeFromTaskbar,
   );
   const toggleShowDesktop = useWindowStore((s) => s.toggleShowDesktop);
-  const quickLaunchItems = useWindowStore((s) => s.quickLaunchItems);
   const removeFromQuickLaunch = useWindowStore((s) => s.removeFromQuickLaunch);
+
+  // Subscribe to VFS root but resolve Quick Launch folder manually to track changes
+  const quickLaunchVfsItems = useVfsStore((s) => {
+    const win = s.root.children?.find((c) => c.name.toLowerCase() === "windows");
+    const appData = win?.children?.find((c) => c.name.toLowerCase() === "application data");
+    const ms = appData?.children?.find((c) => c.name.toLowerCase() === "microsoft");
+    const ie = ms?.children?.find((c) => c.name.toLowerCase() === "internet explorer");
+    const ql = ie?.children?.find((c) => c.name.toLowerCase() === "quick launch");
+    return ql?.children ?? [];
+  });
+
+  const resolvedQlItems = useMemo(() => {
+    return quickLaunchVfsItems.map((node) => {
+      let lnk: any = null;
+      try {
+        lnk = JSON.parse(node.content ?? "");
+      } catch {}
+      return {
+        id: node.name, // The filename (e.g. "Notepad.lnk") acts as unique id
+        title: lnk?.title ?? node.name.replace(/\.lnk$/i, ""),
+        icon: lnk?.icon ?? "/icons/w2k_shortcut.ico",
+        type: lnk?.target === "show-desktop" ? "show-desktop" : lnk?.type ?? "app",
+        appId: lnk?.target,
+        lnkPath: lnk?.target,
+        data: lnk?.data,
+      };
+    });
+  }, [quickLaunchVfsItems]);
 
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [qlCtx, setQlCtx] = useState<{ x: number; y: number; itemId: string } | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     if (!overflowOpen) return;
@@ -234,8 +298,62 @@ export function Taskbar() {
     setQlCtx({ x: e.clientX, y: e.clientY, itemId });
   };
 
-  const visibleItems = quickLaunchItems.slice(0, 3);
-  const overflowItems = quickLaunchItems.slice(3);
+  const handleQlDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes("application/x-rsnra-vfs-path")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "link";
+      if (!isDragOver) setIsDragOver(true);
+    }
+  };
+
+  const handleQlDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleQlDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const srcAbs = e.dataTransfer.getData("application/x-rsnra-vfs-path");
+    if (!srcAbs) return;
+
+    const vfs = useVfsStore.getState();
+    const node = vfs.resolve(srcAbs);
+    if (!node) return;
+
+    const isLnk = node.name.toLowerCase().endsWith(".lnk");
+    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
+    let targetIcon = isLnk ? null : iconForNode(node);
+    let lnk: any = null;
+    if (isLnk) {
+      try {
+        lnk = JSON.parse(node.content ?? "");
+        targetIcon = lnk?.icon;
+      } catch {}
+    }
+
+    if (isLnk && lnk) {
+      useWindowStore.getState().addToQuickLaunch({
+        title: label,
+        icon: targetIcon || "/icons/w2k_shortcut.ico",
+        type: lnk.type === "url" ? "lnk" : "app",
+        appId: lnk.target,
+        lnkPath: lnk.target,
+        data: lnk.data,
+      });
+    } else {
+      const preferred = getPreferredApp(node.name);
+      useWindowStore.getState().addToQuickLaunch({
+        title: label,
+        icon: targetIcon || "/icons/w2k_shortcut.ico",
+        type: "app",
+        appId: (node.appId || preferred?.appId || "notepad") as any,
+        data: { path: srcAbs },
+      });
+    }
+  };
+
+  const visibleItems = resolvedQlItems.slice(0, 3);
+  const overflowItems = resolvedQlItems.slice(3);
 
   return (
     <Bar
@@ -254,7 +372,12 @@ export function Taskbar() {
           Start
         </StartButton>
         <Divider />
-        <QuickLaunchArea>
+        <QuickLaunchArea
+          $dragOver={isDragOver}
+          onDragOver={handleQlDragOver}
+          onDragLeave={handleQlDragLeave}
+          onDrop={handleQlDrop}
+        >
           {visibleItems.map((item) => (
             <QuickLaunchButton
               key={item.id}
@@ -265,6 +388,7 @@ export function Taskbar() {
               <Icon src={item.icon} size={18} />
             </QuickLaunchButton>
           ))}
+          {isDragOver && <InsertionIndicator />}
           {overflowItems.length > 0 && (
             <OverflowWrapper>
               <OverflowButton

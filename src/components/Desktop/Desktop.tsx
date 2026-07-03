@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
@@ -25,15 +25,6 @@ const Wrapper = styled.div<{ $bg: string }>`
   );
   background-size: 4px 4px;
   overflow: hidden;
-`;
-
-const IconColumn = styled.div`
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 `;
 
 // The desktop folder lives at C:\Windows\Desktop (the classic Win95 location).
@@ -66,8 +57,6 @@ function openLnk(lnk: LnkData) {
   }
 }
 
-// Open a non-shortcut desktop node in the matching app. Folders open an
-// Explorer window rooted at that folder.
 function openNode(node: VfsNode, abs: string) {
   if (node.type === "file" && !node.name.toLowerCase().endsWith(".lnk")) {
     const preferred = getPreferredApp(node.name);
@@ -96,8 +85,6 @@ function openNode(node: VfsNode, abs: string) {
   }
   if (isAudioExt(lower)) {
     void openVfsAudio(abs).then((played) => {
-      // Not a built-in system sound (e.g. a .wav saved from Sound Recorder
-      // elsewhere in the VFS) — open it for playback/editing there instead.
       if (!played && lower.endsWith(".wav")) {
         openApp("sound-recorder", {
           title: `${node.name} - Sound Recorder`,
@@ -126,12 +113,28 @@ function isAudioExt(lowerName: string): boolean {
   return AUDIO_EXTS.some((e) => lowerName.endsWith(e));
 }
 
-// Stable empty array — avoids creating a new reference on every render.
 const EMPTY: VfsNode[] = [];
 
 type IconCtx =
   | { kind: "recycle"; x: number; y: number }
   | { kind: "node"; x: number; y: number; node: VfsNode };
+
+function getAutoArrangedPosition(index: number, heightLimit: number) {
+  const rowHeight = 82;
+  const colWidth = 90;
+  const topOffset = 12;
+  const leftOffset = 12;
+  
+  const maxRows = Math.max(1, Math.floor((heightLimit - 40) / rowHeight));
+  
+  const col = Math.floor(index / maxRows);
+  const row = index % maxRows;
+  
+  return {
+    x: leftOffset + col * colWidth,
+    y: topOffset + row * rowHeight,
+  };
+}
 
 export function Desktop() {
   const wallpaperId = useDesktopStore((s) => s.wallpaperId);
@@ -139,11 +142,19 @@ export function Desktop() {
     WALLPAPERS.find((w) => w.id === wallpaperId)?.background ??
     WALLPAPERS[0].background;
 
+  const { iconPositions, setIconPosition, autoArrange, sortBy } = useDesktopStore();
+
+  const [winHeight, setWinHeight] = useState(typeof window !== "undefined" ? window.innerHeight : 600);
+  useEffect(() => {
+    const handleResize = () => setWinHeight(window.innerHeight);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const showHidden = useFilePrefsStore((s) => s.showHidden);
   const recycledCount = useVfsStore((s) => s.recycled.length);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
-  // Subscribe only to the Desktop folder node itself, not the whole root.
-  // This way unrelated VFS mutations (saving files elsewhere) don't re-render the desktop.
+
   const desktopNode = useVfsStore(
     (s) => {
       const winNode = s.root.children?.find(
@@ -160,10 +171,6 @@ export function Desktop() {
     [desktopNode],
   );
 
-
-  // System .lnk shortcuts render first (My Computer, etc.), then the Recycle
-  // Bin, then everything else the user has put on the desktop — folders,
-  // documents, user shortcuts — just like real Windows.
   const systemLnks = desktopNodes.filter(
     (n) =>
       n.type === "file" && n.system && n.name.toLowerCase().endsWith(".lnk"),
@@ -198,7 +205,6 @@ export function Desktop() {
     }
     const node = desktopNodes.find((n) => n.name === renaming);
     let newName = renameVal.trim();
-    // Keep the .lnk extension on shortcuts when renaming.
     if (
       node?.name.toLowerCase().endsWith(".lnk") &&
       !newName.toLowerCase().endsWith(".lnk")
@@ -223,15 +229,14 @@ export function Desktop() {
   const newTextFile = () => {
     let name = "New Text Document.txt";
     let i = 1;
-    while (vfsExists(desktopNodes, name))
-      name = `New Text Document (${++i}).txt`;
+    while (vfsExists(desktopNodes, name)) name = `New Text Document (${++i}).txt`;
     useVfsStore.getState().writeFile(`${DESKTOP_PATH}\\${name}`, "");
     setSelected(name);
     setRenaming(name);
-    setRenameVal(name);
+    setRenameVal(name.replace(/\.txt$/i, ""));
   };
 
-  const renderLnk = (node: VfsNode) => {
+  const renderLnk = (node: VfsNode, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
     const lnk = parseLnk(node);
     if (!lnk) return null;
     const label = node.name.replace(/\.lnk$/i, "");
@@ -259,12 +264,13 @@ export function Desktop() {
           setBgMenu(null);
           setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node });
         }}
+        draggable={draggable}
+        onDragStart={onDragStart}
       />
     );
   };
 
-  // Render a non-shortcut desktop item (folder or file) with the proper icon.
-  const renderNode = (node: VfsNode) => {
+  const renderNode = (node: VfsNode, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
     const isLnk = node.name.toLowerCase().endsWith(".lnk");
     const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
     const lnk = isLnk ? parseLnk(node) : null;
@@ -293,8 +299,124 @@ export function Desktop() {
           setBgMenu(null);
           setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node });
         }}
+        draggable={draggable}
+        onDragStart={onDragStart}
       />
     );
+  };
+
+  // Combine system links, Recycle Bin, and rest of files/folders
+  const allItems = useMemo(() => {
+    const res: any[] = [];
+    systemLnks.forEach((n) => {
+      res.push({
+        key: n.name,
+        type: "lnk",
+        node: n,
+        label: n.name.replace(/\.lnk$/i, ""),
+      });
+    });
+    res.push({
+      key: "__recycle__",
+      type: "recycle",
+      label: "Recycle Bin",
+    });
+    rest.forEach((n) => {
+      res.push({
+        key: n.name,
+        type: "node",
+        node: n,
+        label: n.name.toLowerCase().endsWith(".lnk") ? n.name.replace(/\.lnk$/i, "") : n.name,
+      });
+    });
+    return res;
+  }, [systemLnks, rest]);
+
+  // Sort elements if sortBy is selected
+  const sortedItems = useMemo(() => {
+    const items = [...allItems];
+    if (!sortBy) return items;
+
+    items.sort((a, b) => {
+      if (sortBy === "name") {
+        return a.label.localeCompare(b.label);
+      }
+      if (sortBy === "date") {
+        const tA = a.node?.created ?? 0;
+        const tB = b.node?.created ?? 0;
+        return tA - tB;
+      }
+      if (sortBy === "type") {
+        const typeA = a.node?.type === "dir" ? "dir" : a.node?.name.split(".").pop() || "";
+        const typeB = b.node?.type === "dir" ? "dir" : b.node?.name.split(".").pop() || "";
+        if (typeA === "dir" && typeB !== "dir") return -1;
+        if (typeA !== "dir" && typeB === "dir") return 1;
+        return typeA.localeCompare(typeB);
+      }
+      if (sortBy === "size") {
+        const sizeA = a.node?.content?.length ?? 0;
+        const sizeB = b.node?.content?.length ?? 0;
+        return sizeA - sizeB;
+      }
+      return 0;
+    });
+    return items;
+  }, [allItems, sortBy]);
+
+  // Assign screen positions (either auto-arranged columns or saved dragging coords)
+  const positionedItems = useMemo(() => {
+    return sortedItems.map((item, index) => {
+      let pos: { x: number; y: number };
+      if (autoArrange) {
+        pos = getAutoArrangedPosition(index, winHeight);
+      } else {
+        const saved = iconPositions[item.key];
+        if (saved) {
+          pos = saved;
+        } else {
+          pos = getAutoArrangedPosition(index, winHeight);
+        }
+      }
+      return { ...item, pos };
+    });
+  }, [sortedItems, autoArrange, iconPositions, winHeight]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    const types = Array.from(e.dataTransfer.types || []);
+    e.dataTransfer.dropEffect = types.includes("desktop-icon-name") ? "move" : "copy";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const desktopIconName = e.dataTransfer.getData("desktop-icon-name");
+    const srcAbs = e.dataTransfer.getData("application/x-rsnra-vfs-path");
+    
+    const dropX = e.clientX;
+    const dropY = e.clientY;
+
+    if (desktopIconName) {
+      if (!autoArrange) {
+        setIconPosition(desktopIconName, Math.max(0, dropX - 42), Math.max(0, dropY - 38));
+      }
+    } else if (srcAbs) {
+      const newName = useVfsStore.getState().copyTo(srcAbs, DESKTOP_PATH);
+      if (newName) {
+        if (!autoArrange) {
+          setIconPosition(newName, Math.max(0, dropX - 42), Math.max(0, dropY - 38));
+        }
+      }
+    }
+  };
+
+  const handleIconDragStart = (key: string, e: React.DragEvent) => {
+    e.dataTransfer.setData("desktop-icon-name", key);
+    if (key !== "__recycle__") {
+      const abs = `${DESKTOP_PATH}\\${key}`;
+      e.dataTransfer.setData("application/x-rsnra-vfs-path", abs);
+      e.dataTransfer.setData("text/plain", abs);
+    }
+    e.dataTransfer.effectAllowed = "move";
   };
 
   return (
@@ -314,42 +436,71 @@ export function Desktop() {
           setBgMenu({ x: e.clientX, y: e.clientY });
         }
       }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
     >
-      <IconColumn>
-        {systemLnks.map(renderLnk)}
-
-        {/* Recycle Bin — virtual system item, always after My Computer */}
-        <DesktopIcon
-          label="Recycle Bin"
-          icon={recycleBinIcon}
-          selected={selected === "__recycle__"}
-          onSelect={() => {
-            setSelected("__recycle__");
-            closeAll();
-          }}
-          onOpen={() => openApp("recycle-bin")}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setSelected("__recycle__");
-            setBgMenu(null);
-            setIconCtx({ kind: "recycle", x: e.clientX, y: e.clientY });
-          }}
-        />
-
-        {rest.map((node) => (
+      {positionedItems.map((item) => {
+        if (item.type === "lnk") {
+          return (
+            <div
+              key={item.key}
+              style={{
+                position: "absolute",
+                left: `${item.pos.x}px`,
+                top: `${item.pos.y}px`,
+              }}
+            >
+              {renderLnk(item.node, true, (e) => handleIconDragStart(item.key, e))}
+            </div>
+          );
+        }
+        if (item.type === "recycle") {
+          return (
+            <div
+              key={item.key}
+              style={{
+                position: "absolute",
+                left: `${item.pos.x}px`,
+                top: `${item.pos.y}px`,
+              }}
+            >
+              <DesktopIcon
+                label="Recycle Bin"
+                icon={recycleBinIcon}
+                selected={selected === "__recycle__"}
+                onSelect={() => {
+                  setSelected("__recycle__");
+                  closeAll();
+                }}
+                onOpen={() => openApp("recycle-bin")}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelected("__recycle__");
+                  setBgMenu(null);
+                  setIconCtx({ kind: "recycle", x: e.clientX, y: e.clientY });
+                }}
+                draggable
+                onDragStart={(e) => handleIconDragStart("__recycle__", e)}
+              />
+            </div>
+          );
+        }
+        return (
           <div
-            key={node.name}
+            key={item.key}
             style={{
-              opacity: node.hidden ? 0.5 : 1,
+              position: "absolute",
+              left: `${item.pos.x}px`,
+              top: `${item.pos.y}px`,
+              opacity: item.node.hidden ? 0.5 : 1,
             }}
           >
-            {renderNode(node)}
+            {renderNode(item.node, true, (e) => handleIconDragStart(item.key, e))}
           </div>
-        ))}
-      </IconColumn>
+        );
+      })}
 
-      {/* Background context menu */}
       {bgMenu && (
         <DesktopContextMenu
           x={bgMenu.x}
@@ -360,7 +511,6 @@ export function Desktop() {
         />
       )}
 
-      {/* Recycle Bin icon context menu */}
       {iconCtx?.kind === "recycle" && (
         <ContextMenu
           x={iconCtx.x}
@@ -390,7 +540,6 @@ export function Desktop() {
         </ContextMenu>
       )}
 
-      {/* Generic icon context menu (shortcuts, folders, files) */}
       {iconCtx?.kind === "node" &&
         (() => {
           const { node } = iconCtx;
@@ -481,6 +630,23 @@ export function Desktop() {
                   </CtxItem>
                 </>
               )}
+              <CtxDivider />
+              {/* Properties context menu option */}
+              <CtxItem
+                onClick={() => {
+                  if (node.name.toLowerCase() === "my computer.lnk") {
+                    openApp("system-properties");
+                  } else {
+                    openApp("properties", {
+                      title: `${node.name} Properties`,
+                      data: { path: abs },
+                    });
+                  }
+                  setIconCtx(null);
+                }}
+              >
+                Properties
+              </CtxItem>
             </ContextMenu>
           );
         })()}
@@ -495,7 +661,6 @@ export function Desktop() {
   );
 }
 
-// Case-insensitive "does this name already exist in the desktop listing".
 function vfsExists(nodes: VfsNode[], name: string): boolean {
   return nodes.some((n) => n.name.toLowerCase() === name.toLowerCase());
 }

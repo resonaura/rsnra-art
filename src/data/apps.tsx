@@ -27,6 +27,7 @@ import { SystemProperties } from "../apps/SystemProperties/SystemProperties";
 import { TaskManager } from "../apps/TaskManager/TaskManager";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
+import { FolderOptions } from "../apps/FolderOptions/FolderOptions";
 
 export interface AppDefinition {
   id: AppId;
@@ -237,6 +238,15 @@ export const APPS: Record<AppId, AppDefinition> = {
     height: 490,
     resizable: false,
     singleInstance: false,
+  },
+  "folder-options": {
+    id: "folder-options",
+    title: "Folder Options",
+    icon: "/icons/w98_directory_open.ico",
+    component: asComponent(FolderOptions),
+    width: 360,
+    height: 480,
+    resizable: false,
   },
   datetime: {
     id: "datetime",

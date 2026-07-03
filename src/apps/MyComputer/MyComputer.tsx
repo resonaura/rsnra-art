@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
-import { ContextMenu, CtxDivider, CtxItem } from "../../components/ContextMenu";
+import { ContextMenu, CtxDivider, CtxItem, CtxSubmenu } from "../../components/ContextMenu";
 import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { Icon } from "../../components/Icon/Icon";
 import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
@@ -499,6 +499,7 @@ const APPLETS: AppletItem[] = [
   {
     label: "Folder Options",
     icon: "/icons/w98_directory_open.ico",
+    onOpen: () => openApp("folder-options"),
     file: "shell32.dll",
   },
   { label: "Fonts", icon: "/icons/w98_font_tt.ico", file: "fontext.dll" },
@@ -593,6 +594,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       root: s.root,
       list: s.list,
       resolvePath: s.resolvePath,
+      resolve: s.resolve,
       exists: s.exists,
       mkdir: s.mkdir,
       writeFile: s.writeFile,
@@ -686,10 +688,14 @@ export function MyComputer({ windowId }: { windowId: string }) {
     return formatDate(node);
   };
 
-  const allEntries: VfsNode[] =
+  let allEntries: VfsNode[] =
     isRoot || driveNotReady || path === "Control Panel" || path === "Games"
       ? []
       : (vfs.list(path) ?? []);
+
+  if (path.toLowerCase() === "c:\\windows\\desktop") {
+    allEntries = allEntries.filter((n) => n.name.toLowerCase() !== "my computer.lnk");
+  }
   const entries = showHidden ? allEntries : allEntries.filter((n) => !n.hidden);
 
   const sortValue = (n: VfsNode): string | number => {
@@ -765,6 +771,21 @@ export function MyComputer({ windowId }: { windowId: string }) {
       } else {
         showMissingFileAlert(node.name, vNode.file ?? `${node.name}.exe`);
       }
+      return;
+    }
+    if (node.name.toLowerCase().endsWith(".lnk")) {
+      try {
+        const lnk = JSON.parse(node.content ?? "");
+        if (lnk.type === "app") {
+          if (lnk.target === "winamp") {
+            void openWebamp();
+          } else {
+            openApp(lnk.target as any, { title: lnk.title || node.name.replace(/\.lnk$/i, ""), data: lnk.data });
+          }
+        } else if (lnk.type === "url") {
+          window.open(lnk.target, "_blank", "noopener,noreferrer");
+        }
+      } catch {}
       return;
     }
     const abs = vfs.resolvePath(node.name, path);
@@ -941,7 +962,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const acceptsDrop = (e: React.DragEvent) =>
-    e.dataTransfer.types.includes(VFS_DND_TYPE);
+    Array.from(e.dataTransfer.types || []).includes(VFS_DND_TYPE);
 
   const handleDropOnDir = (destAbs: string) => (e: React.DragEvent) => {
     if (!acceptsDrop(e)) return;
@@ -1006,125 +1027,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     action();
   };
 
-  const ctxItems: {
-    label: string;
-    action: () => void;
-    disabled?: boolean;
-    divider?: boolean;
-  }[] = ctx?.node
-    ? [
-        { label: "Open", action: () => openNode(ctx.node!) },
-        ...(ctx.node.type === "file"
-          ? [
-              {
-                label: "Open With...",
-                action: () => {
-                  const abs = vfs.resolvePath(ctx.node!.name, path);
-                  if (abs) setOpenWithTarget({ node: ctx.node!, abs });
-                },
-              },
-            ]
-          : []),
-        {
-          label: "Add to Quick Launch",
-          action: () => {
-            const node = ctx.node!;
-            const abs = vfs.resolvePath(node.name, path) || node.name;
-            const isLnk = node.name.toLowerCase().endsWith(".lnk");
-            const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
-            
-            let lnk: any = null;
-            if (isLnk) {
-              try {
-                lnk = JSON.parse(node.content ?? "");
-              } catch {}
-            }
-            
-            const targetIcon = lnk?.icon ?? iconForNode(node);
-            if (isLnk && lnk) {
-              if (lnk.type === "url") {
-                useWindowStore.getState().addToQuickLaunch({
-                  title: label,
-                  icon: targetIcon,
-                  type: "lnk",
-                  lnkPath: lnk.target,
-                });
-              } else {
-                useWindowStore.getState().addToQuickLaunch({
-                  title: label,
-                  icon: targetIcon,
-                  type: "app",
-                  appId: lnk.target as any,
-                  data: lnk.data,
-                });
-              }
-            } else {
-              const preferred = getPreferredApp(node.name);
-              useWindowStore.getState().addToQuickLaunch({
-                title: label,
-                icon: targetIcon,
-                type: "app",
-                appId: (node.appId || preferred?.appId || "notepad") as any,
-                data: { path: abs },
-              });
-            }
-          }
-        },
-        { label: "", action: () => {}, divider: true },
-        {
-          label: "Cut",
-          action: () => cutSelected(ctx.node!),
-          disabled: !!ctx.node!.system,
-        },
-        {
-          label: "Copy",
-          action: () => copySelected(ctx.node!),
-          disabled: !!ctx.node!.system,
-        },
-        { label: "", action: () => {}, divider: true },
-        {
-          label: "Rename",
-          action: () => {
-            setRenaming(ctx.node!.name);
-            setRenameVal(ctx.node!.name);
-          },
-        },
-        { label: "Delete", action: () => deleteNode(ctx.node!) },
-        { label: "", action: () => {}, divider: true },
-        { label: "Properties", action: () => propertiesOf(ctx.node!) },
-      ]
-    : [
-        {
-          label: "Paste",
-          action: paste,
-          disabled:
-            isRoot ||
-            path === "Control Panel" ||
-            path === "Games" ||
-            driveNotReady ||
-            !clipboard.mode ||
-            !clipboard.sourcePath,
-        },
-        { label: "", action: () => {}, divider: true },
-        {
-          label: "New Folder",
-          action: newFolder,
-          disabled:
-            isRoot ||
-            path === "Control Panel" ||
-            path === "Games" ||
-            driveNotReady,
-        },
-        {
-          label: "New Text Document",
-          action: newTextFile,
-          disabled:
-            isRoot ||
-            path === "Control Panel" ||
-            path === "Games" ||
-            driveNotReady,
-        },
-      ];
+
 
   const selectedNode = sorted.find((n) => n.name === selected) ?? null;
 
@@ -1295,6 +1198,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: `${showHidden ? "✓" : " "} Show Hidden Files`,
           action: () => useFilePrefsStore.getState().setShowHidden(!showHidden),
+        },
+        { label: "", divider: true },
+        {
+          label: "Folder Options...",
+          action: () => openApp("folder-options"),
         },
       ],
     },
@@ -1596,18 +1504,152 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
       {ctx && (
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
-          {ctxItems.map((it, i) =>
-            it.divider ? (
-              <CtxDivider key={i} />
-            ) : (
+          {ctx.node ? (
+            <>
+              <CtxItem onClick={() => runCtx(() => openNode(ctx.node!))}>Open</CtxItem>
+              {ctx.node.type === "file" && (
+                <CtxItem
+                  onClick={() =>
+                    runCtx(() => {
+                      const abs = vfs.resolvePath(ctx.node!.name, path);
+                      if (abs) setOpenWithTarget({ node: ctx.node!, abs });
+                    })
+                  }
+                >
+                  Open With...
+                </CtxItem>
+              )}
               <CtxItem
-                key={i}
-                $disabled={it.disabled}
-                onClick={() => !it.disabled && runCtx(it.action)}
+                onClick={() =>
+                  runCtx(() => {
+                    const node = ctx.node!;
+                    const abs = vfs.resolvePath(node.name, path) || node.name;
+                    const isLnk = node.name.toLowerCase().endsWith(".lnk");
+                    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
+                    
+                    let lnk: any = null;
+                    if (isLnk) {
+                      try {
+                        lnk = JSON.parse(node.content ?? "");
+                      } catch {}
+                    }
+                    
+                    const targetIcon = lnk?.icon ?? iconForNode(node);
+                    if (isLnk && lnk) {
+                      if (lnk.type === "url") {
+                        useWindowStore.getState().addToQuickLaunch({
+                          title: label,
+                          icon: targetIcon,
+                          type: "lnk",
+                          lnkPath: lnk.target,
+                        });
+                      } else {
+                        useWindowStore.getState().addToQuickLaunch({
+                          title: label,
+                          icon: targetIcon,
+                          type: "app",
+                          appId: lnk.target as any,
+                          data: lnk.data,
+                        });
+                      }
+                    } else {
+                      const preferred = getPreferredApp(node.name);
+                      useWindowStore.getState().addToQuickLaunch({
+                        title: label,
+                        icon: targetIcon,
+                        type: "app",
+                        appId: (node.appId || preferred?.appId || "notepad") as any,
+                        data: { path: abs },
+                      });
+                    }
+                  })
+                }
               >
-                {it.label}
+                Add to Quick Launch
               </CtxItem>
-            ),
+              <CtxDivider />
+              <CtxItem
+                $disabled={!!ctx.node!.system}
+                onClick={() => !ctx.node!.system && runCtx(() => cutSelected(ctx.node!))}
+              >
+                Cut
+              </CtxItem>
+              <CtxItem
+                $disabled={!!ctx.node!.system}
+                onClick={() => !ctx.node!.system && runCtx(() => copySelected(ctx.node!))}
+              >
+                Copy
+              </CtxItem>
+              <CtxDivider />
+              <CtxItem onClick={() => runCtx(() => { setRenaming(ctx.node!.name); setRenameVal(ctx.node!.name); })}>
+                Rename
+              </CtxItem>
+              <CtxItem onClick={() => runCtx(() => deleteNode(ctx.node!))}>Delete</CtxItem>
+              <CtxDivider />
+              <CtxItem onClick={() => runCtx(() => propertiesOf(ctx.node!))}>Properties</CtxItem>
+            </>
+          ) : (
+            <>
+              <CtxSubmenu label="Arrange Icons">
+                <CtxItem onClick={() => runCtx(() => toggleSort("name"))}>
+                  {sortKey === "name" && "✓ "}by Name
+                </CtxItem>
+                <CtxItem onClick={() => runCtx(() => toggleSort("type"))}>
+                  {sortKey === "type" && "✓ "}by Type
+                </CtxItem>
+                <CtxItem onClick={() => runCtx(() => toggleSort("size"))}>
+                  {sortKey === "size" && "✓ "}by Size
+                </CtxItem>
+                <CtxItem onClick={() => runCtx(() => toggleSort("date"))}>
+                  {sortKey === "date" && "✓ "}by Date
+                </CtxItem>
+                <CtxDivider />
+                <CtxItem $disabled>Auto Arrange</CtxItem>
+              </CtxSubmenu>
+              <CtxItem $disabled>Line up Icons</CtxItem>
+              <CtxDivider />
+              <CtxItem
+                $disabled={
+                  isRoot ||
+                  path === "Control Panel" ||
+                  path === "Games" ||
+                  driveNotReady ||
+                  !clipboard.mode ||
+                  !clipboard.sourcePath
+                }
+                onClick={() => runCtx(paste)}
+              >
+                Paste
+              </CtxItem>
+              <CtxDivider />
+              <CtxSubmenu label="New">
+                <CtxItem
+                  $disabled={isRoot || path === "Control Panel" || path === "Games" || driveNotReady}
+                  onClick={() => runCtx(newFolder)}
+                >
+                  Folder
+                </CtxItem>
+                <CtxItem
+                  $disabled={isRoot || path === "Control Panel" || path === "Games" || driveNotReady}
+                  onClick={() => runCtx(newTextFile)}
+                >
+                  Text Document
+                </CtxItem>
+              </CtxSubmenu>
+              <CtxDivider />
+              <CtxItem onClick={() => runCtx(() => openApp("folder-options"))}>Folder Options...</CtxItem>
+              <CtxItem
+                $disabled={isRoot || path === "Control Panel" || path === "Games"}
+                onClick={() =>
+                  runCtx(() => {
+                    const node = vfs.resolve(path);
+                    if (node) propertiesOf(node);
+                  })
+                }
+              >
+                Properties
+              </CtxItem>
+            </>
           )}
         </ContextMenu>
       )}

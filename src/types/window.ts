@@ -26,6 +26,7 @@ export type AppId =
   | "solitaire"
   | "pinball"
   | "task-manager"
+  | "folder-options"
   | "charmap";
 
 export interface Bounds {

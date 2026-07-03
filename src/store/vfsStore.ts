@@ -437,6 +437,57 @@ function buildInitialTree(): VfsNode {
         true,
       ),
       dir("Temp", [], true),
+      dir(
+        "Application Data",
+        [
+          dir(
+            "Microsoft",
+            [
+              dir(
+                "Internet Explorer",
+                [
+                  dir(
+                    "Quick Launch",
+                    [
+                      file("Show Desktop.lnk", {
+                        content: JSON.stringify({
+                          type: "url",
+                          target: "show-desktop",
+                          icon: "/icons/w2k_desktop.ico",
+                          title: "Show Desktop",
+                        }),
+                        system: true,
+                      }),
+                      file("Command Prompt.lnk", {
+                        content: JSON.stringify({
+                          type: "app",
+                          target: "terminal",
+                          icon: "/icons/w98_console_prompt.ico",
+                          title: "Command Prompt",
+                        }),
+                        system: false,
+                      }),
+                      file("Notepad.lnk", {
+                        content: JSON.stringify({
+                          type: "app",
+                          target: "notepad",
+                          icon: "/icons/w2k_notepad_2.ico",
+                          title: "Notepad",
+                        }),
+                        system: false,
+                      }),
+                    ],
+                    false,
+                  ),
+                ],
+                true,
+              ),
+            ],
+            true,
+          ),
+        ],
+        true,
+      ),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", CURSORS_VFS_NODES, true),
       // System sounds — the real Windows Me/95 .wav files, browsable at

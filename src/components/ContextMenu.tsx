@@ -102,3 +102,60 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
     document.body,
   );
 }
+
+const SubmenuContainer = styled.div`
+  position: relative;
+  
+  &:hover > .submenu-trigger {
+    background: ${({ theme }) => theme.hoverBackground};
+    color: ${({ theme }) => theme.headerText};
+  }
+
+  &:hover > .submenu-popup {
+    display: block;
+  }
+`;
+
+const SubmenuTrigger = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 20px;
+  font-size: 12px;
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  color: ${({ theme }) => theme.materialText};
+  box-sizing: border-box;
+  
+  &::after {
+    content: "▶";
+    font-size: 8px;
+    margin-left: 12px;
+  }
+`;
+
+const SubmenuPopup = styled.div`
+  display: none;
+  position: absolute;
+  top: -2px;
+  left: 100%;
+  background: ${({ theme }) => theme.material};
+  border: 2px solid;
+  border-color: ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest};
+  padding: 2px;
+  min-width: 160px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  z-index: 1000000;
+`;
+
+export function CtxSubmenu({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <SubmenuContainer>
+      <SubmenuTrigger className="submenu-trigger">{label}</SubmenuTrigger>
+      <SubmenuPopup className="submenu-popup">{children}</SubmenuPopup>
+    </SubmenuContainer>
+  );
+}

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AppId, Bounds, WindowInstance } from "../types/window";
+import { useVfsStore } from "./vfsStore";
 
 let idCounter = 0;
 const genId = () => `win-${++idCounter}-${Date.now().toString(36)}`;
@@ -279,25 +280,22 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     }));
   },
   addToQuickLaunch: (item) => {
-    const { quickLaunchItems } = get();
-    const exists = quickLaunchItems.some(
-      (q) => (q.type === item.type && q.appId === item.appId && q.lnkPath === item.lnkPath)
-    );
-    if (exists) return;
-
-    const newItem: QuickLaunchItem = {
-      ...item,
-      id: `ql-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    };
-
-    set({
-      quickLaunchItems: [...quickLaunchItems, newItem],
+    const vfs = useVfsStore.getState();
+    const name = item.title.toLowerCase().endsWith(".lnk") ? item.title : `${item.title}.lnk`;
+    const qlPath = `C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch\\${name}`;
+    const content = JSON.stringify({
+      type: item.type === "show-desktop" ? "url" : item.type,
+      target: item.type === "show-desktop" ? "show-desktop" : item.appId || item.lnkPath,
+      icon: item.icon,
+      title: item.title,
+      data: item.data,
     });
+    vfs.writeFile(qlPath, content);
   },
   removeFromQuickLaunch: (id) => {
-    set((state) => ({
-      quickLaunchItems: state.quickLaunchItems.filter((q) => q.id !== id),
-    }));
+    const vfs = useVfsStore.getState();
+    const qlPath = `C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch\\${id}`;
+    vfs.remove(qlPath);
   },
 }));
 
