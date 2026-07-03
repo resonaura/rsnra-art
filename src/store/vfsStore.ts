@@ -362,6 +362,150 @@ function buildInitialTree(): VfsNode {
         ],
         true,
       ),
+      // C:\Windows\Start Menu — mirrors the real Win95 Start Menu structure.
+      // Programs\ contains .lnk shortcuts that the Start Menu reads dynamically.
+      dir(
+        "Start Menu",
+        [
+          dir(
+            "Programs",
+            [
+              dir(
+                "Accessories",
+                [
+                  file("Command Prompt.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "terminal",
+                      icon: "/icons/w98_console_prompt.ico",
+                      title: "Command Prompt",
+                    }),
+                    system: true,
+                  }),
+                  file("Notepad.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "notepad",
+                      icon: "/icons/w2k_notepad_2.ico",
+                      title: "bio.txt - Notepad",
+                      data: { docId: "bio" },
+                    }),
+                    system: true,
+                  }),
+                  file("Paint.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "paint",
+                      icon: "/icons/w2k_paint.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("Calculator.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "calculator",
+                      icon: "/icons/w98_calculator.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("Sound Recorder.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "sound-recorder",
+                      icon: "/icons/w98_cassette_tape.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("Character Map.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "charmap",
+                      icon: "/icons/w98_charmap.ico",
+                    }),
+                    system: true,
+                  }),
+                ],
+                true,
+              ),
+              dir(
+                "Games",
+                [
+                  file("Minesweeper.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "minesweeper",
+                      icon: "/icons/w98_minesweeper.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("RSNRA Snake.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "snake",
+                      icon: "/icons/w98_joystick.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("Solitaire.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "solitaire",
+                      icon: "/icons/w98_game_solitaire.ico",
+                    }),
+                    system: true,
+                  }),
+                  file("3D Pinball.lnk", {
+                    content: JSON.stringify({
+                      type: "app",
+                      target: "pinball",
+                      icon: "/icons/pinball.png",
+                    }),
+                    system: true,
+                  }),
+                  file("Hearts.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w98_mshearts.ico",
+                      file: "mshearts.exe",
+                    }),
+                    system: true,
+                  }),
+                  file("FreeCell.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w98_game_freecell.ico",
+                      file: "freecell.exe",
+                    }),
+                    system: true,
+                  }),
+                  file("Spider.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w98_spider.ico",
+                      file: "spider.exe",
+                    }),
+                    system: true,
+                  }),
+                ],
+                true,
+              ),
+              file("Winamp.lnk", {
+                content: JSON.stringify({
+                  type: "app",
+                  target: "winamp",
+                  icon: "/icons/WinAMP_7.ico",
+                }),
+                system: true,
+              }),
+            ],
+            true,
+          ),
+        ],
+        true,
+      ),
     ],
     true,
   );

@@ -351,7 +351,10 @@ export function openApp(appId: AppId, overrides?: OpenAppOverrides): string {
     return openApp("my-computer", {
       ...overrides,
       title: overrides?.title ?? "Games",
-      data: { ...overrides?.data, path: "Games" },
+      data: {
+        ...overrides?.data,
+        path: "C:\\Windows\\Start Menu\\Programs\\Games",
+      },
     });
   }
 

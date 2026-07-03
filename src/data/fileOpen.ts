@@ -3,6 +3,14 @@ import { useFilePrefsStore } from "../store/filePrefsStore";
 import type { AppId } from "../types/window";
 import { openApp } from "./apps";
 
+// NOTE: icon paths here are intentionally literal strings (not APPS[x].icon)
+// because fileOpen.ts is in a circular module graph:
+//   apps.tsx → MyComputer.tsx → fileOpen.ts → apps.tsx
+// Accessing APPS at module initialisation time (inside a const array literal)
+// would hit the TDZ before apps.tsx finishes evaluating. Use string literals
+// to keep the module side-effect–free and break the cycle.
+// If you change an app's icon in apps.tsx, update the matching entry below too.
+
 export interface OpenWithApp {
   appId: AppId;
   label: string;
@@ -11,7 +19,7 @@ export interface OpenWithApp {
   open: (path: string, name: string) => void;
 }
 
-const OPEN_WITH_CATALOG: OpenWithApp[] = [
+export const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "notepad",
     label: "Notepad",
@@ -23,7 +31,7 @@ const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "paint",
     label: "Paint",
-    icon: "/icons/w2k_paint.ico",
+    icon: "/icons/w98_paint.ico",
     extensions: ["png", "bmp"],
     open: (path, name) =>
       openApp("paint", { title: `${name} - Paint`, data: { path } }),

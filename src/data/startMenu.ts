@@ -1,5 +1,6 @@
 import { useShallow } from "zustand/react/shallow";
 import { playSound } from "../lib/audio";
+import { dirIcon, iconForNode } from "./fileIcons";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
 import { showMissingFileAlert } from "../store/alertStore";
 import type { VfsNode } from "../store/vfsStore";
@@ -7,7 +8,7 @@ import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 import { getPreferredApp } from "./fileOpen";
-import { GAMES } from "./games";
+import { lnkIcon, openLnk, parseLnk } from "./shortcuts";
 
 export interface MenuNode {
   id: string;
@@ -17,6 +18,7 @@ export interface MenuNode {
   action?: () => void;
   children?: MenuNode[];
   disabled?: boolean;
+  separator?: boolean; // renders a divider line instead of a menu item
 }
 
 function closeStartMenu() {
@@ -36,10 +38,72 @@ export function requestShutdown() {
   useWindowStore.getState().setPowerState("shutting-down");
 }
 
-// Build the "Documents" submenu from the *actual* contents of C:\My Documents
-// in the live VFS, so the Start menu reflects files the user has created or
-// edited (not a hardcoded list). Files open in the app that handles them;
-// folders expand into their contents.
+// ── VFS-backed helpers ────────────────────────────────────────────────────────
+
+/** Strip the .lnk suffix to get the display label */
+function lnkLabel(name: string): string {
+  return name.toLowerCase().endsWith(".lnk") ? name.slice(0, -4) : name;
+}
+
+/**
+ * Build a MenuNode subtree from a VFS directory.
+ * - Subdirectories become submenus (recursive).
+ * - .lnk files become action items via parseLnk / openLnk / lnkIcon.
+ * - Other files are ignored (they shouldn't be here, but robustness matters).
+ * - Hidden nodes are skipped.
+ */
+function vfsDirToMenuNodes(
+  absPath: string,
+  vfs: { list: (path: string) => VfsNode[] | null },
+  depth = 0,
+): MenuNode[] {
+  if (depth > 4) return []; // guard against infinite recursion
+  const list = vfs.list(absPath) ?? [];
+  const nodes: MenuNode[] = [];
+
+  for (const node of list) {
+    if (node.hidden) continue;
+
+    const nodeAbs =
+      absPath.replace(/\\+$/, "") + "\\" + node.name;
+
+    if (node.type === "dir") {
+      // Subdirectory → submenu — icon resolved via unified dirIcon()
+      const children = vfsDirToMenuNodes(nodeAbs, vfs, depth + 1);
+      nodes.push({
+        id: nodeAbs,
+        label: node.name,
+        icon: dirIcon(node),
+        children,
+      });
+    } else if (node.name.toLowerCase().endsWith(".lnk")) {
+      const lnk = parseLnk(node);
+      if (!lnk) continue;
+      const disabled = lnk.type === "missing";
+      nodes.push({
+        id: nodeAbs,
+        label: lnkLabel(node.name),
+        icon: lnkIcon(lnk),
+        disabled,
+        action: run(() => {
+          if (lnk.type === "missing") {
+            showMissingFileAlert(lnkLabel(node.name), lnk.file ?? `${lnkLabel(node.name)}.exe`);
+          } else if (lnk.target === "winamp") {
+            void openWebamp();
+          } else {
+            openLnk(lnk, lnkLabel(node.name));
+          }
+        }),
+      });
+    }
+    // other file types: skip silently
+  }
+
+  return nodes;
+}
+
+// ── Documents: built from the live C:\My Documents VFS ───────────────────────
+
 function docChildren(
   path: string,
   vfs: { list: (path: string) => VfsNode[] | null },
@@ -53,14 +117,14 @@ function docChildren(
       nodes.push({
         id: abs,
         label: node.name,
-        icon: "/icons/w2k_directory_open.ico",
+        icon: dirIcon(node),
         children: docChildren(abs, vfs),
       });
     } else {
       nodes.push({
         id: abs,
         label: node.name,
-        icon: "/icons/w2k_text_file.ico",
+        icon: iconForNode(node),
         action: run(() => openFile(abs, node)),
       });
     }
@@ -109,90 +173,37 @@ function openFile(abs: string, node: VfsNode) {
   }
 }
 
-/** The full Start menu tree, with Documents rebuilt from the live VFS. */
+// ── Main export ───────────────────────────────────────────────────────────────
+
+/**
+ * The full Start menu tree.
+ *
+ * Programs → read dynamically from C:\Windows\Start Menu\Programs in VFS.
+ *   Any .lnk files or subdirectories the user adds/removes there are reflected
+ *   immediately — no code changes needed.
+ *
+ * Top-level items (Documents, Settings, Find, Help, Run, Shut Down) are OS-level
+ * items that don't live in Programs; they appear above with a separator before
+ * Shut Down, exactly like real Windows 95.
+ */
 export function useStartMenuTree(): MenuNode[] {
   const vfs = useVfsStore(useShallow((s) => ({ root: s.root, list: s.list })));
+
+  // Programs: read from C:\Windows\Start Menu\Programs
+  const programsChildren = vfsDirToMenuNodes(
+    "C:\\Windows\\Start Menu\\Programs",
+    vfs,
+  );
+
+  // Documents: built from C:\My Documents live content
   const docs = docChildren("C:\\My Documents", vfs);
+
   return [
     {
       id: "programs",
       label: "Programs",
       icon: "/icons/w2k-programs.ico",
-      children: [
-        {
-          id: "accessories",
-          label: "Accessories",
-          icon: "/icons/w2k_folder_open.ico",
-          children: [
-            {
-              id: "terminal",
-              label: "Command Prompt",
-              icon: "/icons/w98_console_prompt.ico",
-              action: run(() => openApp("terminal")),
-            },
-            {
-              id: "notepad",
-              label: "Notepad",
-              icon: "/icons/w2k_notepad_2.ico",
-              action: run(() =>
-                openApp("notepad", {
-                  title: "bio.txt - Notepad",
-                  data: { docId: "bio" },
-                }),
-              ),
-            },
-            {
-              id: "paint",
-              label: "Paint",
-              icon: "/icons/w2k_paint.ico",
-              action: run(() => openApp("paint")),
-            },
-            {
-              id: "calculator",
-              label: "Calculator",
-              icon: "/icons/w98_calculator.ico",
-              action: run(() => openApp("calculator")),
-            },
-            {
-              id: "sound-recorder",
-              label: "Sound Recorder",
-              icon: "/icons/w98_cassette_tape.ico",
-              action: run(() => openApp("sound-recorder")),
-            },
-            {
-              id: "charmap",
-              label: "Character Map",
-              icon: "/icons/w98_charmap.ico",
-              action: run(() => openApp("charmap")),
-            },
-          ],
-        },
-        {
-          id: "games",
-          label: "Games",
-          icon: "/icons/w98_joystick.ico",
-          // Mirrors the actual C:\...\Games folder (src/data/games.ts) —
-          // including entries with nothing installed, which fail with the
-          // same "file missing or corrupted" alert as double-clicking them
-          // in My Computer, instead of just being grayed out.
-          children: GAMES.map((g) => ({
-            id: `game-${g.label}`,
-            label: g.label,
-            icon: g.icon,
-            action: run(() =>
-              g.onOpen && !g.disabled
-                ? g.onOpen()
-                : showMissingFileAlert(g.label, g.file),
-            ),
-          })),
-        },
-        {
-          id: "winamp",
-          label: "Winamp",
-          icon: "/icons/WinAMP_7.ico",
-          action: run(() => openWebamp()),
-        },
-      ],
+      children: programsChildren,
     },
     {
       id: "documents",
@@ -247,6 +258,8 @@ export function useStartMenuTree(): MenuNode[] {
         closeStartMenu();
       },
     },
+    // Separator before Shut Down — just like real Windows 95
+    { id: "__sep__", label: "", separator: true },
     {
       id: "shut-down",
       label: "Shut Down...",

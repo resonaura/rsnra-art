@@ -30,6 +30,14 @@ const ItemWrap = styled.li`
   }
 `;
 
+const Divider = styled.li`
+  height: 0;
+  margin: 3px 4px;
+  border-top: 1px solid ${({ theme }) => theme.borderDark};
+  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
+  list-style: none;
+`;
+
 const Row = styled.div<{ $disabled?: boolean }>`
   display: flex;
   align-items: center;
@@ -76,34 +84,41 @@ interface MenuTreeProps {
 export function MenuTree({ nodes, nested }: MenuTreeProps) {
   return (
     <List $nested={nested}>
-      {nodes.map((node) => (
-        <ItemWrap key={node.id}>
-          <Row
-            $disabled={node.disabled}
-            onClick={() => {
-              if (node.disabled) return;
-              if (!node.children) node.action?.();
-            }}
-          >
-            {node.icon && (
-              <span className="icon-wrap">
-                <Icon
-                  src={node.icon}
-                  size={22}
-                  style={
-                    node.iconScale
-                      ? { transform: `scale(${node.iconScale})` }
-                      : undefined
-                  }
-                />
-              </span>
-            )}
-            <span>{node.label}</span>
-            {node.children && <span className="chevron">▶</span>}
-          </Row>
-          {node.children && <MenuTree nodes={node.children} nested />}
-        </ItemWrap>
-      ))}
+      {nodes.map((node) => {
+        // Render a separator divider
+        if (node.separator) {
+          return <Divider key={node.id} role="separator" />;
+        }
+
+        return (
+          <ItemWrap key={node.id}>
+            <Row
+              $disabled={node.disabled}
+              onClick={() => {
+                if (node.disabled) return;
+                if (!node.children) node.action?.();
+              }}
+            >
+              {node.icon && (
+                <span className="icon-wrap">
+                  <Icon
+                    src={node.icon}
+                    size={22}
+                    style={
+                      node.iconScale
+                        ? { transform: `scale(${node.iconScale})` }
+                        : undefined
+                    }
+                  />
+                </span>
+              )}
+              <span>{node.label}</span>
+              {node.children && <span className="chevron">▶</span>}
+            </Row>
+            {node.children && <MenuTree nodes={node.children} nested />}
+          </ItemWrap>
+        );
+      })}
     </List>
   );
 }

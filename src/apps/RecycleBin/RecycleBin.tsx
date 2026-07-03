@@ -4,6 +4,7 @@ import { AppMenuBar } from "../../components/AppMenuBar";
 import { ContextMenu, CtxItem } from "../../components/ContextMenu";
 import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
+import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
@@ -220,11 +221,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                 >
                   <Td>
                     <Icon
-                      src={
-                        item.node.type === "dir"
-                          ? "/icons/w2k_folder_closed.ico"
-                          : "/icons/w98_file_lines.ico"
-                      }
+                      src={iconForNode(item.node)}
                       size={16}
                       style={{
                         width: 16,
