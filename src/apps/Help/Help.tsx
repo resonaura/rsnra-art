@@ -63,7 +63,7 @@ export function Help({ windowId }: { windowId: string }) {
       >
         <InfoFrame variant="field">
           <Icon
-            src="/icons/w2k_my_computer.ico"
+            src="/icons/explorer.exe/000.ico"
             size={48}
             style={{ width: 48, height: 48 }}
           />

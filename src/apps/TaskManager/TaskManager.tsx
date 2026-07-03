@@ -14,8 +14,8 @@ import {
   Tabs,
 } from "react95";
 import styled from "styled-components";
-import { ScrollArea } from "../../components/ScrollArea";
 import { Icon } from "../../components/Icon/Icon";
+import { ScrollArea } from "../../components/ScrollArea";
 import { buildProcessRows, REAL_PROCESS_NAME } from "../../data/processList";
 import { usePerfStats } from "../../hooks/usePerfStats";
 import { useWindowStore } from "../../store/windowStore";
@@ -54,8 +54,8 @@ const ListFrame = styled(ScrollArea)`
   background: white;
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
 const Th = styled(TableHeadCell)`
@@ -111,8 +111,11 @@ interface SortState<K extends string> {
 function useSort<K extends string>(initial: SortState<K>) {
   const [sort, setSort] = useState<SortState<K>>(initial);
   const toggle = (key: K) =>
-    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as SortDir } : { key, dir: 1 }));
-  const arrow = (key: K) => (sort.key === key ? (sort.dir === 1 ? " ▲" : " ▼") : "");
+    setSort((s) =>
+      s.key === key ? { key, dir: (s.dir * -1) as SortDir } : { key, dir: 1 },
+    );
+  const arrow = (key: K) =>
+    sort.key === key ? (sort.dir === 1 ? " ▲" : " ▼") : "";
   return { sort, toggle, arrow };
 }
 
@@ -134,7 +137,10 @@ export function TaskManager(_props: { windowId: string }) {
   const perf = usePerfStats();
 
   const appSort = useSort<"title" | "status">({ key: "title", dir: 1 });
-  const procSort = useSort<"name" | "pid" | "cpu" | "mem">({ key: "cpu", dir: -1 });
+  const procSort = useSort<"name" | "pid" | "cpu" | "mem">({
+    key: "cpu",
+    dir: -1,
+  });
 
   const sortedApps = useMemo(() => {
     const list = [...windows];
@@ -153,8 +159,17 @@ export function TaskManager(_props: { windowId: string }) {
 
   const sortedProcs = useMemo(() => {
     const key = procSort.sort.key;
-    const field = key === "name" ? "name" : key === "pid" ? "pid" : key === "cpu" ? "cpuPct" : "memK";
-    return [...processRows].sort((a, b) => cmp(a[field], b[field], procSort.sort.dir));
+    const field =
+      key === "name"
+        ? "name"
+        : key === "pid"
+          ? "pid"
+          : key === "cpu"
+            ? "cpuPct"
+            : "memK";
+    return [...processRows].sort((a, b) =>
+      cmp(a[field], b[field], procSort.sort.dir),
+    );
   }, [processRows, procSort.sort]);
 
   const endSelectedApp = () => {
@@ -221,7 +236,13 @@ export function TaskManager(_props: { windowId: string }) {
                       onDoubleClick={() => focusWindow(w.id)}
                     >
                       <TableDataCell>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <Icon src={w.icon} size={16} />
                           <span>{w.title}</span>
                         </div>
@@ -294,7 +315,7 @@ export function TaskManager(_props: { windowId: string }) {
                     } else if (row.pid === 0) {
                       iconPath = "/icons/w98_standby_monitor_moon.ico";
                     } else if (row.pid === 4) {
-                      iconPath = "/icons/w2k_my_computer.ico";
+                      iconPath = "/icons/explorer.exe/000.ico";
                     } else if (row.name === "explorer.exe") {
                       iconPath = "/icons/w98_directory_open.ico";
                     } else if (row.name === REAL_PROCESS_NAME) {
@@ -312,14 +333,22 @@ export function TaskManager(_props: { windowId: string }) {
                         onClick={() => setSelectedPid(row.pid)}
                       >
                         <TableDataCell>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
                             <Icon src={iconPath} size={16} />
                             <span>{row.name}</span>
                           </div>
                         </TableDataCell>
                         <TableDataCell>{row.pid}</TableDataCell>
                         <TableDataCell>{row.cpuPct}%</TableDataCell>
-                        <TableDataCell>{formatMemoryKB(row.memK)}</TableDataCell>
+                        <TableDataCell>
+                          {formatMemoryKB(row.memK)}
+                        </TableDataCell>
                       </Row>
                     );
                   })}
@@ -381,7 +410,8 @@ export function TaskManager(_props: { windowId: string }) {
                 <span>{processRows.length}</span>
                 <span>Physical Memory</span>
                 <span>
-                  {formatMemoryKB(perf.usedMemMB * 1024)} / {formatMemoryKB(perf.limitMemMB * 1024)}
+                  {formatMemoryKB(perf.usedMemMB * 1024)} /{" "}
+                  {formatMemoryKB(perf.limitMemMB * 1024)}
                 </span>
               </div>
             </GroupBox>
@@ -392,7 +422,8 @@ export function TaskManager(_props: { windowId: string }) {
         <span>Processes: {processRows.length}</span>
         <span>CPU Usage: {perf.cpuPct}%</span>
         <span>
-          Mem Usage: {formatMemoryKB(perf.usedMemMB * 1024)} / {formatMemoryKB(perf.limitMemMB * 1024)}
+          Mem Usage: {formatMemoryKB(perf.usedMemMB * 1024)} /{" "}
+          {formatMemoryKB(perf.limitMemMB * 1024)}
         </span>
       </StatusBar>
     </Layout>

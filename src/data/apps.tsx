@@ -8,6 +8,7 @@ import { Contact } from "../apps/Contact/Contact";
 import { DateTime } from "../apps/DateTime/DateTime";
 import { DisplayProperties } from "../apps/DisplayProperties/DisplayProperties";
 import { Find } from "../apps/Find/Find";
+import { FolderOptions } from "../apps/FolderOptions/FolderOptions";
 import { Help } from "../apps/Help/Help";
 import { Minesweeper } from "../apps/Minesweeper/Minesweeper";
 import { MouseProperties } from "../apps/MouseProperties/MouseProperties";
@@ -27,7 +28,6 @@ import { SystemProperties } from "../apps/SystemProperties/SystemProperties";
 import { TaskManager } from "../apps/TaskManager/TaskManager";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
-import { FolderOptions } from "../apps/FolderOptions/FolderOptions";
 
 export interface AppDefinition {
   id: AppId;
@@ -50,7 +50,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   welcome: {
     id: "welcome",
     title: "Welcome",
-    icon: "/icons/w2k_my_computer.ico",
+    icon: "/icons/explorer.exe/000.ico",
     component: asComponent(Welcome),
     width: 620,
     height: 460,
@@ -58,7 +58,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "my-computer": {
     id: "my-computer",
     title: "My Computer",
-    icon: "/icons/w2k_my_computer.ico",
+    icon: "/icons/explorer.exe/000.ico",
     component: asComponent(MyComputer),
     width: 520,
     height: 420,
@@ -189,7 +189,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "system-properties": {
     id: "system-properties",
     title: "System Properties",
-    icon: "/icons/w2k_my_computer.ico",
+    icon: "/icons/explorer.exe/000.ico",
     component: asComponent(SystemProperties),
     width: 400,
     height: 420,
@@ -245,7 +245,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     icon: "/icons/w98_directory_open.ico",
     component: asComponent(FolderOptions),
     width: 380,
-    height: 560,
+    height: 580,
     resizable: false,
   },
   datetime: {

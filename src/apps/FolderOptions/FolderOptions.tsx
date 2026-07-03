@@ -1,8 +1,27 @@
-import { useState } from "react";
-import { Button, Checkbox, GroupBox, Radio, Tab, TabBody, Tabs } from "react95";
+import { useMemo, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  GroupBox,
+  Radio,
+  Tab,
+  TabBody,
+  Tabs,
+  TextInput,
+} from "react95";
 import styled from "styled-components";
 import { Icon } from "../../components/Icon/Icon";
+import { IconPickerDialog } from "../../components/IconPickerDialog/IconPickerDialog";
+import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
+import {
+  KNOWN_EXTENSIONS,
+  extIcon,
+  iconPickerPool,
+  typeLabelForExtension,
+} from "../../data/fileIcons";
+import { candidatesFor, getPreferredApp } from "../../data/fileOpen";
+import { R95_SCALE } from "../../react95.conf";
 import {
   useFilePrefsStore,
   type BrowseFoldersMode,
@@ -14,32 +33,31 @@ const Layout = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 8px;
-  gap: 8px;
 `;
 
-const Content = styled(TabBody)`
-  padding: 12px;
+const Content = styled(ScrollArea)`
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   background: ${({ theme }) => theme.material};
-  overflow-y: auto;
 `;
+
+const contentInnerStyle = {
+  padding: 12,
+  display: "flex" as const,
+  flexDirection: "column" as const,
+  gap: 8,
+};
 
 const ButtonRow = styled.div`
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-  zoom: 0.8;
+  margin-top: 10px;
 `;
 
 const RestoreRow = styled.div`
   display: flex;
   justify-content: flex-end;
-  zoom: 0.8;
 `;
 
 const OptionsList = styled(ScrollArea)`
@@ -48,9 +66,8 @@ const OptionsList = styled(ScrollArea)`
   background: white;
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
-  zoom: 0.8;
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
 const SettingRow = styled.div<{ $indent?: 0 | 1 | 2 }>`
@@ -64,9 +81,9 @@ const SettingRow = styled.div<{ $indent?: 0 | 1 | 2 }>`
 const TreeHeader = styled.div<{ $indent?: 0 | 1 }>`
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   padding-left: ${({ $indent }) => ($indent ? `${$indent * 20}px` : "0")};
-  font-size: 11px;
+  margin-bottom: 5px;
 `;
 
 const IconRow = styled.div`
@@ -82,18 +99,46 @@ const RadioColumn = styled.div`
   flex: 1;
 `;
 
-const CtxDivider = styled.div`
-  height: 1px;
-  margin: 3px 2px;
-  background: ${({ theme }) => theme.borderDark};
-  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
+const TypeRow = styled.button<{ $selected?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  text-align: left;
+  border: none;
+  cursor: default;
+  font-family: inherit;
+  background: ${({ $selected, theme }) =>
+    $selected ? theme.hoverBackground : "transparent"};
+  color: ${({ $selected, theme }) =>
+    $selected ? theme.headerText : theme.canvasText};
+
+  img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+`;
+
+const TypeExt = styled.span`
+  width: 56px;
+  flex-shrink: 0;
+  font-weight: bold;
+`;
+
+const NewTypeForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 `;
 
 // Mirrors the store's own defaults (see filePrefsStore.ts) — used by "Restore
 // Defaults", which only resets the dialog's staged values until Apply/OK.
 const DEFAULTS = {
   showHidden: false,
-  singleClickOpen: true,
+  singleClickOpen: false,
   underlineMode: "browser" as UnderlineMode,
   browseFoldersMode: "same" as BrowseFoldersMode,
   webContentInFolders: true,
@@ -119,22 +164,93 @@ export function FolderOptions({ windowId }: { windowId: string }) {
   // Every field is staged locally and only committed to the persisted store
   // on Apply/OK — Cancel discards, exactly like the real Windows dialog.
   const [showHidden, setShowHidden] = useState(store.showHidden);
-  const [activeDesktopWebContent, setActiveDesktopWebContent] = useState(store.activeDesktopWebContent);
-  const [webContentInFolders, setWebContentInFolders] = useState(store.webContentInFolders);
-  const [browseFoldersMode, setBrowseFoldersMode] = useState(store.browseFoldersMode);
+  const [activeDesktopWebContent, setActiveDesktopWebContent] = useState(
+    store.activeDesktopWebContent,
+  );
+  const [webContentInFolders, setWebContentInFolders] = useState(
+    store.webContentInFolders,
+  );
+  const [browseFoldersMode, setBrowseFoldersMode] = useState(
+    store.browseFoldersMode,
+  );
   const [singleClickOpen, setSingleClickOpen] = useState(store.singleClickOpen);
   const [underlineMode, setUnderlineMode] = useState(store.underlineMode);
 
-  const [autoSearchNetworkFolders, setAutoSearchNetworkFolders] = useState(store.autoSearchNetworkFolders);
-  const [displayAllControlPanelOptions, setDisplayAllControlPanelOptions] = useState(store.displayAllControlPanelOptions);
-  const [fullPathInAddressBar, setFullPathInAddressBar] = useState(store.fullPathInAddressBar);
-  const [fullPathInTitleBar, setFullPathInTitleBar] = useState(store.fullPathInTitleBar);
-  const [hideKnownExtensions, setHideKnownExtensions] = useState(store.hideKnownExtensions);
-  const [hideProtectedSystemFiles, setHideProtectedSystemFiles] = useState(store.hideProtectedSystemFiles);
-  const [launchFoldersInSeparateProcess, setLaunchFoldersInSeparateProcess] = useState(store.launchFoldersInSeparateProcess);
-  const [rememberFolderViewSettings, setRememberFolderViewSettings] = useState(store.rememberFolderViewSettings);
-  const [showMyDocumentsOnDesktop, setShowMyDocumentsOnDesktop] = useState(store.showMyDocumentsOnDesktop);
-  const [showPopupDescriptions, setShowPopupDescriptions] = useState(store.showPopupDescriptions);
+  const [autoSearchNetworkFolders, setAutoSearchNetworkFolders] = useState(
+    store.autoSearchNetworkFolders,
+  );
+  const [displayAllControlPanelOptions, setDisplayAllControlPanelOptions] =
+    useState(store.displayAllControlPanelOptions);
+  const [fullPathInAddressBar, setFullPathInAddressBar] = useState(
+    store.fullPathInAddressBar,
+  );
+  const [fullPathInTitleBar, setFullPathInTitleBar] = useState(
+    store.fullPathInTitleBar,
+  );
+  const [hideKnownExtensions, setHideKnownExtensions] = useState(
+    store.hideKnownExtensions,
+  );
+  const [hideProtectedSystemFiles, setHideProtectedSystemFiles] = useState(
+    store.hideProtectedSystemFiles,
+  );
+  const [launchFoldersInSeparateProcess, setLaunchFoldersInSeparateProcess] =
+    useState(store.launchFoldersInSeparateProcess);
+  const [rememberFolderViewSettings, setRememberFolderViewSettings] = useState(
+    store.rememberFolderViewSettings,
+  );
+  const [showMyDocumentsOnDesktop, setShowMyDocumentsOnDesktop] = useState(
+    store.showMyDocumentsOnDesktop,
+  );
+  const [showPopupDescriptions, setShowPopupDescriptions] = useState(
+    store.showPopupDescriptions,
+  );
+
+  // File Types tab — reads/writes the store directly (no Apply/OK staging;
+  // matches how the real dialog commits type-registry edits immediately).
+  const allExtensions = useMemo(() => {
+    const set = new Set<string>([
+      ...KNOWN_EXTENSIONS,
+      ...Object.keys(store.customFileTypes),
+    ]);
+    return Array.from(set).sort();
+  }, [store.customFileTypes]);
+  const [selectedExt, setSelectedExt] = useState<string | null>(
+    allExtensions[0] ?? null,
+  );
+  const [showOpenWith, setShowOpenWith] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [showNewType, setShowNewType] = useState(false);
+  const [newExt, setNewExt] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+
+  const typeLabel = (ext: string) =>
+    store.customFileTypes[ext] ?? typeLabelForExtension(ext);
+  const typeIcon = (ext: string) =>
+    store.extensionIcons[ext] ?? extIcon(`file.${ext}`);
+  const opener = selectedExt
+    ? (getPreferredApp(`file.${selectedExt}`) ??
+      candidatesFor(`file.${selectedExt}`)[0])
+    : null;
+  const isCustomExt = selectedExt
+    ? selectedExt in store.customFileTypes
+    : false;
+
+  const addNewType = () => {
+    const ext = newExt.trim().toLowerCase().replace(/^\./, "");
+    if (!ext || !newLabel.trim()) return;
+    store.addCustomFileType(ext, newLabel.trim());
+    setSelectedExt(ext);
+    setNewExt("");
+    setNewLabel("");
+    setShowNewType(false);
+  };
+
+  const deleteSelectedType = () => {
+    if (!selectedExt || !isCustomExt) return;
+    store.removeCustomFileType(selectedExt);
+    store.resetExtensionIcon(selectedExt);
+    setSelectedExt(allExtensions.find((e) => e !== selectedExt) ?? null);
+  };
 
   const restoreDefaults = () => {
     setShowHidden(DEFAULTS.showHidden);
@@ -180,18 +296,28 @@ export function FolderOptions({ windowId }: { windowId: string }) {
   };
 
   return (
-    <Layout>
-      <Tabs value={activeTab} onChange={setActiveTab} style={{ fontSize: 11, zoom: 0.8 }}>
+    <Layout style={{ zoom: R95_SCALE }}>
+      <Tabs value={activeTab} onChange={setActiveTab}>
         <Tab value="general">General</Tab>
         <Tab value="view">View</Tab>
         <Tab value="filetypes">File Types</Tab>
       </Tabs>
-      <Content>
+      <TabBody>
         {activeTab === "general" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 11 }}>
-            <GroupBox style={{ zoom: 0.8 }} label="Active Desktop">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <GroupBox label="Active Desktop">
               <IconRow>
-                <Icon src="/icons/w98_monitor_windows.ico" size={32} style={{ width: 32, height: 32 }} />
+                <Icon
+                  src={`/icons/shell32.dll/${activeDesktopWebContent ? "049" : "050"}.ico`}
+                  size={32}
+                  isInReact95
+                />
                 <RadioColumn>
                   <Radio
                     name="desktop"
@@ -199,7 +325,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={activeDesktopWebContent}
                     onChange={() => setActiveDesktopWebContent(true)}
                     label="Enable Web content on my desktop"
-                    style={{ fontSize: 11 }}
                   />
                   <Radio
                     name="desktop"
@@ -207,14 +332,17 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={!activeDesktopWebContent}
                     onChange={() => setActiveDesktopWebContent(false)}
                     label="Use Windows classic desktop"
-                    style={{ fontSize: 11 }}
                   />
                 </RadioColumn>
               </IconRow>
             </GroupBox>
-            <GroupBox style={{ zoom: 0.8 }} label="Web View">
+            <GroupBox label="Web View">
               <IconRow>
-                <Icon src="/icons/w98_shell_window3.ico" size={32} style={{ width: 32, height: 32 }} />
+                <Icon
+                  src={`/icons/shell32.dll/${webContentInFolders ? "051" : "052"}.ico`}
+                  size={32}
+                  isInReact95
+                />
                 <RadioColumn>
                   <Radio
                     name="webview"
@@ -222,7 +350,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={webContentInFolders}
                     onChange={() => setWebContentInFolders(true)}
                     label="Enable Web content in folders"
-                    style={{ fontSize: 11 }}
                   />
                   <Radio
                     name="webview"
@@ -230,14 +357,17 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={!webContentInFolders}
                     onChange={() => setWebContentInFolders(false)}
                     label="Use Windows classic folders"
-                    style={{ fontSize: 11 }}
                   />
                 </RadioColumn>
               </IconRow>
             </GroupBox>
-            <GroupBox style={{ zoom: 0.8 }} label="Browse Folders">
+            <GroupBox label="Browse Folders">
               <IconRow>
-                <Icon src="/icons/w98_shell_window5.ico" size={32} style={{ width: 32, height: 32 }} />
+                <Icon
+                  src={`/icons/shell32.dll/${browseFoldersMode === "same" ? "053" : "054"}.ico`}
+                  size={32}
+                  isInReact95
+                />
                 <RadioColumn>
                   <Radio
                     name="browse"
@@ -245,7 +375,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={browseFoldersMode === "same"}
                     onChange={() => setBrowseFoldersMode("same")}
                     label="Open each folder in the same window"
-                    style={{ fontSize: 11 }}
                   />
                   <Radio
                     name="browse"
@@ -253,17 +382,16 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={browseFoldersMode === "own"}
                     onChange={() => setBrowseFoldersMode("own")}
                     label="Open each folder in its own window"
-                    style={{ fontSize: 11 }}
                   />
                 </RadioColumn>
               </IconRow>
             </GroupBox>
-            <GroupBox style={{ zoom: 0.8 }} label="Click items as follows">
+            <GroupBox label="Click items as follows">
               <IconRow>
                 <Icon
-                  src="/icons/w98_accessibility_key_pointer.ico"
+                  src={`/icons/shell32.dll/${singleClickOpen ? "055" : "056"}.ico`}
                   size={32}
-                  style={{ width: 32, height: 32 }}
+                  isInReact95
                 />
                 <RadioColumn>
                   <Radio
@@ -272,7 +400,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={singleClickOpen}
                     onChange={() => setSingleClickOpen(true)}
                     label="Single-click to open an item (point to select)"
-                    style={{ fontSize: 11 }}
                   />
                   <RadioColumn style={{ paddingLeft: 20 }}>
                     <Radio
@@ -282,7 +409,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                       onChange={() => setUnderlineMode("browser")}
                       disabled={!singleClickOpen}
                       label="Underline icon titles consistent with my browser"
-                      style={{ fontSize: 11 }}
                     />
                     <Radio
                       name="underline"
@@ -291,7 +417,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                       onChange={() => setUnderlineMode("point")}
                       disabled={!singleClickOpen}
                       label="Underline icon titles only when I point at them"
-                      style={{ fontSize: 11 }}
                     />
                   </RadioColumn>
                   <Radio
@@ -300,53 +425,72 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                     checked={!singleClickOpen}
                     onChange={() => setSingleClickOpen(false)}
                     label="Double-click to open an item (single-click to select)"
-                    style={{ fontSize: 11 }}
                   />
                 </RadioColumn>
               </IconRow>
             </GroupBox>
             <RestoreRow>
-              <Button onClick={restoreDefaults} style={{ fontSize: 11 }}>Restore Defaults</Button>
+              <Button onClick={restoreDefaults}>Restore Defaults</Button>
             </RestoreRow>
           </div>
         )}
 
         {activeTab === "view" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
-            <GroupBox style={{ zoom: 0.8 }} label="Folder views">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            <GroupBox label="Folder views">
               <div style={{ display: "flex", gap: 6 }}>
-                <Button style={{ fontSize: 11, flex: 1 }}>Like Current Folder</Button>
-                <Button style={{ fontSize: 11, flex: 1 }}>Reset All Folders</Button>
+                <Button>Like Current Folder</Button>
+                <Button>Reset All Folders</Button>
               </div>
             </GroupBox>
-            <div style={{ fontSize: 11 }}>Advanced settings:</div>
-            <OptionsList orientation="vertical" contentStyle={{ padding: 6, gap: 4 }}>
+            <div>Advanced settings:</div>
+            <OptionsList
+              isInReact95
+              orientation="vertical"
+              contentStyle={{ padding: 6, gap: 4 }}
+              style={{ maxHeight: 480 }}
+            >
               <TreeHeader>
-                <Icon src="/icons/w98_directory_closed.ico" size={16} style={{ width: 16, height: 16 }} />
+                <Icon
+                  src="/icons/w98_directory_closed.ico"
+                  size={16}
+                  isInReact95
+                />
                 Files and Folders
               </TreeHeader>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={autoSearchNetworkFolders}
-                  onChange={(e: any) => setAutoSearchNetworkFolders(e.target.checked)}
+                  onChange={(e: any) =>
+                    setAutoSearchNetworkFolders(e.target.checked)
+                  }
                   label="Automatically search for network folders and printers"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={displayAllControlPanelOptions}
-                  onChange={(e: any) => setDisplayAllControlPanelOptions(e.target.checked)}
+                  onChange={(e: any) =>
+                    setDisplayAllControlPanelOptions(e.target.checked)
+                  }
                   label="Display all Control Panel options and all folder contents"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={fullPathInAddressBar}
-                  onChange={(e: any) => setFullPathInAddressBar(e.target.checked)}
+                  onChange={(e: any) =>
+                    setFullPathInAddressBar(e.target.checked)
+                  }
                   label="Display the full path in the address bar"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
@@ -354,12 +498,15 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                   checked={fullPathInTitleBar}
                   onChange={(e: any) => setFullPathInTitleBar(e.target.checked)}
                   label="Display the full path in title bar"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
 
-              <TreeHeader $indent={1}>
-                <Icon src="/icons/w98_directory_closed.ico" size={16} style={{ width: 16, height: 16 }} />
+              <TreeHeader $indent={1} style={{ marginTop: 5 }}>
+                <Icon
+                  src="/icons/w98_directory_closed.ico"
+                  size={16}
+                  isInReact95
+                />
                 Hidden files and folders
               </TreeHeader>
               <SettingRow $indent={2}>
@@ -369,7 +516,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                   checked={!showHidden}
                   onChange={() => setShowHidden(false)}
                   label="Do not show hidden files and folders"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={2}>
@@ -379,102 +525,219 @@ export function FolderOptions({ windowId }: { windowId: string }) {
                   checked={showHidden}
                   onChange={() => setShowHidden(true)}
                   label="Show hidden files and folders"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
 
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={hideKnownExtensions}
-                  onChange={(e: any) => setHideKnownExtensions(e.target.checked)}
+                  onChange={(e: any) =>
+                    setHideKnownExtensions(e.target.checked)
+                  }
                   label="Hide file extensions for known file types"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={hideProtectedSystemFiles}
-                  onChange={(e: any) => setHideProtectedSystemFiles(e.target.checked)}
+                  onChange={(e: any) =>
+                    setHideProtectedSystemFiles(e.target.checked)
+                  }
                   label="Hide protected operating system files (Recommended)"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={launchFoldersInSeparateProcess}
-                  onChange={(e: any) => setLaunchFoldersInSeparateProcess(e.target.checked)}
+                  onChange={(e: any) =>
+                    setLaunchFoldersInSeparateProcess(e.target.checked)
+                  }
                   label="Launch folder windows in a separate process"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={rememberFolderViewSettings}
-                  onChange={(e: any) => setRememberFolderViewSettings(e.target.checked)}
+                  onChange={(e: any) =>
+                    setRememberFolderViewSettings(e.target.checked)
+                  }
                   label="Remember each folder's view settings"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={showMyDocumentsOnDesktop}
-                  onChange={(e: any) => setShowMyDocumentsOnDesktop(e.target.checked)}
+                  onChange={(e: any) =>
+                    setShowMyDocumentsOnDesktop(e.target.checked)
+                  }
                   label="Show My Documents on the Desktop"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
               <SettingRow $indent={1}>
                 <Checkbox
                   checked={showPopupDescriptions}
-                  onChange={(e: any) => setShowPopupDescriptions(e.target.checked)}
+                  onChange={(e: any) =>
+                    setShowPopupDescriptions(e.target.checked)
+                  }
                   label="Show pop-up description for folder and desktop items"
-                  style={{ fontSize: 11 }}
                 />
               </SettingRow>
             </OptionsList>
             <RestoreRow>
-              <Button onClick={restoreDefaults} style={{ fontSize: 11 }}>Restore Defaults</Button>
+              <Button onClick={restoreDefaults}>Restore Defaults</Button>
             </RestoreRow>
           </div>
         )}
 
         {activeTab === "filetypes" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0, fontSize: 11 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
             <div>Registered file types:</div>
-            <OptionsList orientation="vertical" contentStyle={{ padding: 6, gap: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
-                <span>Extension</span>
-                <span>File Type</span>
-              </div>
-              <CtxDivider style={{ margin: "2px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>TXT</span>
-                <span>Text Document</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>BMP</span>
-                <span>Bitmap Image</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>PNG</span>
-                <span>Portable Network Graphic</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>LNK</span>
-                <span>Shortcut</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>WAV</span>
-                <span>Wave Sound</span>
-              </div>
+            <OptionsList
+              isInReact95
+              orientation="vertical"
+              contentStyle={{ padding: 2 }}
+              style={{ maxHeight: "430px" }}
+            >
+              {allExtensions.map((ext) => (
+                <TypeRow
+                  key={ext}
+                  $selected={selectedExt === ext}
+                  onClick={() => setSelectedExt(ext)}
+                >
+                  <Icon src={typeIcon(ext)} size={16} isInReact95 />
+                  <TypeExt>{ext.toUpperCase()}</TypeExt>
+                  <span>{typeLabel(ext)}</span>
+                </TypeRow>
+              ))}
             </OptionsList>
+
+            {showNewType ? (
+              <NewTypeForm>
+                <label>
+                  Extension:
+                  <TextInput
+                    value={newExt}
+                    onChange={(e: any) => setNewExt(e.target.value)}
+                    placeholder="e.g. xyz"
+                    style={{ marginTop: 2 }}
+                    fullWidth
+                  />
+                </label>
+                <label>
+                  Description of type:
+                  <TextInput
+                    value={newLabel}
+                    onChange={(e: any) => setNewLabel(e.target.value)}
+                    placeholder="e.g. XYZ Document"
+                    style={{ marginTop: 2 }}
+                    fullWidth
+                  />
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: 6,
+                  }}
+                >
+                  <Button
+                    onClick={addNewType}
+                    disabled={!newExt.trim() || !newLabel.trim()}
+                  >
+                    OK
+                  </Button>
+                  <Button onClick={() => setShowNewType(false)}>Cancel</Button>
+                </div>
+              </NewTypeForm>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <Button
+                  onClick={() => setShowNewType(true)}
+                  style={{ flex: 1 }}
+                >
+                  New...
+                </Button>
+                <Button
+                  onClick={deleteSelectedType}
+                  disabled={!isCustomExt}
+                  style={{ flex: 1 }}
+                >
+                  Delete
+                </Button>
+              </div>
+            )}
+
+            {selectedExt && opener && (
+              <GroupBox label={`Details for '${selectedExt}' extension`}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span>Opens with:</span>
+                    <Icon src={opener.icon} size={16} isInReact95 />
+                    <span style={{ flex: 1 }}>{opener.label}</span>
+                    <Button onClick={() => setShowOpenWith(true)}>
+                      Change...
+                    </Button>
+                  </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      Files with extension '{selectedExt}' are of type '
+                      {typeLabel(selectedExt)}'.
+                    </span>
+                    <Button onClick={() => setShowIconPicker(true)}>
+                      Change Icon...
+                    </Button>
+                  </div>
+                </div>
+              </GroupBox>
+            )}
+
+            {showOpenWith && selectedExt && (
+              <OpenWithDialog
+                isInReact95
+                fileName={`file.${selectedExt}`}
+                associateOnly
+                onClose={() => setShowOpenWith(false)}
+              />
+            )}
+            {showIconPicker && selectedExt && (
+              <IconPickerDialog
+                isInReact95
+                title={`Choose an icon for '.${selectedExt}' files:`}
+                icons={Array.from(
+                  new Set([typeIcon(selectedExt), ...iconPickerPool()]),
+                )}
+                current={typeIcon(selectedExt)}
+                onPick={(icon) => store.setExtensionIcon(selectedExt, icon)}
+                onClose={() => setShowIconPicker(false)}
+              />
+            )}
           </div>
         )}
-      </Content>
+      </TabBody>
       <ButtonRow>
-        <Button onClick={handleOk} style={{ width: 70, fontSize: 11 }}>OK</Button>
-        <Button onClick={() => closeWindow(windowId)} style={{ width: 70, fontSize: 11 }}>Cancel</Button>
-        <Button onClick={handleApply} style={{ width: 70, fontSize: 11 }}>Apply</Button>
+        <Button onClick={handleOk} style={{ width: 70 }}>
+          OK
+        </Button>
+        <Button onClick={() => closeWindow(windowId)} style={{ width: 70 }}>
+          Cancel
+        </Button>
+        <Button onClick={handleApply} style={{ width: 70 }}>
+          Apply
+        </Button>
       </ButtonRow>
     </Layout>
   );

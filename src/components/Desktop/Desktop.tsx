@@ -94,18 +94,17 @@ function openNode(node: VfsNode, abs: string) {
     });
     return;
   }
-  if (
-    lower.endsWith(".txt") ||
-    lower.endsWith(".log") ||
-    lower.endsWith(".ini")
-  ) {
-    openApp("notepad", {
-      title: `${node.name} - Notepad`,
-      data: { path: abs },
-    });
-  } else if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
+  if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
     openApp("paint", { title: `${node.name} - Paint`, data: { path: abs } });
+    return;
   }
+  // Every remaining file type (txt/log/ini, but also bat/sys/reg/dll/unknown
+  // extensions, …) opens as text in Notepad — real Windows always has some
+  // default handler, and Notepad can display any content as a last resort.
+  openApp("notepad", {
+    title: `${node.name} - Notepad`,
+    data: { path: abs },
+  });
 }
 
 const AUDIO_EXTS = [".wav", ".mp3", ".mid", ".midi", ".rmi", ".ogg"];
@@ -157,6 +156,7 @@ export function Desktop() {
   const hideKnownExtensions = useFilePrefsStore((s) => s.hideKnownExtensions);
   const showMyDocumentsOnDesktop = useFilePrefsStore((s) => s.showMyDocumentsOnDesktop);
   const showPopupDescriptions = useFilePrefsStore((s) => s.showPopupDescriptions);
+  const extensionIcons = useFilePrefsStore((s) => s.extensionIcons);
   const underline = singleClickOpen ? (underlineMode === "browser" ? "always" : "hover") : "none";
   const recycledCount = useVfsStore((s) => s.recycled.length);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
@@ -283,7 +283,7 @@ export function Desktop() {
     const isLnk = node.name.toLowerCase().endsWith(".lnk");
     const label = isLnk ? node.name.replace(/\.lnk$/i, "") : displayName(node.name, hideKnownExtensions);
     const lnk = isLnk ? parseLnk(node) : null;
-    const icon = lnk?.icon ?? iconForNode(node);
+    const icon = lnk?.icon ?? iconForNode(node, extensionIcons);
     return (
       <DesktopIcon
         key={node.name}
@@ -627,7 +627,7 @@ export function Desktop() {
               </CtxItem>
               <CtxItem
                 onClick={() => {
-                  const targetIcon = lnk?.icon ?? iconForNode(node);
+                  const targetIcon = lnk?.icon ?? iconForNode(node, extensionIcons);
                   if (isLnk && lnk) {
                     if (lnk.type === "url") {
                       useWindowStore.getState().addToQuickLaunch({

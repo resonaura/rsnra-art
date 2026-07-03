@@ -57,6 +57,16 @@ interface FilePrefsState {
   setLaunchFoldersInSeparateProcess: (v: boolean) => void;
   rememberFolderViewSettings: boolean;
   setRememberFolderViewSettings: (v: boolean) => void;
+
+  // File Types tab
+  /** Per-extension icon override (lowercase extension, no dot → icon path). */
+  extensionIcons: Record<string, string>;
+  setExtensionIcon: (extension: string, icon: string) => void;
+  resetExtensionIcon: (extension: string) => void;
+  /** User-registered extensions that aren't in the built-in EXT_ICONS table. */
+  customFileTypes: Record<string, string>;
+  addCustomFileType: (extension: string, typeLabel: string) => void;
+  removeCustomFileType: (extension: string) => void;
 }
 
 export const useFilePrefsStore = create<FilePrefsState>()(
@@ -70,7 +80,7 @@ export const useFilePrefsStore = create<FilePrefsState>()(
           openWithDefaults: { ...s.openWithDefaults, [extension]: appId },
         })),
 
-      singleClickOpen: true,
+      singleClickOpen: false,
       setSingleClickOpen: (singleClickOpen) => set({ singleClickOpen }),
       underlineMode: "browser",
       setUnderlineMode: (underlineMode) => set({ underlineMode }),
@@ -101,10 +111,29 @@ export const useFilePrefsStore = create<FilePrefsState>()(
       setLaunchFoldersInSeparateProcess: (launchFoldersInSeparateProcess) => set({ launchFoldersInSeparateProcess }),
       rememberFolderViewSettings: true,
       setRememberFolderViewSettings: (rememberFolderViewSettings) => set({ rememberFolderViewSettings }),
+
+      extensionIcons: {},
+      setExtensionIcon: (extension, icon) =>
+        set((s) => ({ extensionIcons: { ...s.extensionIcons, [extension]: icon } })),
+      resetExtensionIcon: (extension) =>
+        set((s) => {
+          const next = { ...s.extensionIcons };
+          delete next[extension];
+          return { extensionIcons: next };
+        }),
+      customFileTypes: {},
+      addCustomFileType: (extension, typeLabel) =>
+        set((s) => ({ customFileTypes: { ...s.customFileTypes, [extension]: typeLabel } })),
+      removeCustomFileType: (extension) =>
+        set((s) => {
+          const next = { ...s.customFileTypes };
+          delete next[extension];
+          return { customFileTypes: next };
+        }),
     }),
     {
       name: "rsnra95-fileprefs",
-      version: 1,
+      version: 2,
       migrate: (persisted) => persisted as FilePrefsState,
     },
   ),

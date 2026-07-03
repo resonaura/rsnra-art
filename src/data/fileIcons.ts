@@ -33,77 +33,138 @@ import { lnkIcon, parseLnk } from "./shortcuts";
 // Keep sorted alphabetically for readability.
 const EXT_ICONS: Readonly<Record<string, string>> = {
   // Text / documents (Notepad)
-  txt:  "/icons/w98_file_lines.ico",
-  log:  "/icons/w98_file_lines.ico",
+  txt: "/icons/w98_file_lines.ico",
+  log: "/icons/w98_file_lines.ico",
   // Images (Paint)
-  bmp:  "/icons/w98_paint.ico",
-  png:  "/icons/w98_imagPNG.ico",
-  jpg:  "/icons/w98_imagJPEG.ico",
+  bmp: "/icons/w98_paint.ico",
+  png: "/icons/w98_imagPNG.ico",
+  jpg: "/icons/w98_imagJPEG.ico",
   jpeg: "/icons/w98_imagJPEG.ico",
-  gif:  "/icons/w98_imagGIF.ico",
+  gif: "/icons/w98_imagGIF.ico",
   // Audio (Sound Recorder / Winamp)
-  wav:  "/icons/w2k_wave_sound.ico",
-  mp3:  "/icons/w98_cd_audio_cd.ico",
-  mid:  "/icons/w2k_midi_sequence.ico",
+  wav: "/icons/w2k_wave_sound.ico",
+  mp3: "/icons/w98_cd_audio_cd.ico",
+  mid: "/icons/w2k_midi_sequence.ico",
   midi: "/icons/w2k_midi_sequence.ico",
-  rmi:  "/icons/w2k_midi_sequence.ico",
-  ogg:  "/icons/w98_cd_audio_cd.ico",
+  rmi: "/icons/w2k_midi_sequence.ico",
+  ogg: "/icons/w98_cd_audio_cd.ico",
   // System / config
-  ini:  "/icons/w2k_ini_&_inf.ico",
-  inf:  "/icons/w2k_ini_&_inf.ico",
-  sys:  "/icons/w2k_ini_&_inf.ico",
-  reg:  "/icons/w2k_ini_&_inf.ico",
-  dll:  "/icons/w2k_ini_&_inf.ico",
+  ini: "/icons/w2k_ini_&_inf.ico",
+  inf: "/icons/w2k_ini_&_inf.ico",
+  sys: "/icons/w2k_ini_&_inf.ico",
+  reg: "/icons/w2k_ini_&_inf.ico",
+  dll: "/icons/w2k_ini_&_inf.ico",
   // Executables
-  exe:  "/icons/w98_executable.ico",
-  com:  "/icons/w98_executable_script.ico",
-  bat:  "/icons/w2k_ms-dos_batch_file.ico",
+  exe: "/icons/w98_executable.ico",
+  com: "/icons/w98_executable_script.ico",
+  bat: "/icons/w2k_ms-dos_batch_file.ico",
   // Help / docs
-  hlp:  "/icons/w2k_help.ico",
-  chm:  "/icons/w2k_help.ico",
+  hlp: "/icons/w2k_help.ico",
+  chm: "/icons/w2k_help.ico",
   // Fonts
-  fon:  "/icons/w2k_font_2.ico",
-  ttf:  "/icons/w2k_font_2.ico",
+  fon: "/icons/w2k_font_2.ico",
+  ttf: "/icons/w2k_font_2.ico",
   // Cursors
-  cur:  "/icons/w98_mouse.ico",
-  ani:  "/icons/w98_mouse.ico",
+  cur: "/icons/w98_mouse.ico",
+  ani: "/icons/w98_mouse.ico",
   // Shortcuts
-  lnk:  "/icons/w2k_shortcut.ico",
+  lnk: "/icons/w2k_shortcut.ico",
   // Archives
-  zip:  "/icons/w98_zip.ico",
-  cab:  "/icons/w98_zip.ico",
+  zip: "/icons/w98_zip.ico",
+  cab: "/icons/w98_zip.ico",
   // WordPad / rich text
-  doc:  "/icons/w98_wordpad.ico",
-  rtf:  "/icons/w98_wordpad.ico",
+  doc: "/icons/w98_wordpad.ico",
+  rtf: "/icons/w98_wordpad.ico",
 };
+
+// ─── Extension → descriptive type name ────────────────────────────────────────
+// Powers the File Types manager (Folder Options ▸ File Types) and Explorer's
+// "Type" column. Keep in sync with EXT_ICONS above.
+const EXT_TYPE_LABELS: Readonly<Record<string, string>> = {
+  txt: "Text Document",
+  log: "Text Document",
+  bmp: "Bitmap Image",
+  png: "Portable Network Graphic",
+  jpg: "JPEG Image",
+  jpeg: "JPEG Image",
+  gif: "GIF Image",
+  wav: "Wave Sound",
+  mp3: "MP3 Audio",
+  mid: "MIDI Sequence",
+  midi: "MIDI Sequence",
+  rmi: "MIDI Sequence",
+  ogg: "OGG Audio",
+  ini: "Configuration Settings",
+  inf: "Setup Information",
+  sys: "System File",
+  reg: "Registration Entries",
+  dll: "Application Extension",
+  exe: "Application",
+  com: "MS-DOS Application",
+  bat: "MS-DOS Batch File",
+  hlp: "Help File",
+  chm: "Compiled HTML Help",
+  fon: "Font File",
+  ttf: "TrueType Font File",
+  cur: "Cursor",
+  ani: "Animated Cursor",
+  lnk: "Shortcut",
+  zip: "Compressed (zipped) Folder",
+  cab: "Cabinet File",
+  doc: "WordPad Document",
+  rtf: "Rich Text Document",
+};
+
+/** Descriptive type name for a bare extension (no dot), for the File Types manager. */
+export function typeLabelForExtension(ext: string): string {
+  const lower = ext.toLowerCase();
+  return EXT_TYPE_LABELS[lower] ?? `${lower.toUpperCase()} File`;
+}
+
+/** All extensions with a built-in icon + type registration. */
+export const KNOWN_EXTENSIONS: readonly string[] = Object.keys(EXT_ICONS);
+
+/**
+ * Curated icon pool for the "Change Icon" picker — every built-in file-type
+ * icon plus every app's own icon (our stand-in for browsing a real .exe's
+ * embedded icon resources, since nothing here is an actual binary).
+ */
+export function iconPickerPool(): string[] {
+  const pool = new Set<string>([
+    ...Object.values(EXT_ICONS),
+    ...Object.values(APPS).map((a) => a.icon),
+    FILE_DEFAULT,
+  ]);
+  return Array.from(pool);
+}
 
 // ─── Named folder icons ───────────────────────────────────────────────────────
 // Key = lowercase folder name. Add entries here for well-known directories.
 const SPECIAL_FOLDER_ICONS: Readonly<Record<string, string>> = {
-  "windows":           "/icons/w2k_folder_open.ico",
-  "program files":     "/icons/w98_directory_open.ico",
-  "my documents":      "/icons/w2k_my_documents.ico",
-  "my pictures":       "/icons/w98_directory_pictures.ico",
-  "start menu":        "/icons/w2k_folder_open.ico",
-  "programs":          "/icons/w2k-programs.ico",
-  "accessories":       "/icons/w2k_folder_open.ico",
-  "games":             "/icons/w98_joystick.ico",
-  "desktop":           "/icons/w98_directory_open.ico",
-  "recycled":          "/icons/w2k_recycle_bin_empty.ico",
-  "temp":              "/icons/w2k_folder_open.ico",
-  "system":            "/icons/w2k_folder_open.ico",
-  "cursors":           "/icons/w98_mouse.ico",
-  "media":             "/icons/w98_mixer_sound.ico",
-  "fonts":             "/icons/w2k_font_2.ico",
-  "help":              "/icons/w2k_help.ico",
-  "winamp":            "/icons/WinAMP_7.ico",
-  "rsnra":             "/icons/w98_cd_audio_cd.ico",
-  "internet explorer": "/icons/w98_internet_options.ico",
-  "command":           "/icons/w98_console_prompt.ico",
+  windows: "/icons/w2k_folder_open.ico",
+  "program files": "/icons/w98_directory_open.ico",
+  "my documents": "/icons/w2k_my_documents.ico",
+  "my pictures": "/icons/w98_directory_pictures.ico",
+  "start menu": "/icons/w2k_folder_open.ico",
+  programs: "/icons/w2k-programs.ico",
+  accessories: "/icons/w2k_folder_open.ico",
+  games: "/icons/w98_joystick.ico",
+  desktop: "/icons/w98_directory_open.ico",
+  recycled: "/icons/w2k_recycle_bin_empty.ico",
+  temp: "/icons/w2k_folder_open.ico",
+  system: "/icons/w2k_folder_open.ico",
+  cursors: "/icons/w98_mouse.ico",
+  media: "/icons/w98_mixer_sound.ico",
+  fonts: "/icons/w2k_font_2.ico",
+  help: "/icons/w2k_help.ico",
+  winamp: "/icons/WinAMP_7.ico",
+  rsnra: "/icons/shell32.dll/088.ico",
+  "internet explorer": "/icons/shell32.dll/098.ico",
+  command: "/icons/w98_console_prompt.ico",
 };
 
-const FOLDER_DEFAULT = "/icons/w2k_folder_open.ico";
-const FILE_DEFAULT   = "/icons/w2k_unknown_filetype.ico";
+const FOLDER_DEFAULT = "/icons/shell32.dll/086.ico";
+const FILE_DEFAULT = "/icons/shell32.dll/000.ico";
 
 // ─── Public helpers ───────────────────────────────────────────────────────────
 
@@ -115,11 +176,16 @@ export function extOf(name: string): string {
 
 /**
  * Resolve the icon for a bare filename based on its extension.
- * Consults EXT_ICONS; falls back to the generic unknown-filetype icon.
+ * Consults `overrides` (the user's Folder Options ▸ File Types customizations)
+ * first, then EXT_ICONS; falls back to the generic unknown-filetype icon.
  */
-export function extIcon(name: string): string {
+export function extIcon(
+  name: string,
+  overrides?: Record<string, string>,
+): string {
   const ext = extOf(name);
-  return ext ? (EXT_ICONS[ext] ?? FILE_DEFAULT) : FILE_DEFAULT;
+  if (!ext) return FILE_DEFAULT;
+  return overrides?.[ext] ?? EXT_ICONS[ext] ?? FILE_DEFAULT;
 }
 
 /** Is this a "known" file type — i.e. one with a registered EXT_ICONS entry? */
@@ -134,7 +200,10 @@ export function isKnownExtension(name: string): boolean {
  * in EXT_ICONS, matching real Explorer behavior (unrecognized extensions
  * always stay visible).
  */
-export function displayName(name: string, hideKnownExtensions: boolean): string {
+export function displayName(
+  name: string,
+  hideKnownExtensions: boolean,
+): string {
   if (!hideKnownExtensions || !isKnownExtension(name)) return name;
   return name.slice(0, name.lastIndexOf("."));
 }
@@ -161,8 +230,16 @@ export function dirIcon(node: VfsNode): string {
  *   3. Directory            → dirIcon()
  *   4. Executable with appId → app's own icon from APPS[]
  *   5. Extension            → extIcon()
+ *
+ * @param extensionIconOverrides per-extension icon overrides from Folder
+ * Options ▸ File Types ▸ Change Icon (`useFilePrefsStore.extensionIcons`).
+ * Pass this from components that need to react to the user customizing a
+ * type's icon; omit it for one-off/non-reactive lookups.
  */
-export function iconForNode(node: VfsNode): string {
+export function iconForNode(
+  node: VfsNode,
+  extensionIconOverrides?: Record<string, string>,
+): string {
   // 1. Shortcut
   const lnk = parseLnk(node);
   if (lnk) return lnkIcon(lnk);
@@ -179,5 +256,5 @@ export function iconForNode(node: VfsNode): string {
   }
 
   // 5. Extension-based
-  return extIcon(node.name);
+  return extIcon(node.name, extensionIconOverrides);
 }

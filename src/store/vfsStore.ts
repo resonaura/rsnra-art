@@ -278,7 +278,6 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
   });
 }
 
-
 let _id = 0;
 const now = () => Date.now() + _id++;
 const dir = (
@@ -391,7 +390,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "my-computer",
-              icon: "/icons/w2k_my_computer.ico",
+              icon: "/icons/explorer.exe/000.ico",
             }),
             system: true,
           }),
@@ -887,8 +886,14 @@ export const useVfsStore = create<VfsState>()(
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
         const parentPath =
-          parts.length === 1 ? "C:\\" : "C:" + SEP + parts.slice(0, -1).join(SEP);
-        const newRoot = insertNode(get().root, parentPath, dir(name, [], false));
+          parts.length === 1
+            ? "C:\\"
+            : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        const newRoot = insertNode(
+          get().root,
+          parentPath,
+          dir(name, [], false),
+        );
         if (!newRoot) return false;
         set({ root: newRoot });
         return true;
@@ -914,7 +919,9 @@ export const useVfsStore = create<VfsState>()(
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
         const parentPath =
-          parts.length === 1 ? "C:\\" : "C:" + SEP + parts.slice(0, -1).join(SEP);
+          parts.length === 1
+            ? "C:\\"
+            : "C:" + SEP + parts.slice(0, -1).join(SEP);
         const newRoot = insertNode(
           get().root,
           parentPath,
@@ -1131,9 +1138,9 @@ export const useVfsStore = create<VfsState>()(
         if (!node || node.system) return false;
         const newRoot = updateNode(get().root, abs, (n) => ({
           ...n,
-          ...(("hidden" in attrs) && { hidden: attrs.hidden }),
-          ...(("readonly" in attrs) && { readonly: attrs.readonly }),
-          ...(("archive" in attrs) && { archive: attrs.archive }),
+          ...("hidden" in attrs && { hidden: attrs.hidden }),
+          ...("readonly" in attrs && { readonly: attrs.readonly }),
+          ...("archive" in attrs && { archive: attrs.archive }),
         }));
         if (!newRoot) return false;
         set({ root: newRoot });
@@ -1146,12 +1153,18 @@ export const useVfsStore = create<VfsState>()(
         let success = false;
         const newRoot = updateNode(get().root, abs, (parent) => {
           if (parent.type !== "dir" || !parent.children) return null;
-          const idx = parent.children.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
+          const idx = parent.children.findIndex(
+            (c) => c.name.toLowerCase() === name.toLowerCase(),
+          );
           if (idx === -1) return null;
           const child = parent.children[idx];
           const rest = parent.children.filter((_, i) => i !== idx);
           const target = Math.max(0, Math.min(targetIndex, rest.length));
-          const newChildren = [...rest.slice(0, target), child, ...rest.slice(target)];
+          const newChildren = [
+            ...rest.slice(0, target),
+            child,
+            ...rest.slice(target),
+          ];
           success = true;
           return { ...parent, children: newChildren };
         });

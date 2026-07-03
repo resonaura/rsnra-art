@@ -24,6 +24,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import styled, { css } from "styled-components";
+import { R95_SCALE_COMPENSATION } from "../../react95.conf";
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -291,6 +292,7 @@ export interface ScrollAreaProps {
   /** Forwarded to the root container. */
   onDrop?: DragEventHandler<HTMLDivElement>;
   children: ReactNode;
+  isInReact95?: boolean;
 }
 
 // ── component ────────────────────────────────────────────────────────────────
@@ -325,9 +327,17 @@ export function ScrollArea({
   onDragOver,
   onDrop,
   children,
+  isInReact95 = false,
 }: ScrollAreaProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  /** Refs to the Track elements so we can read their actual CSS pixel sizes.
+   *  This is necessary because Track lives inside a zoom-compensated
+   *  VerticalBar/HorizontalBar, making its coordinate space different from
+   *  the viewport's CSS pixel space.  Reading clientHeight/clientWidth
+   *  directly sidesteps all analytical compensation math. */
+  const vTrackRef = useRef<HTMLDivElement>(null);
+  const hTrackRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<ScrollState>(INITIAL_STATE);
 
   const repeat = useRepeatScroll();
@@ -400,28 +410,48 @@ export function ScrollArea({
   const showHorizontal =
     allowHorizontal && state.scrollWidth > state.clientWidth + 1;
 
-  // Track inner sizes (between the two arrow buttons)
+  // Scroll ranges (in viewport CSS px — used for scrollTop/scrollLeft math)
+  const vScrollRange = state.scrollHeight - state.clientHeight;
+  const hScrollRange = state.scrollWidth - state.clientWidth;
+
+  // Viewport-space track sizes — used only for showVertical/showHorizontal
+  // and page-scroll amounts. NOT used for thumb geometry.
   const vTrack = Math.max(0, state.clientHeight - 2 * SB_SIZE);
   const hTrack = Math.max(0, state.clientWidth - 2 * SB_SIZE);
 
-  // Vertical thumb
-  const vScrollRange = state.scrollHeight - state.clientHeight;
-  const vThumb =
-    vScrollRange > 0
-      ? Math.max(MIN_THUMB, (state.clientHeight / state.scrollHeight) * vTrack)
-      : vTrack;
-  const vThumbTop =
-    vScrollRange > 0 ? (state.scrollTop / vScrollRange) * (vTrack - vThumb) : 0;
+  /**
+   * Thumb geometry in the Track element's own CSS pixel space.
+   *
+   * The Track lives inside a zoom-compensated VerticalBar, so its CSS
+   * coordinate space differs from the viewport's CSS pixel space.
+   * Reading clientHeight/clientWidth from the Track element refs gives
+   * us the exact pixel budget — no analytical R95_SCALE math needed,
+   * and no rounding errors from the SB_SIZE scaling mismatch.
+   *
+   * Falls back to the viewport-space vTrack/hTrack before refs are
+   * populated (first render), corrected on the next render.
+   */
+  const vTrackPx = vTrackRef.current?.clientHeight ?? vTrack;
+  const hTrackPx = hTrackRef.current?.clientWidth ?? hTrack;
 
-  // Horizontal thumb
-  const hScrollRange = state.scrollWidth - state.clientWidth;
-  const hThumb =
+  // Vertical thumb (in Track CSS px)
+  const vThumbSize =
+    vScrollRange > 0
+      ? Math.max(MIN_THUMB, (state.clientHeight / state.scrollHeight) * vTrackPx)
+      : vTrackPx;
+  const vThumbPos =
+    vScrollRange > 0
+      ? (state.scrollTop / vScrollRange) * (vTrackPx - vThumbSize)
+      : 0;
+
+  // Horizontal thumb (in Track CSS px)
+  const hThumbSize =
     hScrollRange > 0
-      ? Math.max(MIN_THUMB, (state.clientWidth / state.scrollWidth) * hTrack)
-      : hTrack;
-  const hThumbLeft =
+      ? Math.max(MIN_THUMB, (state.clientWidth / state.scrollWidth) * hTrackPx)
+      : hTrackPx;
+  const hThumbPos =
     hScrollRange > 0
-      ? (state.scrollLeft / hScrollRange) * (hTrack - hThumb)
+      ? (state.scrollLeft / hScrollRange) * (hTrackPx - hThumbSize)
       : 0;
 
   // ── scroll actions ─────────────────────────────────────────────────────────
@@ -453,13 +483,17 @@ export function ScrollArea({
       if (!vDragRef.current) return;
       const el = viewportRef.current;
       if (!el) return;
+      // pixelDelta is in browser CSS px; Track CSS px ≈ browser CSS px
+      // because VerticalBar zoom (×1/R95) × react95 zoom (×R95) ≈ 1.
+      // vTrackPx and vThumbSize are already in Track CSS px, so the
+      // ratio is dimensionally correct.
       const pixelDelta = e.clientY - vDragRef.current.startY;
-      const trackRange = vTrack - vThumb;
+      const trackRange = vTrackPx - vThumbSize;
       if (trackRange <= 0) return;
       const scrollDelta = pixelDelta * (vScrollRange / trackRange);
       el.scrollTop = vDragRef.current.startScroll + scrollDelta;
     },
-    [vTrack, vThumb, vScrollRange],
+    [vTrackPx, vThumbSize, vScrollRange],
   );
 
   const onVThumbPointerUp = useCallback(
@@ -496,12 +530,12 @@ export function ScrollArea({
       const el = viewportRef.current;
       if (!el) return;
       const pixelDelta = e.clientX - hDragRef.current.startX;
-      const trackRange = hTrack - hThumb;
+      const trackRange = hTrackPx - hThumbSize;
       if (trackRange <= 0) return;
       const scrollDelta = pixelDelta * (hScrollRange / trackRange);
       el.scrollLeft = hDragRef.current.startScroll + scrollDelta;
     },
-    [hTrack, hThumb, hScrollRange],
+    [hTrackPx, hThumbSize, hScrollRange],
   );
 
   const onHThumbPointerUp = useCallback(
@@ -523,9 +557,11 @@ export function ScrollArea({
       if (e.target !== e.currentTarget) return; // clicked on thumb, not track
       const el = viewportRef.current;
       if (!el) return;
+      // clickY is in browser CSS px; vThumbPos/vThumbSize are in Track CSS px.
+      // Net zoom on Track ≈ 1 so the comparison is valid.
       const rect = e.currentTarget.getBoundingClientRect();
       const clickY = e.clientY - rect.top;
-      const thumbCenter = vThumbTop + vThumb / 2;
+      const thumbCenter = vThumbPos + vThumbSize / 2;
       const page = state.clientHeight * PAGE_FACTOR;
       const fn =
         clickY < thumbCenter
@@ -533,7 +569,7 @@ export function ScrollArea({
           : () => scrollBy(0, page);
       repeat.begin(fn);
     },
-    [vThumbTop, vThumb, state.clientHeight, scrollBy, repeat],
+    [vThumbPos, vThumbSize, state.clientHeight, scrollBy, repeat],
   );
 
   const onHTrackPointerDown = useCallback(
@@ -543,7 +579,7 @@ export function ScrollArea({
       if (!el) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const thumbCenter = hThumbLeft + hThumb / 2;
+      const thumbCenter = hThumbPos + hThumbSize / 2;
       const page = state.clientWidth * PAGE_FACTOR;
       const fn =
         clickX < thumbCenter
@@ -551,7 +587,7 @@ export function ScrollArea({
           : () => scrollBy(page, 0);
       repeat.begin(fn);
     },
-    [hThumbLeft, hThumb, state.clientWidth, scrollBy, repeat],
+    [hThumbPos, hThumbSize, state.clientWidth, scrollBy, repeat],
   );
 
   // ── arrow buttons ──────────────────────────────────────────────────────────
@@ -578,7 +614,7 @@ export function ScrollArea({
   return (
     <Root
       className={className}
-      style={style}
+      style={{ ...style }}
       onMouseDown={onMouseDown}
       onClick={onClick}
       onContextMenu={onContextMenu}
@@ -596,7 +632,9 @@ export function ScrollArea({
           </Content>
         </Viewport>
         {showVertical && (
-          <VerticalBar>
+          <VerticalBar
+            style={{ zoom: isInReact95 ? R95_SCALE_COMPENSATION : 1 }}
+          >
             <ScrollBtn
               onPointerDown={onUpPress}
               onPointerUp={repeat.end}
@@ -605,12 +643,18 @@ export function ScrollArea({
               <ArrowUp />
             </ScrollBtn>
             <Track
+              ref={vTrackRef}
               onPointerDown={onVTrackPointerDown}
               onPointerUp={repeat.end}
               onPointerLeave={repeat.end}
             >
               <Thumb
-                style={{ height: vThumb, top: vThumbTop, left: 0, right: 0 }}
+                style={{
+                  height: vThumbSize,
+                  top: vThumbPos,
+                  left: 0,
+                  right: 0,
+                }}
                 onPointerDown={onVThumbPointerDown}
                 onPointerMove={onVThumbPointerMove}
                 onPointerUp={onVThumbPointerUp}
@@ -628,7 +672,9 @@ export function ScrollArea({
       </MainRow>
       {showHorizontal && (
         <BottomRow>
-          <HorizontalBar>
+          <HorizontalBar
+            style={{ zoom: isInReact95 ? R95_SCALE_COMPENSATION : 1 }}
+          >
             <ScrollBtn
               onPointerDown={onLeftPress}
               onPointerUp={repeat.end}
@@ -637,12 +683,18 @@ export function ScrollArea({
               <ArrowLeft />
             </ScrollBtn>
             <Track
+              ref={hTrackRef}
               onPointerDown={onHTrackPointerDown}
               onPointerUp={repeat.end}
               onPointerLeave={repeat.end}
             >
               <Thumb
-                style={{ width: hThumb, left: hThumbLeft, top: 0, bottom: 0 }}
+                style={{
+                  width: hThumbSize,
+                  left: hThumbPos,
+                  top: 0,
+                  bottom: 0,
+                }}
                 onPointerDown={onHThumbPointerDown}
                 onPointerMove={onHThumbPointerMove}
                 onPointerUp={onHThumbPointerUp}

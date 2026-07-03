@@ -55,7 +55,11 @@ export function SystemProperties({ windowId }: { windowId: string }) {
         {tab === "General" ? (
           <>
             <Header>
-              <Logo src="/icons/w2k_my_computer.ico" alt="" draggable={false} />
+              <Logo
+                src="/icons/explorer.exe/000.ico"
+                alt=""
+                draggable={false}
+              />
               <div>
                 <div style={{ fontSize: 13, fontWeight: "bold" }}>
                   RSNRA.ART

@@ -2,14 +2,19 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
-import { ContextMenu, CtxDivider, CtxItem, CtxSubmenu } from "../../components/ContextMenu";
+import {
+  ContextMenu,
+  CtxDivider,
+  CtxItem,
+  CtxSubmenu,
+} from "../../components/ContextMenu";
 import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { Icon } from "../../components/Icon/Icon";
 import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
-import { getPreferredApp } from "../../data/fileOpen";
 import { displayName, iconForNode } from "../../data/fileIcons";
+import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
@@ -226,14 +231,18 @@ const IconGrid = styled(ScrollArea)`
 `;
 
 const underlineCss = css<{ $underline?: "always" | "hover" | "none" }>`
-  text-decoration: ${({ $underline }) => ($underline === "always" ? "underline" : "none")};
+  text-decoration: ${({ $underline }) =>
+    $underline === "always" ? "underline" : "none"};
   &:hover {
     text-decoration: ${({ $underline }) =>
       $underline === "hover" || $underline === "always" ? "underline" : "none"};
   }
 `;
 
-const IconItem = styled.button<{ $selected?: boolean; $underline?: "always" | "hover" | "none" }>`
+const IconItem = styled.button<{
+  $selected?: boolean;
+  $underline?: "always" | "hover" | "none";
+}>`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -670,8 +679,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
   const underlineMode = useFilePrefsStore((s) => s.underlineMode);
   const hideKnownExtensions = useFilePrefsStore((s) => s.hideKnownExtensions);
-  const hideProtectedSystemFiles = useFilePrefsStore((s) => s.hideProtectedSystemFiles);
-  const showPopupDescriptions = useFilePrefsStore((s) => s.showPopupDescriptions);
+  const hideProtectedSystemFiles = useFilePrefsStore(
+    (s) => s.hideProtectedSystemFiles,
+  );
+  const showPopupDescriptions = useFilePrefsStore(
+    (s) => s.showPopupDescriptions,
+  );
   const fullPathInTitleBar = useFilePrefsStore((s) => s.fullPathInTitleBar);
   const fullPathInAddressBar = useFilePrefsStore((s) => s.fullPathInAddressBar);
   const browseFoldersMode = useFilePrefsStore((s) => s.browseFoldersMode);
@@ -728,10 +741,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
       : (vfs.list(path) ?? []);
 
   if (path.toLowerCase() === "c:\\windows\\desktop") {
-    allEntries = allEntries.filter((n) => n.name.toLowerCase() !== "my computer.lnk");
+    allEntries = allEntries.filter(
+      (n) => n.name.toLowerCase() !== "my computer.lnk",
+    );
   }
   const entries = allEntries.filter(
-    (n) => (showHidden || !n.hidden) && (!hideProtectedSystemFiles || !n.system),
+    (n) =>
+      (showHidden || !n.hidden) && (!hideProtectedSystemFiles || !n.system),
   );
 
   const sortValue = (n: VfsNode): string | number => {
@@ -777,7 +793,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     );
     let icon = "/icons/w98_directory_open.ico";
     if (isRoot) {
-      icon = "/icons/w2k_my_computer.ico";
+      icon = "/icons/explorer.exe/000.ico";
     } else if (path === "Control Panel") {
       icon = "/icons/w2k_control_panel.ico";
     } else if (path === "Games") {
@@ -785,10 +801,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
     } else if (isDriveRoot) {
       icon =
         DRIVES.find((d) => d.target === path)?.icon ??
-        "/icons/w98_hard_disk_drive.ico";
+        "/icons/shell32.dll/105.ico";
     }
     updateIcon(windowId, icon);
-  }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon, fullPathInTitleBar]);
+  }, [
+    path,
+    isRoot,
+    isDriveRoot,
+    windowId,
+    updateTitle,
+    updateIcon,
+    fullPathInTitleBar,
+  ]);
 
   const refresh = () => setPath((p) => p); // no-op; VFS mutations re-render via root swap
   void refresh;
@@ -819,7 +843,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
           if (lnk.target === "winamp") {
             void openWebamp();
           } else {
-            openApp(lnk.target as any, { title: lnk.title || node.name.replace(/\.lnk$/i, ""), data: lnk.data });
+            openApp(lnk.target as any, {
+              title: lnk.title || node.name.replace(/\.lnk$/i, ""),
+              data: lnk.data,
+            });
           }
         } else if (lnk.type === "url") {
           window.open(lnk.target, "_blank", "noopener,noreferrer");
@@ -849,11 +876,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
           data: { path: abs },
         });
       else openApp(id);
-    } else if (node.name.toLowerCase().endsWith(".txt")) {
-      openApp("notepad", {
-        title: `${node.name} - Notepad`,
-        data: { path: abs },
-      });
     } else if (isAudioFile(node.name)) {
       void openVfsAudio(abs).then((played) => {
         if (!played && node.name.toLowerCase().endsWith(".wav")) {
@@ -868,6 +890,15 @@ export function MyComputer({ windowId }: { windowId: string }) {
       node.name.toLowerCase().endsWith(".bmp")
     ) {
       openApp("paint", { title: `${node.name} - Paint`, data: { path: abs } });
+    } else {
+      // Every remaining file type (txt/log/ini, but also bat/sys/reg/dll/
+      // unknown extensions, …) opens as text in Notepad — real Windows
+      // always has some default handler, and Notepad can display any
+      // content as a last resort.
+      openApp("notepad", {
+        title: `${node.name} - Notepad`,
+        data: { path: abs },
+      });
     }
   };
 
@@ -1069,8 +1100,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
     closeCtx();
     action();
   };
-
-
 
   const selectedNode = sorted.find((n) => n.name === selected) ?? null;
 
@@ -1417,10 +1446,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
               textDecoration: underline === "always" ? "underline" : "none",
             }}
             onMouseEnter={(e) => {
-              if (underline === "hover") e.currentTarget.style.textDecoration = "underline";
+              if (underline === "hover")
+                e.currentTarget.style.textDecoration = "underline";
             }}
             onMouseLeave={(e) => {
-              if (underline === "hover") e.currentTarget.style.textDecoration = "none";
+              if (underline === "hover")
+                e.currentTarget.style.textDecoration = "none";
             }}
           >
             {nodeLabel(node)}
@@ -1450,7 +1481,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
       <AddressRow>
         <span style={{ fontSize: 12 }}>Address</span>
         <AddressField variant="field">
-          {isRoot || path === "Control Panel" || path === "Games" || fullPathInAddressBar
+          {isRoot ||
+          path === "Control Panel" ||
+          path === "Games" ||
+          fullPathInAddressBar
             ? path
             : leafName(path)}
         </AddressField>
@@ -1579,7 +1613,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
           {ctx.node ? (
             <>
-              <CtxItem onClick={() => runCtx(() => openNode(ctx.node!))}>Open</CtxItem>
+              <CtxItem onClick={() => runCtx(() => openNode(ctx.node!))}>
+                Open
+              </CtxItem>
               {ctx.node.type === "file" && (
                 <CtxItem
                   onClick={() =>
@@ -1598,15 +1634,17 @@ export function MyComputer({ windowId }: { windowId: string }) {
                     const node = ctx.node!;
                     const abs = vfs.resolvePath(node.name, path) || node.name;
                     const isLnk = node.name.toLowerCase().endsWith(".lnk");
-                    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
-                    
+                    const label = isLnk
+                      ? node.name.replace(/\.lnk$/i, "")
+                      : node.name;
+
                     let lnk: any = null;
                     if (isLnk) {
                       try {
                         lnk = JSON.parse(node.content ?? "");
                       } catch {}
                     }
-                    
+
                     const targetIcon = lnk?.icon ?? iconForNode(node);
                     if (isLnk && lnk) {
                       if (lnk.type === "url") {
@@ -1631,7 +1669,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
                         title: label,
                         icon: targetIcon,
                         type: "app",
-                        appId: (node.appId || preferred?.appId || "notepad") as any,
+                        appId: (node.appId ||
+                          preferred?.appId ||
+                          "notepad") as any,
                         data: { path: abs },
                       });
                     }
@@ -1643,23 +1683,38 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxDivider />
               <CtxItem
                 $disabled={!!ctx.node!.system}
-                onClick={() => !ctx.node!.system && runCtx(() => cutSelected(ctx.node!))}
+                onClick={() =>
+                  !ctx.node!.system && runCtx(() => cutSelected(ctx.node!))
+                }
               >
                 Cut
               </CtxItem>
               <CtxItem
                 $disabled={!!ctx.node!.system}
-                onClick={() => !ctx.node!.system && runCtx(() => copySelected(ctx.node!))}
+                onClick={() =>
+                  !ctx.node!.system && runCtx(() => copySelected(ctx.node!))
+                }
               >
                 Copy
               </CtxItem>
               <CtxDivider />
-              <CtxItem onClick={() => runCtx(() => { setRenaming(ctx.node!.name); setRenameVal(ctx.node!.name); })}>
+              <CtxItem
+                onClick={() =>
+                  runCtx(() => {
+                    setRenaming(ctx.node!.name);
+                    setRenameVal(ctx.node!.name);
+                  })
+                }
+              >
                 Rename
               </CtxItem>
-              <CtxItem onClick={() => runCtx(() => deleteNode(ctx.node!))}>Delete</CtxItem>
+              <CtxItem onClick={() => runCtx(() => deleteNode(ctx.node!))}>
+                Delete
+              </CtxItem>
               <CtxDivider />
-              <CtxItem onClick={() => runCtx(() => propertiesOf(ctx.node!))}>Properties</CtxItem>
+              <CtxItem onClick={() => runCtx(() => propertiesOf(ctx.node!))}>
+                Properties
+              </CtxItem>
             </>
           ) : (
             <>
@@ -1697,22 +1752,36 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxDivider />
               <CtxSubmenu label="New">
                 <CtxItem
-                  $disabled={isRoot || path === "Control Panel" || path === "Games" || driveNotReady}
+                  $disabled={
+                    isRoot ||
+                    path === "Control Panel" ||
+                    path === "Games" ||
+                    driveNotReady
+                  }
                   onClick={() => runCtx(newFolder)}
                 >
                   Folder
                 </CtxItem>
                 <CtxItem
-                  $disabled={isRoot || path === "Control Panel" || path === "Games" || driveNotReady}
+                  $disabled={
+                    isRoot ||
+                    path === "Control Panel" ||
+                    path === "Games" ||
+                    driveNotReady
+                  }
                   onClick={() => runCtx(newTextFile)}
                 >
                   Text Document
                 </CtxItem>
               </CtxSubmenu>
               <CtxDivider />
-              <CtxItem onClick={() => runCtx(() => openApp("folder-options"))}>Folder Options...</CtxItem>
+              <CtxItem onClick={() => runCtx(() => openApp("folder-options"))}>
+                Folder Options...
+              </CtxItem>
               <CtxItem
-                $disabled={isRoot || path === "Control Panel" || path === "Games"}
+                $disabled={
+                  isRoot || path === "Control Panel" || path === "Games"
+                }
                 onClick={() =>
                   runCtx(() => {
                     const node = vfs.resolve(path);

@@ -94,7 +94,7 @@ export function CloseProgramDialog() {
           </Intro>
           <ListFrame orientation="vertical">
             <Row $selected={false}>
-              <Icon src="/icons/w2k_my_computer.ico" size={16} />
+              <Icon src="/icons/explorer.exe/000.ico" size={16} />
               RSNRA.ART Desktop (system)
             </Row>
             {windows.map((w) => (

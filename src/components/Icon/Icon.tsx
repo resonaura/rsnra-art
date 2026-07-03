@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getCachedIconUrl, resolveIconUrl } from "../../lib/iconCache";
+import { R95_SCALE_COMPENSATION } from "../../react95.conf";
 
 interface IconProps {
   src: string;
@@ -9,6 +10,7 @@ interface IconProps {
   style?: React.CSSProperties;
   draggable?: boolean;
   title?: string;
+  isInReact95?: boolean;
 }
 
 // Drop-in replacement for <img src="/icons/name.ico" /> that renders the
@@ -25,6 +27,7 @@ export function Icon({
   style,
   draggable = false,
   title,
+  isInReact95 = false,
 }: IconProps) {
   const [resolved, setResolved] = useState(() => getCachedIconUrl(src, size));
 
@@ -41,11 +44,21 @@ export function Icon({
     };
   }, [src, size]);
 
+  const renderSize = useMemo(
+    () => (isInReact95 ? size * R95_SCALE_COMPENSATION : size),
+    [isInReact95, size],
+  );
+
   if (!resolved) {
     return (
       <span
         className={className}
-        style={{ display: "inline-block", width: size, height: size, ...style }}
+        style={{
+          display: "inline-block",
+          width: renderSize,
+          height: renderSize,
+          ...style,
+        }}
         aria-hidden
       />
     );
@@ -58,7 +71,12 @@ export function Icon({
       title={title}
       draggable={draggable}
       className={className}
-      style={{ imageRendering: "pixelated", ...style }}
+      style={{
+        imageRendering: "pixelated",
+        width: renderSize,
+        height: renderSize,
+        ...style,
+      }}
     />
   );
 }
