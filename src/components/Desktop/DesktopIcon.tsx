@@ -22,7 +22,7 @@ const IconButton = styled.button<{ $selected: boolean }>`
   }
 `;
 
-const Label = styled.span<{ $selected: boolean }>`
+const Label = styled.span<{ $selected: boolean; $underline?: "always" | "hover" | "none" }>`
   font-size: 12px;
   color: white;
   text-shadow: 1px 1px black;
@@ -31,6 +31,12 @@ const Label = styled.span<{ $selected: boolean }>`
   padding: 1px 3px;
   background: ${({ $selected, theme }) =>
     $selected ? theme.hoverBackground : "transparent"};
+  text-decoration: ${({ $underline }) => ($underline === "always" ? "underline" : "none")};
+
+  ${IconButton}:hover & {
+    text-decoration: ${({ $underline }) =>
+      $underline === "hover" || $underline === "always" ? "underline" : "none"};
+  }
 `;
 
 const RenameInput = styled.input`
@@ -68,6 +74,12 @@ interface DesktopIconProps {
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
+  /** Folder Options ▸ General ▸ "Click items as follows". */
+  singleClickOpen?: boolean;
+  /** Folder Options ▸ General ▸ underline sub-choice (only meaningful when singleClickOpen). */
+  underline?: "always" | "hover" | "none";
+  /** Folder Options ▸ View ▸ "Show pop-up description for folder and desktop items". */
+  tooltip?: string;
 }
 
 export function DesktopIcon({
@@ -86,14 +98,21 @@ export function DesktopIcon({
   draggable,
   onDragStart,
   onDragEnd,
+  singleClickOpen,
+  underline = "none",
+  tooltip,
 }: DesktopIconProps) {
   return (
     <IconButton
       type="button"
       $selected={selected}
-      onClick={onSelect}
+      title={tooltip}
+      onClick={() => {
+        onSelect();
+        if (singleClickOpen && !renaming) onOpen();
+      }}
       onDoubleClick={() => {
-        if (renaming) return;
+        if (renaming || singleClickOpen) return;
         onOpen();
       }}
       onKeyDown={(e) => {
@@ -131,7 +150,9 @@ export function DesktopIcon({
           }}
         />
       ) : (
-        <Label $selected={selected}>{label}</Label>
+        <Label $selected={selected} $underline={singleClickOpen ? underline : "none"}>
+          {label}
+        </Label>
       )}
     </IconButton>
   );

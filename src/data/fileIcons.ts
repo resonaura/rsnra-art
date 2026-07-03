@@ -122,6 +122,23 @@ export function extIcon(name: string): string {
   return ext ? (EXT_ICONS[ext] ?? FILE_DEFAULT) : FILE_DEFAULT;
 }
 
+/** Is this a "known" file type — i.e. one with a registered EXT_ICONS entry? */
+export function isKnownExtension(name: string): boolean {
+  const ext = extOf(name);
+  return ext !== "" && ext in EXT_ICONS;
+}
+
+/**
+ * Filename as it should be displayed given the "Hide extensions for known
+ * file types" preference — strips the extension only when it's registered
+ * in EXT_ICONS, matching real Explorer behavior (unrecognized extensions
+ * always stay visible).
+ */
+export function displayName(name: string, hideKnownExtensions: boolean): string {
+  if (!hideKnownExtensions || !isKnownExtension(name)) return name;
+  return name.slice(0, name.lastIndexOf("."));
+}
+
 /**
  * Resolve the icon for a directory node.
  *

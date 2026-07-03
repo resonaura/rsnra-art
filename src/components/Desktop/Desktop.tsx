@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { openApp } from "../../data/apps";
-import { iconForNode } from "../../data/fileIcons";
+import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { playSound } from "../../lib/audio";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
@@ -152,6 +152,12 @@ export function Desktop() {
   }, []);
 
   const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
+  const underlineMode = useFilePrefsStore((s) => s.underlineMode);
+  const hideKnownExtensions = useFilePrefsStore((s) => s.hideKnownExtensions);
+  const showMyDocumentsOnDesktop = useFilePrefsStore((s) => s.showMyDocumentsOnDesktop);
+  const showPopupDescriptions = useFilePrefsStore((s) => s.showPopupDescriptions);
+  const underline = singleClickOpen ? (underlineMode === "browser" ? "always" : "hover") : "none";
   const recycledCount = useVfsStore((s) => s.recycled.length);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
 
@@ -266,13 +272,16 @@ export function Desktop() {
         }}
         draggable={draggable}
         onDragStart={onDragStart}
+        singleClickOpen={singleClickOpen}
+        underline={underline}
+        tooltip={showPopupDescriptions ? label : undefined}
       />
     );
   };
 
   const renderNode = (node: VfsNode, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
     const isLnk = node.name.toLowerCase().endsWith(".lnk");
-    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
+    const label = isLnk ? node.name.replace(/\.lnk$/i, "") : displayName(node.name, hideKnownExtensions);
     const lnk = isLnk ? parseLnk(node) : null;
     const icon = lnk?.icon ?? iconForNode(node);
     return (
@@ -301,6 +310,9 @@ export function Desktop() {
         }}
         draggable={draggable}
         onDragStart={onDragStart}
+        singleClickOpen={singleClickOpen}
+        underline={underline}
+        tooltip={showPopupDescriptions ? node.name : undefined}
       />
     );
   };
@@ -321,6 +333,13 @@ export function Desktop() {
       type: "recycle",
       label: "Recycle Bin",
     });
+    if (showMyDocumentsOnDesktop) {
+      res.push({
+        key: "__mydocs__",
+        type: "mydocs",
+        label: "My Documents",
+      });
+    }
     rest.forEach((n) => {
       res.push({
         key: n.name,
@@ -330,7 +349,7 @@ export function Desktop() {
       });
     });
     return res;
-  }, [systemLnks, rest]);
+  }, [systemLnks, rest, showMyDocumentsOnDesktop]);
 
   // Sort elements if sortBy is selected
   const sortedItems = useMemo(() => {
@@ -413,7 +432,7 @@ export function Desktop() {
 
   const handleIconDragStart = (key: string, e: React.DragEvent) => {
     e.dataTransfer.setData("desktop-icon-name", key);
-    if (key !== "__recycle__") {
+    if (key !== "__recycle__" && key !== "__mydocs__") {
       const abs = `${DESKTOP_PATH}\\${key}`;
       e.dataTransfer.setData("application/x-rsnra-vfs-path", abs);
       e.dataTransfer.setData("text/plain", abs);
@@ -484,6 +503,48 @@ export function Desktop() {
                 }}
                 draggable
                 onDragStart={(e) => handleIconDragStart("__recycle__", e)}
+                singleClickOpen={singleClickOpen}
+                underline={underline}
+                tooltip={showPopupDescriptions ? "Recycle Bin" : undefined}
+              />
+            </div>
+          );
+        }
+        if (item.type === "mydocs") {
+          return (
+            <div
+              key={item.key}
+              style={{
+                position: "absolute",
+                left: `${item.pos.x}px`,
+                top: `${item.pos.y}px`,
+              }}
+            >
+              <DesktopIcon
+                label="My Documents"
+                icon="/icons/w2k_my_documents.ico"
+                selected={selected === "__mydocs__"}
+                onSelect={() => {
+                  setSelected("__mydocs__");
+                  closeAll();
+                }}
+                onOpen={() =>
+                  openApp("my-computer", {
+                    title: "My Documents",
+                    data: { path: "C:\\My Documents" },
+                  })
+                }
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelected("__mydocs__");
+                  closeAll();
+                }}
+                draggable
+                onDragStart={(e) => handleIconDragStart("__mydocs__", e)}
+                singleClickOpen={singleClickOpen}
+                underline={underline}
+                tooltip={showPopupDescriptions ? "My Documents" : undefined}
               />
             </div>
           );

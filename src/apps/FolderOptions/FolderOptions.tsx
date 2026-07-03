@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Button, Checkbox, GroupBox, Radio, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
-import { useFilePrefsStore } from "../../store/filePrefsStore";
+import { Icon } from "../../components/Icon/Icon";
+import { ScrollArea } from "../../components/ScrollArea";
+import {
+  useFilePrefsStore,
+  type BrowseFoldersMode,
+  type UnderlineMode,
+} from "../../store/filePrefsStore";
 import { useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
@@ -20,34 +26,60 @@ const Content = styled(TabBody)`
   flex-direction: column;
   gap: 8px;
   background: ${({ theme }) => theme.material};
+  overflow-y: auto;
 `;
 
 const ButtonRow = styled.div`
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+  zoom: 0.8;
 `;
 
-const OptionsList = styled.div`
+const RestoreRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  zoom: 0.8;
+`;
+
+const OptionsList = styled(ScrollArea)`
   flex: 1;
+  min-height: 0;
   background: white;
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderDarkest};
-  padding: 6px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  zoom: 0.8;
 `;
 
-const SettingRow = styled.div<{ $indent?: boolean }>`
+const SettingRow = styled.div<{ $indent?: 0 | 1 | 2 }>`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: ${({ $indent }) => ($indent ? "20px" : "0")};
+  padding-left: ${({ $indent }) => ($indent ? `${$indent * 20}px` : "0")};
   font-size: 11px;
+`;
+
+const TreeHeader = styled.div<{ $indent?: 0 | 1 }>`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: ${({ $indent }) => ($indent ? `${$indent * 20}px` : "0")};
+  font-size: 11px;
+`;
+
+const IconRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+`;
+
+const RadioColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
 `;
 
 const CtxDivider = styled.div`
@@ -57,34 +89,89 @@ const CtxDivider = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
 `;
 
+// Mirrors the store's own defaults (see filePrefsStore.ts) — used by "Restore
+// Defaults", which only resets the dialog's staged values until Apply/OK.
+const DEFAULTS = {
+  showHidden: false,
+  singleClickOpen: true,
+  underlineMode: "browser" as UnderlineMode,
+  browseFoldersMode: "same" as BrowseFoldersMode,
+  webContentInFolders: true,
+  activeDesktopWebContent: false,
+  hideKnownExtensions: false,
+  hideProtectedSystemFiles: true,
+  showMyDocumentsOnDesktop: true,
+  showPopupDescriptions: true,
+  fullPathInTitleBar: false,
+  fullPathInAddressBar: false,
+  autoSearchNetworkFolders: true,
+  displayAllControlPanelOptions: false,
+  launchFoldersInSeparateProcess: false,
+  rememberFolderViewSettings: true,
+};
+
 export function FolderOptions({ windowId }: { windowId: string }) {
-  const showHidden = useFilePrefsStore((s) => s.showHidden);
-  const setShowHidden = useFilePrefsStore((s) => s.setShowHidden);
+  const store = useFilePrefsStore();
   const closeWindow = useWindowStore((s) => s.closeWindow);
 
   const [activeTab, setActiveTab] = useState("general");
-  const [localShowHidden, setLocalShowHidden] = useState(showHidden);
 
-  // General tab states (mocked/pure visual since they don't affect logic, or can be interactive)
-  const [activeDesktop, setActiveDesktop] = useState("classic");
-  const [webView, setWebView] = useState("classic");
-  const [browseFolders, setBrowseFolders] = useState("same");
-  const [clickMode, setClickMode] = useState("double");
+  // Every field is staged locally and only committed to the persisted store
+  // on Apply/OK — Cancel discards, exactly like the real Windows dialog.
+  const [showHidden, setShowHidden] = useState(store.showHidden);
+  const [activeDesktopWebContent, setActiveDesktopWebContent] = useState(store.activeDesktopWebContent);
+  const [webContentInFolders, setWebContentInFolders] = useState(store.webContentInFolders);
+  const [browseFoldersMode, setBrowseFoldersMode] = useState(store.browseFoldersMode);
+  const [singleClickOpen, setSingleClickOpen] = useState(store.singleClickOpen);
+  const [underlineMode, setUnderlineMode] = useState(store.underlineMode);
 
-  // View tab states (mocked except hidden files)
-  const [netFolders, setNetFolders] = useState(true);
-  const [allCp, setAllCp] = useState(false);
-  const [fullPathAddr, setFullPathAddr] = useState(false);
-  const [fullPathTitle, setFullPathTitle] = useState(false);
-  const [hideExt, setHideExt] = useState(true);
-  const [hideSystem, setHideSystem] = useState(true);
-  const [separateProc, setSeparateProc] = useState(false);
-  const [rememberSettings, setRememberSettings] = useState(true);
-  const [showDocsDesktop, setShowDocsDesktop] = useState(true);
-  const [showPopupDesc, setShowPopupDesc] = useState(true);
+  const [autoSearchNetworkFolders, setAutoSearchNetworkFolders] = useState(store.autoSearchNetworkFolders);
+  const [displayAllControlPanelOptions, setDisplayAllControlPanelOptions] = useState(store.displayAllControlPanelOptions);
+  const [fullPathInAddressBar, setFullPathInAddressBar] = useState(store.fullPathInAddressBar);
+  const [fullPathInTitleBar, setFullPathInTitleBar] = useState(store.fullPathInTitleBar);
+  const [hideKnownExtensions, setHideKnownExtensions] = useState(store.hideKnownExtensions);
+  const [hideProtectedSystemFiles, setHideProtectedSystemFiles] = useState(store.hideProtectedSystemFiles);
+  const [launchFoldersInSeparateProcess, setLaunchFoldersInSeparateProcess] = useState(store.launchFoldersInSeparateProcess);
+  const [rememberFolderViewSettings, setRememberFolderViewSettings] = useState(store.rememberFolderViewSettings);
+  const [showMyDocumentsOnDesktop, setShowMyDocumentsOnDesktop] = useState(store.showMyDocumentsOnDesktop);
+  const [showPopupDescriptions, setShowPopupDescriptions] = useState(store.showPopupDescriptions);
+
+  const restoreDefaults = () => {
+    setShowHidden(DEFAULTS.showHidden);
+    setActiveDesktopWebContent(DEFAULTS.activeDesktopWebContent);
+    setWebContentInFolders(DEFAULTS.webContentInFolders);
+    setBrowseFoldersMode(DEFAULTS.browseFoldersMode);
+    setSingleClickOpen(DEFAULTS.singleClickOpen);
+    setUnderlineMode(DEFAULTS.underlineMode);
+    setAutoSearchNetworkFolders(DEFAULTS.autoSearchNetworkFolders);
+    setDisplayAllControlPanelOptions(DEFAULTS.displayAllControlPanelOptions);
+    setFullPathInAddressBar(DEFAULTS.fullPathInAddressBar);
+    setFullPathInTitleBar(DEFAULTS.fullPathInTitleBar);
+    setHideKnownExtensions(DEFAULTS.hideKnownExtensions);
+    setHideProtectedSystemFiles(DEFAULTS.hideProtectedSystemFiles);
+    setLaunchFoldersInSeparateProcess(DEFAULTS.launchFoldersInSeparateProcess);
+    setRememberFolderViewSettings(DEFAULTS.rememberFolderViewSettings);
+    setShowMyDocumentsOnDesktop(DEFAULTS.showMyDocumentsOnDesktop);
+    setShowPopupDescriptions(DEFAULTS.showPopupDescriptions);
+  };
 
   const handleApply = () => {
-    setShowHidden(localShowHidden);
+    store.setShowHidden(showHidden);
+    store.setActiveDesktopWebContent(activeDesktopWebContent);
+    store.setWebContentInFolders(webContentInFolders);
+    store.setBrowseFoldersMode(browseFoldersMode);
+    store.setSingleClickOpen(singleClickOpen);
+    store.setUnderlineMode(underlineMode);
+    store.setAutoSearchNetworkFolders(autoSearchNetworkFolders);
+    store.setDisplayAllControlPanelOptions(displayAllControlPanelOptions);
+    store.setFullPathInAddressBar(fullPathInAddressBar);
+    store.setFullPathInTitleBar(fullPathInTitleBar);
+    store.setHideKnownExtensions(hideKnownExtensions);
+    store.setHideProtectedSystemFiles(hideProtectedSystemFiles);
+    store.setLaunchFoldersInSeparateProcess(launchFoldersInSeparateProcess);
+    store.setRememberFolderViewSettings(rememberFolderViewSettings);
+    store.setShowMyDocumentsOnDesktop(showMyDocumentsOnDesktop);
+    store.setShowPopupDescriptions(showPopupDescriptions);
   };
 
   const handleOk = () => {
@@ -94,7 +181,7 @@ export function FolderOptions({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <Tabs value={activeTab} onChange={setActiveTab} style={{ fontSize: 11 }}>
+      <Tabs value={activeTab} onChange={setActiveTab} style={{ fontSize: 11, zoom: 0.8 }}>
         <Tab value="general">General</Tab>
         <Tab value="view">View</Tab>
         <Tab value="filetypes">File Types</Tab>
@@ -102,203 +189,259 @@ export function FolderOptions({ windowId }: { windowId: string }) {
       <Content>
         {activeTab === "general" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 11 }}>
-            <GroupBox label="Active Desktop">
-              <Radio
-                name="desktop"
-                value="web"
-                checked={activeDesktop === "web"}
-                onChange={() => setActiveDesktop("web")}
-                label="Enable Web content on my desktop"
-                style={{ fontSize: 11 }}
-              />
-              <Radio
-                name="desktop"
-                value="classic"
-                checked={activeDesktop === "classic"}
-                onChange={() => setActiveDesktop("classic")}
-                label="Use Windows classic desktop"
-                style={{ fontSize: 11 }}
-              />
+            <GroupBox style={{ zoom: 0.8 }} label="Active Desktop">
+              <IconRow>
+                <Icon src="/icons/w98_monitor_windows.ico" size={32} style={{ width: 32, height: 32 }} />
+                <RadioColumn>
+                  <Radio
+                    name="desktop"
+                    value="web"
+                    checked={activeDesktopWebContent}
+                    onChange={() => setActiveDesktopWebContent(true)}
+                    label="Enable Web content on my desktop"
+                    style={{ fontSize: 11 }}
+                  />
+                  <Radio
+                    name="desktop"
+                    value="classic"
+                    checked={!activeDesktopWebContent}
+                    onChange={() => setActiveDesktopWebContent(false)}
+                    label="Use Windows classic desktop"
+                    style={{ fontSize: 11 }}
+                  />
+                </RadioColumn>
+              </IconRow>
             </GroupBox>
-            <GroupBox label="Web View">
-              <Radio
-                name="webview"
-                value="web"
-                checked={webView === "web"}
-                onChange={() => setWebView("web")}
-                label="Enable Web content in folders"
-                style={{ fontSize: 11 }}
-              />
-              <Radio
-                name="webview"
-                value="classic"
-                checked={webView === "classic"}
-                onChange={() => setWebView("classic")}
-                label="Use Windows classic folders"
-                style={{ fontSize: 11 }}
-              />
+            <GroupBox style={{ zoom: 0.8 }} label="Web View">
+              <IconRow>
+                <Icon src="/icons/w98_shell_window3.ico" size={32} style={{ width: 32, height: 32 }} />
+                <RadioColumn>
+                  <Radio
+                    name="webview"
+                    value="web"
+                    checked={webContentInFolders}
+                    onChange={() => setWebContentInFolders(true)}
+                    label="Enable Web content in folders"
+                    style={{ fontSize: 11 }}
+                  />
+                  <Radio
+                    name="webview"
+                    value="classic"
+                    checked={!webContentInFolders}
+                    onChange={() => setWebContentInFolders(false)}
+                    label="Use Windows classic folders"
+                    style={{ fontSize: 11 }}
+                  />
+                </RadioColumn>
+              </IconRow>
             </GroupBox>
-            <GroupBox label="Browse Folders">
-              <Radio
-                name="browse"
-                value="same"
-                checked={browseFolders === "same"}
-                onChange={() => setBrowseFolders("same")}
-                label="Open each folder in the same window"
-                style={{ fontSize: 11 }}
-              />
-              <Radio
-                name="browse"
-                value="own"
-                checked={browseFolders === "own"}
-                onChange={() => setBrowseFolders("own")}
-                label="Open each folder in its own window"
-                style={{ fontSize: 11 }}
-              />
+            <GroupBox style={{ zoom: 0.8 }} label="Browse Folders">
+              <IconRow>
+                <Icon src="/icons/w98_shell_window5.ico" size={32} style={{ width: 32, height: 32 }} />
+                <RadioColumn>
+                  <Radio
+                    name="browse"
+                    value="same"
+                    checked={browseFoldersMode === "same"}
+                    onChange={() => setBrowseFoldersMode("same")}
+                    label="Open each folder in the same window"
+                    style={{ fontSize: 11 }}
+                  />
+                  <Radio
+                    name="browse"
+                    value="own"
+                    checked={browseFoldersMode === "own"}
+                    onChange={() => setBrowseFoldersMode("own")}
+                    label="Open each folder in its own window"
+                    style={{ fontSize: 11 }}
+                  />
+                </RadioColumn>
+              </IconRow>
             </GroupBox>
-            <GroupBox label="Click items as follows">
-              <Radio
-                name="click"
-                value="single"
-                checked={clickMode === "single"}
-                onChange={() => setClickMode("single")}
-                label="Single-click to open an item (point to select)"
-                style={{ fontSize: 11 }}
-              />
-              <Radio
-                name="click"
-                value="double"
-                checked={clickMode === "double"}
-                onChange={() => setClickMode("double")}
-                label="Double-click to open an item (single-click to select)"
-                style={{ fontSize: 11 }}
-              />
+            <GroupBox style={{ zoom: 0.8 }} label="Click items as follows">
+              <IconRow>
+                <Icon
+                  src="/icons/w98_accessibility_key_pointer.ico"
+                  size={32}
+                  style={{ width: 32, height: 32 }}
+                />
+                <RadioColumn>
+                  <Radio
+                    name="click"
+                    value="single"
+                    checked={singleClickOpen}
+                    onChange={() => setSingleClickOpen(true)}
+                    label="Single-click to open an item (point to select)"
+                    style={{ fontSize: 11 }}
+                  />
+                  <RadioColumn style={{ paddingLeft: 20 }}>
+                    <Radio
+                      name="underline"
+                      value="browser"
+                      checked={underlineMode === "browser"}
+                      onChange={() => setUnderlineMode("browser")}
+                      disabled={!singleClickOpen}
+                      label="Underline icon titles consistent with my browser"
+                      style={{ fontSize: 11 }}
+                    />
+                    <Radio
+                      name="underline"
+                      value="point"
+                      checked={underlineMode === "point"}
+                      onChange={() => setUnderlineMode("point")}
+                      disabled={!singleClickOpen}
+                      label="Underline icon titles only when I point at them"
+                      style={{ fontSize: 11 }}
+                    />
+                  </RadioColumn>
+                  <Radio
+                    name="click"
+                    value="double"
+                    checked={!singleClickOpen}
+                    onChange={() => setSingleClickOpen(false)}
+                    label="Double-click to open an item (single-click to select)"
+                    style={{ fontSize: 11 }}
+                  />
+                </RadioColumn>
+              </IconRow>
             </GroupBox>
+            <RestoreRow>
+              <Button onClick={restoreDefaults} style={{ fontSize: 11 }}>Restore Defaults</Button>
+            </RestoreRow>
           </div>
         )}
 
         {activeTab === "view" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
-            <GroupBox label="Folder views">
+            <GroupBox style={{ zoom: 0.8 }} label="Folder views">
               <div style={{ display: "flex", gap: 6 }}>
                 <Button style={{ fontSize: 11, flex: 1 }}>Like Current Folder</Button>
                 <Button style={{ fontSize: 11, flex: 1 }}>Reset All Folders</Button>
               </div>
             </GroupBox>
             <div style={{ fontSize: 11 }}>Advanced settings:</div>
-            <OptionsList>
-              <SettingRow>
+            <OptionsList orientation="vertical" contentStyle={{ padding: 6, gap: 4 }}>
+              <TreeHeader>
+                <Icon src="/icons/w98_directory_closed.ico" size={16} style={{ width: 16, height: 16 }} />
+                Files and Folders
+              </TreeHeader>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={netFolders}
-                  onChange={(e: any) => setNetFolders(e.target.checked)}
+                  checked={autoSearchNetworkFolders}
+                  onChange={(e: any) => setAutoSearchNetworkFolders(e.target.checked)}
                   label="Automatically search for network folders and printers"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={allCp}
-                  onChange={(e: any) => setAllCp(e.target.checked)}
+                  checked={displayAllControlPanelOptions}
+                  onChange={(e: any) => setDisplayAllControlPanelOptions(e.target.checked)}
                   label="Display all Control Panel options and all folder contents"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={fullPathAddr}
-                  onChange={(e: any) => setFullPathAddr(e.target.checked)}
+                  checked={fullPathInAddressBar}
+                  onChange={(e: any) => setFullPathInAddressBar(e.target.checked)}
                   label="Display the full path in the address bar"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={fullPathTitle}
-                  onChange={(e: any) => setFullPathTitle(e.target.checked)}
+                  checked={fullPathInTitleBar}
+                  onChange={(e: any) => setFullPathInTitleBar(e.target.checked)}
                   label="Display the full path in title bar"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              
-              {/* Hidden files radio group */}
-              <div style={{ paddingLeft: 4, fontWeight: "bold", fontSize: 11 }}>Hidden files and folders:</div>
-              <SettingRow $indent>
+
+              <TreeHeader $indent={1}>
+                <Icon src="/icons/w98_directory_closed.ico" size={16} style={{ width: 16, height: 16 }} />
+                Hidden files and folders
+              </TreeHeader>
+              <SettingRow $indent={2}>
                 <Radio
                   name="hiddenfiles"
                   value="no"
-                  checked={!localShowHidden}
-                  onChange={() => setLocalShowHidden(false)}
+                  checked={!showHidden}
+                  onChange={() => setShowHidden(false)}
                   label="Do not show hidden files and folders"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow $indent>
+              <SettingRow $indent={2}>
                 <Radio
                   name="hiddenfiles"
                   value="yes"
-                  checked={localShowHidden}
-                  onChange={() => setLocalShowHidden(true)}
+                  checked={showHidden}
+                  onChange={() => setShowHidden(true)}
                   label="Show hidden files and folders"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
 
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={hideExt}
-                  onChange={(e: any) => setHideExt(e.target.checked)}
+                  checked={hideKnownExtensions}
+                  onChange={(e: any) => setHideKnownExtensions(e.target.checked)}
                   label="Hide file extensions for known file types"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={hideSystem}
-                  onChange={(e: any) => setHideSystem(e.target.checked)}
+                  checked={hideProtectedSystemFiles}
+                  onChange={(e: any) => setHideProtectedSystemFiles(e.target.checked)}
                   label="Hide protected operating system files (Recommended)"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={separateProc}
-                  onChange={(e: any) => setSeparateProc(e.target.checked)}
+                  checked={launchFoldersInSeparateProcess}
+                  onChange={(e: any) => setLaunchFoldersInSeparateProcess(e.target.checked)}
                   label="Launch folder windows in a separate process"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={rememberSettings}
-                  onChange={(e: any) => setRememberSettings(e.target.checked)}
+                  checked={rememberFolderViewSettings}
+                  onChange={(e: any) => setRememberFolderViewSettings(e.target.checked)}
                   label="Remember each folder's view settings"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={showDocsDesktop}
-                  onChange={(e: any) => setShowDocsDesktop(e.target.checked)}
+                  checked={showMyDocumentsOnDesktop}
+                  onChange={(e: any) => setShowMyDocumentsOnDesktop(e.target.checked)}
                   label="Show My Documents on the Desktop"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
-              <SettingRow>
+              <SettingRow $indent={1}>
                 <Checkbox
-                  checked={showPopupDesc}
-                  onChange={(e: any) => setShowPopupDesc(e.target.checked)}
+                  checked={showPopupDescriptions}
+                  onChange={(e: any) => setShowPopupDescriptions(e.target.checked)}
                   label="Show pop-up description for folder and desktop items"
                   style={{ fontSize: 11 }}
                 />
               </SettingRow>
             </OptionsList>
+            <RestoreRow>
+              <Button onClick={restoreDefaults} style={{ fontSize: 11 }}>Restore Defaults</Button>
+            </RestoreRow>
           </div>
         )}
 
         {activeTab === "filetypes" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0, fontSize: 11 }}>
             <div>Registered file types:</div>
-            <OptionsList>
+            <OptionsList orientation="vertical" contentStyle={{ padding: 6, gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
                 <span>Extension</span>
                 <span>File Type</span>

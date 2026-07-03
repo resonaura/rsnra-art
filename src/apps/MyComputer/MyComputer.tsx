@@ -9,7 +9,7 @@ import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { APPS, openApp } from "../../data/apps";
 import { getPreferredApp } from "../../data/fileOpen";
-import { iconForNode } from "../../data/fileIcons";
+import { displayName, iconForNode } from "../../data/fileIcons";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
@@ -80,6 +80,13 @@ function formatDate(node: VfsNode): string {
   const mi = String(d.getMinutes()).padStart(2, "0");
   const ampm = d.getHours() >= 12 ? "PM" : "AM";
   return `${mm}/${dd}/${yy} ${hh}:${mi} ${ampm}`;
+}
+
+/** Last path segment of a `C:\Windows\Desktop`-style absolute path. */
+function leafName(path: string): string {
+  const trimmed = path.replace(/\\+$/, "");
+  const idx = trimmed.lastIndexOf("\\");
+  return idx >= 0 ? trimmed.slice(idx + 1) : path;
 }
 
 /** Is `descendantAbs` the same path as, or nested inside, `ancestorAbs`? */
@@ -218,7 +225,15 @@ const IconGrid = styled(ScrollArea)`
   margin: 0 8px 8px;
 `;
 
-const IconItem = styled.button<{ $selected?: boolean }>`
+const underlineCss = css<{ $underline?: "always" | "hover" | "none" }>`
+  text-decoration: ${({ $underline }) => ($underline === "always" ? "underline" : "none")};
+  &:hover {
+    text-decoration: ${({ $underline }) =>
+      $underline === "hover" || $underline === "always" ? "underline" : "none"};
+  }
+`;
+
+const IconItem = styled.button<{ $selected?: boolean; $underline?: "always" | "hover" | "none" }>`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -234,6 +249,7 @@ const IconItem = styled.button<{ $selected?: boolean }>`
   font-family: inherit;
   font-size: 11px;
   text-align: center;
+  ${underlineCss}
 
   img {
     width: 32px;
@@ -283,7 +299,11 @@ const SmallGrid = styled.div`
   gap: 2px;
 `;
 
-const SmallRow = styled.button<{ $selected?: boolean; $dragOver?: boolean }>`
+const SmallRow = styled.button<{
+  $selected?: boolean;
+  $dragOver?: boolean;
+  $underline?: "always" | "hover" | "none";
+}>`
   ${rowBase}
   width: 190px;
   background: ${({ $selected, $dragOver, theme }) =>
@@ -299,6 +319,7 @@ const SmallRow = styled.button<{ $selected?: boolean; $dragOver?: boolean }>`
     $dragOver ? `1px solid ${theme.headerBackground}` : "none"};
   color: ${({ $selected, theme }) =>
     $selected ? theme.headerText : theme.canvasText};
+  ${underlineCss}
   img {
     width: 16px;
     height: 16px;
@@ -646,6 +667,19 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
   const driveNotReady = /^[AD]:\\$/.test(path);
   const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
+  const underlineMode = useFilePrefsStore((s) => s.underlineMode);
+  const hideKnownExtensions = useFilePrefsStore((s) => s.hideKnownExtensions);
+  const hideProtectedSystemFiles = useFilePrefsStore((s) => s.hideProtectedSystemFiles);
+  const showPopupDescriptions = useFilePrefsStore((s) => s.showPopupDescriptions);
+  const fullPathInTitleBar = useFilePrefsStore((s) => s.fullPathInTitleBar);
+  const fullPathInAddressBar = useFilePrefsStore((s) => s.fullPathInAddressBar);
+  const browseFoldersMode = useFilePrefsStore((s) => s.browseFoldersMode);
+  const underline: "always" | "hover" | "none" = singleClickOpen
+    ? underlineMode === "browser"
+      ? "always"
+      : "hover"
+    : "none";
   const controlPanelNodes: VfsNode[] = APPLETS.map(
     (applet) =>
       ({
@@ -696,7 +730,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
   if (path.toLowerCase() === "c:\\windows\\desktop") {
     allEntries = allEntries.filter((n) => n.name.toLowerCase() !== "my computer.lnk");
   }
-  const entries = showHidden ? allEntries : allEntries.filter((n) => !n.hidden);
+  const entries = allEntries.filter(
+    (n) => (showHidden || !n.hidden) && (!hideProtectedSystemFiles || !n.system),
+  );
 
   const sortValue = (n: VfsNode): string | number => {
     switch (sortKey) {
@@ -735,7 +771,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
   // Sync the window title + icon to the current path — just like real Win95 Explorer
   useEffect(() => {
-    updateTitle(windowId, isRoot ? MY_COMPUTER : path);
+    updateTitle(
+      windowId,
+      isRoot ? MY_COMPUTER : fullPathInTitleBar ? path : leafName(path),
+    );
     let icon = "/icons/w98_directory_open.ico";
     if (isRoot) {
       icon = "/icons/w2k_my_computer.ico";
@@ -749,7 +788,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         "/icons/w98_hard_disk_drive.ico";
     }
     updateIcon(windowId, icon);
-  }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon]);
+  }, [path, isRoot, isDriveRoot, windowId, updateTitle, updateIcon, fullPathInTitleBar]);
 
   const refresh = () => setPath((p) => p); // no-op; VFS mutations re-render via root swap
   void refresh;
@@ -794,8 +833,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (preferred) {
       preferred.open(abs, node.name);
     } else if (node.type === "dir") {
-      setPath(abs);
-      setSelected(null);
+      if (browseFoldersMode === "own") {
+        openApp("my-computer", { title: node.name, data: { path: abs } });
+      } else {
+        setPath(abs);
+        setSelected(null);
+      }
     } else if (node.appId && APPS[node.appId as keyof typeof APPS]) {
       const id = node.appId as keyof typeof APPS;
       if (id === "winamp") {
@@ -1267,13 +1310,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
       onDrop: isDropTarget ? handleDropOnDir(abs!) : undefined,
       title: node.system
         ? "System item — protected, cannot be moved, renamed, or deleted"
-        : undefined,
+        : showPopupDescriptions
+          ? describeTypeLocal(node)
+          : undefined,
       onClick: (e: React.MouseEvent) => {
         e.stopPropagation();
         setSelected(node.name);
+        if (singleClickOpen && renaming !== node.name) openNode(node);
       },
       onDoubleClick: () => {
-        if (renaming === node.name) return;
+        if (renaming === node.name || singleClickOpen) return;
         openNode(node);
       },
       onContextMenu: (e: React.MouseEvent) => openCtx(e, node),
@@ -1296,10 +1342,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
     />
   );
 
+  const nodeLabel = (node: VfsNode): string =>
+    node.name.toLowerCase().endsWith(".lnk")
+      ? node.name.replace(/\.lnk$/i, "")
+      : displayName(node.name, hideKnownExtensions);
+
   const renderIcon = (node: VfsNode): ReactNode => (
     <IconItem
       key={node.name}
       $selected={selected === node.name}
+      $underline={underline}
       tabIndex={0}
       {...nodeHandlers(node)}
       style={{
@@ -1311,7 +1363,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         <FileIcon node={node} />
         {node.system && <LockGlyph />}
       </div>
-      {renaming === node.name ? renameBox() : node.name}
+      {renaming === node.name ? renameBox() : nodeLabel(node)}
     </IconItem>
   );
 
@@ -1320,6 +1372,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       key={node.name}
       $selected={selected === node.name}
       $dragOver={dragOverKey === node.name}
+      $underline={underline}
       tabIndex={0}
       {...nodeHandlers(node)}
       style={{ opacity: nodeOpacity(node) }}
@@ -1335,7 +1388,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           whiteSpace: "nowrap",
         }}
       >
-        {renaming === node.name ? renameBox(140) : node.name}
+        {renaming === node.name ? renameBox(140) : nodeLabel(node)}
       </span>
     </SmallRow>
   );
@@ -1357,8 +1410,20 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {renaming === node.name ? (
           renameBox(140)
         ) : (
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-            {node.name}
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              textDecoration: underline === "always" ? "underline" : "none",
+            }}
+            onMouseEnter={(e) => {
+              if (underline === "hover") e.currentTarget.style.textDecoration = "underline";
+            }}
+            onMouseLeave={(e) => {
+              if (underline === "hover") e.currentTarget.style.textDecoration = "none";
+            }}
+          >
+            {nodeLabel(node)}
           </span>
         )}
       </ColName>
@@ -1384,7 +1449,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
       </NavToolbar>
       <AddressRow>
         <span style={{ fontSize: 12 }}>Address</span>
-        <AddressField variant="field">{path}</AddressField>
+        <AddressField variant="field">
+          {isRoot || path === "Control Panel" || path === "Games" || fullPathInAddressBar
+            ? path
+            : leafName(path)}
+        </AddressField>
       </AddressRow>
 
       <IconGrid
@@ -1416,12 +1485,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
             <IconItem
               key={d.label}
               $selected={selected === d.label}
+              $underline={underline}
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelected(d.label);
+                if (singleClickOpen) enter(d);
               }}
-              onDoubleClick={() => enter(d)}
+              onDoubleClick={() => {
+                if (!singleClickOpen) enter(d);
+              }}
               onContextMenu={(e) => openCtx(e, null)}
               onDragOver={
                 d.kind === "drive" && !d.notReady

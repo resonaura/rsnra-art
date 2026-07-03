@@ -244,8 +244,8 @@ export const APPS: Record<AppId, AppDefinition> = {
     title: "Folder Options",
     icon: "/icons/w98_directory_open.ico",
     component: asComponent(FolderOptions),
-    width: 360,
-    height: 480,
+    width: 380,
+    height: 560,
     resizable: false,
   },
   datetime: {
