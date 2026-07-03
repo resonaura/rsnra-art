@@ -7,7 +7,7 @@ import { AppMenuBar } from "../../components/AppMenuBar";
 import { useWindowStore } from "../../store/windowStore";
 import { Shell } from "./shell";
 import { TerminalScrollbar } from "./TerminalScrollbar";
-
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
 const Root = styled.div`
   display: flex;
   flex-direction: column;
@@ -31,6 +31,12 @@ const TermContainer = styled.div`
   padding: 4px;
   background: #000;
   overflow: hidden;
+
+  .xterm,
+  .xterm-viewport,
+  .xterm-screen {
+    background: transparent !important;
+  }
 
   .xterm {
     height: 100%;
@@ -122,6 +128,8 @@ export function TerminalApp({ windowId }: { windowId: string }) {
   );
   const [scrollState, setScrollState] = useState<ScrollState>(INITIAL_SCROLL);
   const [bgColor, setBgColor] = useState("#000000");
+
+  const { showFileDialog, dialog: fileDialogEl } = useFileDialog();
 
   const syncScroll = useCallback(() => {
     const term = termRef.current;
@@ -235,9 +243,16 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    const shell = new Shell(term, windowId, closeWindow, updateTitle, (bg) => {
-      setBgColor(bg);
-    });
+    const shell = new Shell(
+      term,
+      windowId,
+      closeWindow,
+      updateTitle,
+      (bg) => {
+        setBgColor(bg);
+      },
+      showFileDialog
+    );
     shellRef.current = shell;
     shell.start();
 
@@ -322,6 +337,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
           onStep={handleStep}
         />
       </TermRow>
+      {fileDialogEl}
     </Root>
   );
 }

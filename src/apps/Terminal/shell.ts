@@ -43,6 +43,7 @@ export class Shell {
   // input is ignored meanwhile so keystrokes can't pile into a buffer for a
   // prompt that hasn't been shown yet.
   private busy = false;
+  private showFileDialog?: any;
 
   constructor(
     term: Terminal,
@@ -50,12 +51,14 @@ export class Shell {
     closeWindow: (id: string) => void,
     updateTitle: (id: string, title: string) => void,
     onSetColor?: (bg: string, fg: string) => void,
+    showFileDialog?: any,
   ) {
     this.term = term;
     this.windowId = windowId;
     this.closeWindow = closeWindow;
     this.updateTitle = updateTitle;
     this.onSetColor = onSetColor;
+    this.showFileDialog = showFileDialog;
 
     this.disposable = term.onData((data) => this.onData(data));
     this.resizeDisposable = term.onResize(() => {
@@ -299,7 +302,6 @@ export class Shell {
     const vfs = useVfsStore.getState();
     const expanded = expandVars(line.trim(), this.vars, vfs);
 
-    let printedSomeText = false;
     const print = (lines: string[], kind?: "echo" | "output" | "error") => {
       // The window may have been closed while an async command (e.g. an
       // in-flight `ping`) was still awaiting the network — don't touch the
@@ -310,7 +312,6 @@ export class Shell {
           this.term.writeln(`${ANSI.RED}${text}${ANSI.RESET}`);
         else this.term.writeln(text);
       }
-      printedSomeText = true;
     };
 
     const ctx: CmdContext = {
@@ -358,9 +359,6 @@ export class Shell {
     if (!this.active) return;
     if (this.nano) return; // nano took over
 
-    if (printedSomeText) {
-      this.term.write("\r\n");
-    }
     this.showPrompt();
   }
 
@@ -381,6 +379,7 @@ export class Shell {
         // it was before nano started. Show prompt on the restored line.
         this.showPrompt();
       },
+      this.showFileDialog
     );
     this.nano.setVfsRead((p) => useVfsStore.getState().read(p));
     this.nano.start();

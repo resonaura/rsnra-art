@@ -1101,6 +1101,7 @@ function cmdAbout(_args: string[], ctx: CmdContext) {
     `${BAND_NAME} — Alternative Rock, ${BAND_LOCATION}.`,
     "Fuzzed-out guitars, atmospheric synths, anthemic choruses.",
     'Run "links" for everything else.',
+    "",
   ]);
 }
 
@@ -1110,11 +1111,12 @@ function cmdLinks(_args: string[], ctx: CmdContext) {
     `TikTok      ${LINKS.tiktok}`,
     `Instagram   ${LINKS.instagram}`,
     `Contact     ${CONTACT_EMAIL}`,
+    "",
   ]);
 }
 
 function cmdWhoami(_args: string[], ctx: CmdContext) {
-  ctx.print(["rsnra"]);
+  ctx.print(["rsnra", ""]);
 }
 
 const sleep = (ms: number) =>
@@ -1822,7 +1824,8 @@ async function dispatchCommand(cmdLine: string, ctx: CmdContext) {
 
   ctx.print([
     `'${cmd}' is not recognized as an internal or external command,`,
-    `operable program or batch file. Type "help".\n`,
+    `operable program or batch file. Type "help".`,
+    "",
   ]);
   ctx.setErrorLevel(1);
 }

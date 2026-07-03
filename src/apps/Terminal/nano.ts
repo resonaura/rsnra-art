@@ -1,4 +1,5 @@
 import type { Terminal } from "@xterm/xterm";
+import { useVfsStore } from "../../store/vfsStore";
 
 /**
  * Nano text editor — faithful recreation of GNU nano 9.1, drawn directly
@@ -20,7 +21,7 @@ import type { Terminal } from "@xterm/xterm";
 
 // ─── Constants from nano source ──────────────────────────────────────────────
 
-const BRANDING = "  GNU nano 9.1";
+const BRANDING = "  UW PICO 5.09";
 const WIDTH_OF_TAB = 8;
 
 // ANSI styling.  Default nano uses reverse video (A_REVERSE) for title bar,
@@ -56,18 +57,18 @@ interface Shortcut {
 // Order matches the allfuncs list; bottombars uses a zigzag layout
 // (index%2 = row, index/2 = column).
 const MMAIN: Shortcut[] = [
-  { key: "^G", tag: "Help" },
+  { key: "^G", tag: "Get Help" },
   { key: "^X", tag: "Exit" },
-  { key: "^O", tag: "Write Out" },
-  { key: "^R", tag: "Read File" },
-  { key: "^W", tag: "Where Is" },
-  { key: "^\\", tag: "Replace" },
-  { key: "^K", tag: "Cut" },
-  { key: "^U", tag: "Paste" },
-  { key: "^T", tag: "Execute" },
+  { key: "^O", tag: "WriteOut" },
   { key: "^J", tag: "Justify" },
-  { key: "^C", tag: "Location" },
-  { key: "^_", tag: "Go To Line" },
+  { key: "^R", tag: "Read File" },
+  { key: "^W", tag: "Where is" },
+  { key: "^Y", tag: "Prev Pg" },
+  { key: "^V", tag: "Next Pg" },
+  { key: "^K", tag: "Cut Text" },
+  { key: "^U", tag: "UnCut Text" },
+  { key: "^C", tag: "Cur Pos" },
+  { key: "^T", tag: "To Spell" },
 ];
 
 // Search (Where Is) menu.
@@ -96,23 +97,18 @@ const MREPLACEWITH: Shortcut[] = [
 
 // Write File menu.
 const MWRITEFILE: Shortcut[] = [
-  { key: "^G", tag: "Help" },
+  { key: "^G", tag: "Get Help" },
   { key: "^C", tag: "Cancel" },
-  { key: "M-D", tag: "DOS Format" },
-  { key: "M-B", tag: "Backup File" },
-  { key: "M-A", tag: "Append" },
-  { key: "M-P", tag: "Prepend" },
-  { key: "^Q", tag: "Discard buf" },
-  { key: "M-F", tag: "Browse" },
+  { key: "^T", tag: "To Files" },
+  { key: "TAB", tag: "Complete" },
 ];
 
 // Insert File menu.
 const MINSERTFILE: Shortcut[] = [
-  { key: "^G", tag: "Help" },
+  { key: "^G", tag: "Get Help" },
   { key: "^C", tag: "Cancel" },
-  { key: "M-N", tag: "No Convert" },
-  { key: "^X", tag: "Execute Cmd" },
-  { key: "M-F", tag: "Browse" },
+  { key: "^T", tag: "To Files" },
+  { key: "TAB", tag: "Complete" },
 ];
 
 // Go To Line menu.
@@ -315,12 +311,15 @@ export class Nano {
   private wheelHandler: ((e: WheelEvent) => void) | null = null;
   private escapeBuffer = "";
 
+  private showFileDialog?: any;
+
   constructor(
     term: Terminal,
     path: string,
     content: string,
     onSave: (path: string, content: string) => void,
     onExit: () => void,
+    showFileDialog?: any,
   ) {
     this.term = term;
     this.path = path;
@@ -328,6 +327,7 @@ export class Nano {
     this.lines = content.length ? content.split("\n") : [""];
     this.onSave = onSave;
     this.onExit = onExit;
+    this.showFileDialog = showFileDialog;
     this.disposable = term.onData((data) => this.handleData(data));
     this.resizeDisposable = term.onResize(() => this.render());
   }
@@ -658,10 +658,10 @@ export class Nano {
   /** Render the first bottom shortcut row (row N-2). */
   private renderBottomRow1(cols: number) {
     if (this.mode === "yesno") {
-      const width = Math.max(1, Math.floor(cols / 2));
+      const width = Math.max(1, Math.floor(cols / 6));
       const row =
-        this.formatKeyTag(" Y", "Yes", width) +
-        this.formatKeyTag("^C", "Cancel", width);
+        " ".repeat(width) +
+        this.formatKeyTag(" Y", "Yes", width);
       this.term.write(`\x1b[2K${row.slice(0, cols)}`);
       return;
     }
@@ -680,8 +680,10 @@ export class Nano {
   /** Render the second bottom shortcut row (row N-1). */
   private renderBottomRow2(cols: number) {
     if (this.mode === "yesno") {
-      const width = Math.max(1, Math.floor(cols / 2));
-      const row = this.formatKeyTag(" N", "No", width);
+      const width = Math.max(1, Math.floor(cols / 6));
+      const row =
+        this.formatKeyTag("^C", "Cancel", width) +
+        this.formatKeyTag(" N", "No", width);
       this.term.write(`\x1b[2K${row.slice(0, cols)}`);
       return;
     }
@@ -1683,6 +1685,16 @@ export class Nano {
       case "\r": // Enter — confirm
         this.confirmPrompt();
         break;
+      case "\t": // TAB — Complete
+        if (this.mode === "writefile" || this.mode === "insertfile") {
+          this.doPathCompletion();
+        }
+        break;
+      case "\x14": // ^T — To Files (Browse)
+        if (this.mode === "writefile" || this.mode === "insertfile") {
+          this.triggerToFiles();
+        }
+        break;
       case "\x1b": // Esc — cancel
         this.cancelPrompt();
         break;
@@ -1828,6 +1840,78 @@ export class Nano {
     this.wipeStatusbar();
     this.statusline("HUSH", "Cancelled");
     this.render();
+  }
+
+  private async triggerToFiles() {
+    if (!this.showFileDialog) return;
+
+    // Hide cursor while dialog is open
+    this.term.write(HIDE_CURSOR);
+
+    try {
+      const mode = this.mode === "writefile" ? "save" : "open";
+      const title = this.mode === "writefile" ? "Save As" : "Open";
+      const initialPath = this.answer || "";
+
+      const file = await this.showFileDialog({
+        mode,
+        title,
+        initialDir: initialPath.includes(":") ? initialPath.split("\\").slice(0, -1).join("\\") : "C:\\",
+        filters: [
+          { label: "All Files (*.*)", extensions: [] }
+        ]
+      });
+
+      if (file) {
+        this.answer = file;
+        this.answerCursor = file.length;
+        this.render();
+      }
+    } catch (e) {
+      console.error("Error showing file dialog:", e);
+    } finally {
+      // Restore cursor
+      this.term.write(SHOW_CURSOR);
+    }
+  }
+
+  private doPathCompletion() {
+    const currentInput = this.answer.slice(0, this.answerCursor);
+    const lastPart = currentInput.split(/[\\/]/).pop() || "";
+    const parentPath = currentInput.slice(0, currentInput.length - lastPart.length);
+
+    const vfs = useVfsStore.getState();
+    const SEP = "\\";
+    let resolvedParentPath = "";
+    if (parentPath) {
+      if (parentPath.includes(":")) {
+        resolvedParentPath = parentPath;
+      } else {
+        resolvedParentPath = vfs.cwd + (vfs.cwd.endsWith(SEP) ? "" : SEP) + parentPath;
+      }
+    } else {
+      resolvedParentPath = vfs.cwd;
+    }
+
+    const node = vfs.resolve(resolvedParentPath);
+    if (node && node.type === "dir" && node.children) {
+      const partial = lastPart.toLowerCase();
+      const matches = node.children
+        .filter((c) => c.name.toLowerCase().startsWith(partial))
+        .map((c) => c.name + (c.type === "dir" ? SEP : ""));
+
+      if (matches.length === 1) {
+        const completed = matches[0].slice(lastPart.length);
+        this.answer =
+          currentInput +
+          completed +
+          this.answer.slice(this.answerCursor);
+        this.answerCursor += completed.length;
+        this.render();
+      } else if (matches.length > 1) {
+        this.statusline("HUSH", matches.join("  "));
+      }
+    }
   }
 
   // ─── Input handling ──────────────────────────────────────────────────────
