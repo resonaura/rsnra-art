@@ -113,6 +113,7 @@ const INITIAL_SCROLL: ScrollState = {
 export function TerminalApp({ windowId }: { windowId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const shellRef = useRef<Shell | null>(null);
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const updateTitle = useWindowStore((s) => s.updateTitle);
@@ -164,7 +165,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
       cursorStyle: "bar",
       allowTransparency: true,
       theme: {
-        background: "#000000",
+        background: "transparent",
         foreground: "#c0c0c0", // Тот самый стандартный светло-серый текст DOS
         cursor: "#ffffff",
         selectionBackground: "#ffffff",
@@ -200,7 +201,39 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     term.open(containerRef.current);
     fitAddon.fit();
 
+    term.registerLinkProvider({
+      provideLinks(y, callback) {
+        const line = term.buffer.active.getLine(y - 1);
+        if (!line) {
+          callback(undefined);
+          return;
+        }
+        const text = line.translateToString(true);
+        const regex = /https?:\/\/[^\s"'()<>]+|www\.[^\s"'()<>]+/gi;
+        const links: any[] = [];
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          const matchedText = match[0];
+          const startX = match.index;
+          const endX = startX + matchedText.length;
+          links.push({
+            text: matchedText,
+            range: {
+              start: { x: startX + 1, y },
+              end: { x: endX, y },
+            },
+            activate(_e: any, text: string) {
+              const url = text.toLowerCase().startsWith("www.") ? `https://${text}` : text;
+              window.open(url, "_blank", "noopener,noreferrer");
+            },
+          });
+        }
+        callback(links);
+      },
+    });
+
     termRef.current = term;
+    fitAddonRef.current = fitAddon;
 
     const shell = new Shell(term, windowId, closeWindow, updateTitle, (bg) => {
       setBgColor(bg);
@@ -213,7 +246,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     let fitTimer: ReturnType<typeof setTimeout> | null = null;
     const doFit = () => {
       try {
-        fitAddon.fit();
+        fitAddonRef.current?.fit();
       } catch {
         /* not ready */
       }
@@ -221,7 +254,10 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     };
     // Defer initial fits to catch late layout passes
     setTimeout(doFit, 50);
-    setTimeout(doFit, 200);
+    setTimeout(doFit, 150);
+    setTimeout(doFit, 300);
+    setTimeout(doFit, 600);
+    setTimeout(doFit, 1000);
 
     // The terminal is measured using the VT323 web font's cell metrics —
     // if that font is still loading at mount time, the initial fit() uses
@@ -253,15 +289,19 @@ export function TerminalApp({ windowId }: { windowId: string }) {
       shell.destroy();
       term.dispose();
       termRef.current = null;
+      fitAddonRef.current = null;
       shellRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Focus terminal when window gains focus
+  // Focus and refit terminal when window gains focus
   useEffect(() => {
     if (isFocused && termRef.current) {
       termRef.current.focus();
+      try {
+        fitAddonRef.current?.fit();
+      } catch {}
     }
   }, [isFocused]);
 

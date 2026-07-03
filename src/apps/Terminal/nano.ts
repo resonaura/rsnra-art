@@ -282,6 +282,7 @@ export class Nano {
   private mode: NanoMode = "edit";
   private statusMsg = "";
   private statusImportance: "HUSH" | "INFO" | "NOTICE" | "ALERT" = "HUSH";
+  private exitAfterSave = false;
   private countdown = 0; // keystrokes until statusbar is wiped
 
   // Prompt input
@@ -1290,6 +1291,10 @@ export class Nano {
   }
 
   private doSaveFile() {
+    if (!this.savePath) {
+      this.doWriteOut();
+      return;
+    }
     // Save without prompting (^S)
     this.onSave(this.savePath, this.lines.join("\n"));
     this.modified = false;
@@ -1300,6 +1305,9 @@ export class Nano {
   private executeWriteFile(filePath: string) {
     if (!filePath) {
       this.statusline("HUSH", "Cancelled");
+      this.exitAfterSave = false;
+      this.mode = "edit";
+      this.render();
       return;
     }
     this.savePath = filePath;
@@ -1307,14 +1315,21 @@ export class Nano {
     this.modified = false;
     this.path = this.savePath;
     this.statusline("HUSH", "Saved");
-    this.mode = "edit";
-    this.render();
+    
+    if (this.exitAfterSave) {
+      this.doExitNow();
+    } else {
+      this.mode = "edit";
+      this.render();
+    }
   }
 
   // ─── Exit ────────────────────────────────────────────────────────────────
 
   private doExit() {
-    if (this.modified) {
+    const emptyBuffer = this.lines.join("\n") === "";
+    if (this.modified && !emptyBuffer) {
+      this.exitAfterSave = true;
       this.mode = "yesno";
       this.statusMsg = "Save modified buffer?";
       this.statusImportance = "HUSH";
@@ -1977,8 +1992,12 @@ export class Nano {
       case "y":
       case "Y":
         // Save then exit
-        this.doSaveFile();
-        this.doExitNow();
+        if (this.savePath) {
+          this.doSaveFile();
+          this.doExitNow();
+        } else {
+          this.doWriteOut();
+        }
         break;
       case "n":
       case "N":
@@ -1986,6 +2005,7 @@ export class Nano {
         this.doExitNow();
         break;
       case "\x03": // ^C — cancel
+        this.exitAfterSave = false;
         this.mode = "edit";
         this.statusline("HUSH", "Cancelled");
         this.render();

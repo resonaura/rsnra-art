@@ -887,8 +887,7 @@ function cmdFind(args: string[], ctx: CmdContext) {
 function cmdNano(args: string[], ctx: CmdContext) {
   const file = args[0];
   if (!file) {
-    ctx.print(["Usage: nano <file>"], "error");
-    ctx.setErrorLevel(1);
+    ctx.enterNano("");
     return;
   }
   const abs = ctx.vfs.resolvePath(file);
@@ -1821,13 +1820,10 @@ async function dispatchCommand(cmdLine: string, ctx: CmdContext) {
     return;
   }
 
-  ctx.print(
-    [
-      `'${cmd}' is not recognized as an internal or external command,`,
-      `operable program or batch file. Type "help".`,
-    ],
-    "error",
-  );
+  ctx.print([
+    `'${cmd}' is not recognized as an internal or external command,`,
+    `operable program or batch file. Type "help".\n`,
+  ]);
   ctx.setErrorLevel(1);
 }
 

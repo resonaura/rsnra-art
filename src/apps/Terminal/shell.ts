@@ -299,6 +299,7 @@ export class Shell {
     const vfs = useVfsStore.getState();
     const expanded = expandVars(line.trim(), this.vars, vfs);
 
+    let printedSomeText = false;
     const print = (lines: string[], kind?: "echo" | "output" | "error") => {
       // The window may have been closed while an async command (e.g. an
       // in-flight `ping`) was still awaiting the network — don't touch the
@@ -309,6 +310,7 @@ export class Shell {
           this.term.writeln(`${ANSI.RED}${text}${ANSI.RESET}`);
         else this.term.writeln(text);
       }
+      printedSomeText = true;
     };
 
     const ctx: CmdContext = {
@@ -356,6 +358,9 @@ export class Shell {
     if (!this.active) return;
     if (this.nano) return; // nano took over
 
+    if (printedSomeText) {
+      this.term.write("\r\n");
+    }
     this.showPrompt();
   }
 
@@ -373,8 +378,7 @@ export class Shell {
       () => {
         this.nano = null;
         // After alternate screen buffer restore, the cursor is back where
-        // it was before nano started. Move to a new line and show prompt.
-        this.term.write("\r\n");
+        // it was before nano started. Show prompt on the restored line.
         this.showPrompt();
       },
     );
