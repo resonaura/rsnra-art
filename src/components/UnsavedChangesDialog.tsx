@@ -1,32 +1,20 @@
 import { useEffect } from "react";
-import { Button, Window, WindowContent, WindowHeader } from "react95";
+import { Button, WindowContent } from "react95";
 import styled from "styled-components";
 import { playSound } from "../lib/audio";
 import { useUnsavedStore } from "../store/unsavedStore";
 import { useWindowStore } from "../store/windowStore";
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 600000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 340px;
-`;
+import { Icon } from "./Icon/Icon";
+import { SystemDialog } from "./SystemDialog/SystemDialog";
 
 const Body = styled(WindowContent)`
   display: flex;
-  gap: 14px;
+  gap: 25px;
   align-items: flex-start;
   padding: 0;
 `;
 
-const WarnIcon = styled.img`
+const WarnIcon = styled(Icon)`
   width: 32px;
   height: 32px;
   image-rendering: pixelated;
@@ -34,7 +22,6 @@ const WarnIcon = styled.img`
 `;
 
 const Message = styled.div`
-  font-size: 12px;
   line-height: 1.5;
   white-space: pre-line;
   padding-top: 4px;
@@ -74,41 +61,39 @@ export function UnsavedChangesDialog() {
   const message = `${appTitle}\nThe ${name === "Untitled" ? "document" : "file"} "${name}" has changed.\n\nDo you want to save the changes?`;
 
   return (
-    <Overlay onMouseDown={() => confirmCancel()}>
-      <Dialog onMouseDown={(e) => e.stopPropagation()} shadow={false}>
-        <WindowHeader
-          active
-          className="window-drag-handle"
-          style={{ display: "flex", alignItems: "center", zoom: 0.8 }}
+    <SystemDialog
+      title="Save Changes"
+      width={400}
+      onClose={confirmCancel}
+      closable={false}
+      zIndex={600000}
+    >
+      <WindowContent>
+        <Body>
+          <WarnIcon
+            src="/icons/w2k_warning.ico"
+            alt="Warning"
+            isInReact95
+            draggable={false}
+          />
+          <Message>{message}</Message>
+        </Body>
+      </WindowContent>
+      <Footer>
+        <Button
+          style={{ width: "80px" }}
+          primary
+          onClick={() => void confirmSave()}
         >
-          <span>Save Changes</span>
-        </WindowHeader>
-        <WindowContent>
-          <Body>
-            <WarnIcon
-              src="/icons/w2k_warning.ico"
-              alt="Warning"
-              draggable={false}
-            />
-            <Message>{message}</Message>
-          </Body>
-        </WindowContent>
-        <Footer style={{ zoom: 0.68 }}>
-          <Button
-            style={{ width: "80px" }}
-            primary
-            onClick={() => void confirmSave()}
-          >
-            Yes
-          </Button>
-          <Button style={{ width: "80px" }} onClick={confirmDiscard}>
-            No
-          </Button>
-          <Button style={{ width: "80px" }} onClick={confirmCancel}>
-            Cancel
-          </Button>
-        </Footer>
-      </Dialog>
-    </Overlay>
+          Yes
+        </Button>
+        <Button style={{ width: "80px" }} onClick={confirmDiscard}>
+          No
+        </Button>
+        <Button style={{ width: "80px" }} onClick={confirmCancel}>
+          Cancel
+        </Button>
+      </Footer>
+    </SystemDialog>
   );
 }

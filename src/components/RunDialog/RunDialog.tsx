@@ -1,54 +1,108 @@
 import { useState } from "react";
-import {
-  Button,
-  TextInput,
-  Window,
-  WindowContent,
-  WindowHeader,
-} from "react95";
-import styled from "styled-components";
+import { Button, WindowContent } from "react95";
+import styled, { css } from "styled-components";
 import { openApp } from "../../data/apps";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
+import { alertError, alertInfo } from "../../lib/systemDialogs";
 import { useWindowStore } from "../../store/windowStore";
 import type { AppId } from "../../types/window";
 import { Icon } from "../Icon/Icon";
+import { SystemDialog } from "../SystemDialog/SystemDialog";
 
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
+const raised = css`
+  border: 2px solid;
+  border-color: ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest};
 `;
 
-const Dialog = styled(Window)`
-  width: 380px;
+const sunken = css`
+  border: 2px solid;
+  border-color: ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
-const Row = styled.div`
+const IntroRow = styled.div`
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
 
   img {
     width: 32px;
     height: 32px;
     image-rendering: pixelated;
+    margin-top: 2px;
   }
+`;
+
+const IntroText = styled.p`
+  margin: 0;
+  line-height: 1.4;
+`;
+
+const OpenRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+`;
+
+const OpenLabel = styled.label`
+  flex-shrink: 0;
+  u {
+    text-decoration: underline;
+  }
+`;
+
+const ComboBox = styled.div`
+  ${sunken}
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  height: 22px;
+  background: #fff;
+`;
+
+const ComboInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0 4px;
+  background: transparent;
+`;
+
+const ComboArrow = styled.button`
+  ${raised}
+  width: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: default;
+  background: ${({ theme }) => theme.material};
+  &:active {
+    ${sunken}
+  }
+`;
+
+const ArrowGlyph = styled.span`
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid ${({ theme }) => theme.materialText};
 `;
 
 const Footer = styled.div`
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-`;
-
-const ErrorText = styled.p`
-  color: #8b0000;
-  font-size: 11px;
-  margin: -8px 0 12px;
 `;
 
 const RUN_MAP: Record<string, AppId> = {
@@ -83,22 +137,24 @@ export function RunDialog() {
   const open = useWindowStore((s) => s.runDialogOpen);
   const setOpen = useWindowStore((s) => s.setRunDialogOpen);
   const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { showFileDialog, dialog } = useFileDialog();
 
   if (!open) return null;
 
   const close = () => {
     setOpen(false);
     setValue("");
-    setError(null);
   };
 
   const submit = () => {
-    const key = value.trim().toLowerCase();
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
     const target = RUN_MAP[key];
     if (!target) {
-      setError(
-        `Cannot find "${value}". Try: terminal, notepad, music, games, contact...`,
+      alertError(
+        "Run",
+        `Cannot find '${trimmed}'. Make sure you typed the name correctly, and then try again.`,
       );
       return;
     }
@@ -106,53 +162,71 @@ export function RunDialog() {
     close();
   };
 
+  const browse = async () => {
+    const picked = await showFileDialog({
+      mode: "open",
+      title: "Browse",
+      initialDir: "C:\\",
+    });
+    if (picked) setValue(picked);
+  };
+
   return (
-    <Overlay onMouseDown={close}>
-      <Dialog onMouseDown={(e) => e.stopPropagation()}>
-        <WindowHeader>
-          <span>Run</span>
-        </WindowHeader>
-        <WindowContent>
-          <Row>
-            <Icon
-              src="/icons/w2k_run.ico"
-              size={64}
-              style={{ minWidth: "fit-content", width: 64, height: 64 }}
+    <SystemDialog
+      title="Run"
+      width={400}
+      onClose={close}
+      onHelp={() =>
+        alertInfo(
+          "Run",
+          "Type the name of a program, folder, document, or Internet resource, and RSNRA.ART will open it for you.",
+        )
+      }
+    >
+      <WindowContent>
+        <IntroRow>
+          <Icon src="/icons/w2k_run.ico" size={32} isInReact95 />
+          <IntroText>
+            Type the name of a program, folder, document, or Internet
+            resource, and RSNRA.ART will open it for you.
+          </IntroText>
+        </IntroRow>
+        <OpenRow>
+          <OpenLabel>
+            <u>O</u>pen:
+          </OpenLabel>
+          <ComboBox>
+            <ComboInput
+              autoFocus
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
             />
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: "0 0 8px", fontSize: 12 }}>
-                Type the name of an app, and RSNRA.ART will open it for you.
-              </p>
-              <TextInput
-                fullWidth
-                autoFocus
-                value={value}
-                placeholder="terminal"
-                onChange={(e) => {
-                  setValue(e.target.value);
-                  setError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
-                }}
-              />
-            </div>
-          </Row>
-          {error && <ErrorText>{error}</ErrorText>}
-          <Footer>
-            <Button
-              style={{ zoom: 0.8, width: "80px" }}
-              onClick={submit}
-              primary
-            >
-              OK
-            </Button>
-            <Button style={{ zoom: 0.8, width: "80px" }} onClick={close}>
-              Cancel
-            </Button>
-          </Footer>
-        </WindowContent>
-      </Dialog>
-    </Overlay>
+            <ComboArrow type="button" tabIndex={-1} aria-label="Recent items">
+              <ArrowGlyph />
+            </ComboArrow>
+          </ComboBox>
+        </OpenRow>
+        <Footer>
+          <Button
+            style={{ width: "75px" }}
+            onClick={submit}
+            primary
+            disabled={!value.trim()}
+          >
+            OK
+          </Button>
+          <Button style={{ width: "75px" }} onClick={close}>
+            Cancel
+          </Button>
+          <Button style={{ width: "75px" }} onClick={browse}>
+            Browse...
+          </Button>
+        </Footer>
+      </WindowContent>
+      {dialog}
+    </SystemDialog>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Button, Window, WindowContent, WindowHeader } from "react95";
+import { Button, WindowContent } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
@@ -7,6 +7,7 @@ import { FileIcon } from "../FileIcon/FileIcon";
 
 import { contentByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
+import { SystemDialog } from "../SystemDialog/SystemDialog";
 
 // ─── styled helpers ──────────────────────────────────────────────────────────
 
@@ -21,21 +22,6 @@ const sunken = css`
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
-`;
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 440px;
-  max-width: 95vw;
 `;
 
 const Body = styled(WindowContent)`
@@ -380,167 +366,158 @@ export function FileDialog({
   const confirmLabel = mode === "open" ? "Open" : "Save";
 
   return (
-    <Overlay onMouseDown={onCancel}>
-      <Dialog onMouseDown={(e) => e.stopPropagation()}>
-        <WindowHeader style={{ zoom: 0.8 }}>
-          <span>{dialogTitle}</span>
-        </WindowHeader>
-        <Body onKeyDown={handleKeyDown}>
-          {/* Toolbar */}
-          <ToolbarRow>
-            <ToolBtn
-              title="Up one level"
-              onClick={goUp}
-              disabled={dirStack.length <= 1}
+    <SystemDialog title={dialogTitle} width={440} onClose={onCancel}>
+      <Body onKeyDown={handleKeyDown}>
+        {/* Toolbar */}
+        <ToolbarRow>
+          <ToolBtn
+            title="Up one level"
+            onClick={goUp}
+            disabled={dirStack.length <= 1}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              style={{ imageRendering: "pixelated" }}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                style={{ imageRendering: "pixelated" }}
-              >
-                <path
-                  d="M1 7 L8 1 L15 7 L12 7 L12 15 L4 15 L4 7 Z"
-                  fill="#ffff80"
-                  stroke="#000"
-                  strokeWidth="1"
-                />
-              </svg>
-            </ToolBtn>
-            <ToolBtn title="Create New Folder" onClick={newFolder}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                style={{ imageRendering: "pixelated" }}
-              >
-                <path
-                  d="M1 3 L6 3 L7 5 L15 5 L15 13 L1 13 Z"
-                  fill="#ffff80"
-                  stroke="#000"
-                  strokeWidth="1"
-                />
-                <path
-                  d="M8 7 L8 11 M6 9 L10 9"
-                  stroke="#000"
-                  strokeWidth="1.4"
-                />
-              </svg>
-            </ToolBtn>
-          </ToolbarRow>
-
-          {/* Look in */}
-          <LookInRow>
-            <LookInLabel>Look in:</LookInLabel>
-            <LookInSelect
-              value={currentDir}
-              onChange={(e) => navigateTo(e.target.value)}
+              <path
+                d="M1 7 L8 1 L15 7 L12 7 L12 15 L4 15 L4 7 Z"
+                fill="#ffff80"
+                stroke="#000"
+                strokeWidth="1"
+              />
+            </svg>
+          </ToolBtn>
+          <ToolBtn title="Create New Folder" onClick={newFolder}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              style={{ imageRendering: "pixelated" }}
             >
-              {dirStack.map((d, i) => (
-                <option key={i} value={d.path}>
-                  {SEP.repeat(0)} {d.label}
-                </option>
-              ))}
-            </LookInSelect>
-          </LookInRow>
+              <path
+                d="M1 3 L6 3 L7 5 L15 5 L15 13 L1 13 Z"
+                fill="#ffff80"
+                stroke="#000"
+                strokeWidth="1"
+              />
+              <path d="M8 7 L8 11 M6 9 L10 9" stroke="#000" strokeWidth="1.4" />
+            </svg>
+          </ToolBtn>
+        </ToolbarRow>
 
-          {/* File list */}
-          <FileList orientation="vertical">
-            {entries.length === 0 && (
-              <div style={{ padding: "8px", color: "#888", fontSize: 12 }}>
-                This folder is empty.
-              </div>
-            )}
-            {entries.map((node) => (
-              <FileEntry
-                key={node.name}
-                $selected={
-                  selectedName.toLowerCase() === node.name.toLowerCase()
-                }
-                onClick={() => handleEntryClick(node)}
-                onDoubleClick={() => handleEntryDoubleClick(node)}
-              >
-                <FileIcon node={node} />
-                {renaming === node.name ? (
-                  <InlineRenameInput
-                    autoFocus
-                    value={renameVal}
-                    onChange={(e) => setRenameVal(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                    onBlur={commitRename}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === "Enter") commitRename();
-                      if (e.key === "Escape") setRenaming(null);
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      flex: 1,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {node.name}
-                  </span>
-                )}
-                {node.type === "file" && (
-                  <span style={{ color: "#666", fontSize: 11 }}>
-                    {formatSize(node)}
-                  </span>
-                )}
-              </FileEntry>
+        {/* Look in */}
+        <LookInRow>
+          <LookInLabel>Look in:</LookInLabel>
+          <LookInSelect
+            value={currentDir}
+            onChange={(e) => navigateTo(e.target.value)}
+          >
+            {dirStack.map((d, i) => (
+              <option key={i} value={d.path}>
+                {SEP.repeat(0)} {d.label}
+              </option>
             ))}
-          </FileList>
+          </LookInSelect>
+        </LookInRow>
 
-          {/* File name */}
-          <FileNameRow>
-            <span>File name:</span>
-            <FileNameInput
-              autoFocus
-              value={fileName}
-              onChange={(e) => {
-                setFileName(e.target.value);
-                setSelectedName(e.target.value);
-              }}
-              onKeyDown={handleKeyDown}
-            />
-          </FileNameRow>
-
-          {/* File type */}
-          <FileTypeRow>
-            <span>Files of type:</span>
-            <FileTypeSelect
-              value={filterIndex}
-              onChange={(e) => setFilterIndex(Number(e.target.value))}
+        {/* File list */}
+        <FileList orientation="vertical">
+          {entries.length === 0 && (
+            <div style={{ padding: "8px", color: "#888", fontSize: 12 }}>
+              This folder is empty.
+            </div>
+          )}
+          {entries.map((node) => (
+            <FileEntry
+              key={node.name}
+              $selected={
+                selectedName.toLowerCase() === node.name.toLowerCase()
+              }
+              onClick={() => handleEntryClick(node)}
+              onDoubleClick={() => handleEntryDoubleClick(node)}
             >
-              {filters.map((f, i) => (
-                <option key={i} value={i}>
-                  {f.label}
-                </option>
-              ))}
-            </FileTypeSelect>
-          </FileTypeRow>
+              <FileIcon node={node} />
+              {renaming === node.name ? (
+                <InlineRenameInput
+                  autoFocus
+                  value={renameVal}
+                  onChange={(e) => setRenameVal(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") commitRename();
+                    if (e.key === "Escape") setRenaming(null);
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {node.name}
+                </span>
+              )}
+              {node.type === "file" && (
+                <span style={{ color: "#666", fontSize: 11 }}>
+                  {formatSize(node)}
+                </span>
+              )}
+            </FileEntry>
+          ))}
+        </FileList>
 
-          {/* Buttons */}
-          <Footer style={{ zoom: 0.8 }}>
-            <Button
-              style={{ width: "80px" }}
-              onClick={handleConfirm}
-              primary
-              disabled={!fileName.trim()}
-            >
-              {confirmLabel}
-            </Button>
-            <Button style={{ width: "80px" }} onClick={onCancel}>
-              Cancel
-            </Button>
-          </Footer>
-        </Body>
-      </Dialog>
-    </Overlay>
+        {/* File name */}
+        <FileNameRow>
+          <span>File name:</span>
+          <FileNameInput
+            autoFocus
+            value={fileName}
+            onChange={(e) => {
+              setFileName(e.target.value);
+              setSelectedName(e.target.value);
+            }}
+            onKeyDown={handleKeyDown}
+          />
+        </FileNameRow>
+
+        {/* File type */}
+        <FileTypeRow>
+          <span>Files of type:</span>
+          <FileTypeSelect
+            value={filterIndex}
+            onChange={(e) => setFilterIndex(Number(e.target.value))}
+          >
+            {filters.map((f, i) => (
+              <option key={i} value={i}>
+                {f.label}
+              </option>
+            ))}
+          </FileTypeSelect>
+        </FileTypeRow>
+
+        {/* Buttons */}
+        <Footer>
+          <Button
+            style={{ width: "80px" }}
+            onClick={handleConfirm}
+            primary
+            disabled={!fileName.trim()}
+          >
+            {confirmLabel}
+          </Button>
+          <Button style={{ width: "80px" }} onClick={onCancel}>
+            Cancel
+          </Button>
+        </Footer>
+      </Body>
+    </SystemDialog>
   );
 }
 

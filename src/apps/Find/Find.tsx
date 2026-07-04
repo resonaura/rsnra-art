@@ -10,6 +10,7 @@ import { iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
+import { R95_SCALE } from "../../react95.conf";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -17,6 +18,7 @@ const Layout = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
+  zoom: ${R95_SCALE};
 `;
 
 const Field = styled.div`
@@ -27,13 +29,11 @@ const Field = styled.div`
 `;
 
 const Label = styled.label`
-  font-size: 12px;
   white-space: nowrap;
 `;
 
 const ResultHead = styled.div`
   display: flex;
-  font-size: 11px;
   padding: 4px 8px;
   border-bottom: 1px solid ${({ theme }) => theme.borderDark};
   background: ${({ theme }) => theme.material};
@@ -50,7 +50,6 @@ const Row = styled.div<{ $selected?: boolean }>`
   align-items: center;
   gap: 24px;
   padding: 3px 8px;
-  font-size: 12px;
   cursor: default;
   background: ${({ $selected, theme }) =>
     $selected ? theme.hoverBackground : "transparent"};
@@ -86,7 +85,6 @@ const ColSize = styled.span`
 `;
 
 const StatusBar = styled.div`
-  font-size: 11px;
   padding: 3px 8px;
   border-top: 1px solid ${({ theme }) => theme.borderDark};
   background: ${({ theme }) => theme.material};
@@ -227,11 +225,11 @@ export function Find({ windowId }: { windowId: string }) {
 
   return (
     <Layout>
-      <AppMenuBar menus={menus} />
+      <AppMenuBar isInReact95 menus={menus} />
       <Field>
         <Label>Named:</Label>
         <TextField
-          style={{ zoom: 0.8, flex: 1 }}
+          style={{ flex: 1 }}
           value={query}
           placeholder="* bio *"
           onChange={(e) => setQuery(e.target.value)}
@@ -243,7 +241,6 @@ export function Find({ windowId }: { windowId: string }) {
           }}
         />
         <Button
-          style={{ zoom: 0.8 }}
           onClick={() => {
             setSubmitted(query);
             setSelected(null);
@@ -264,7 +261,6 @@ export function Find({ windowId }: { windowId: string }) {
             <div
               style={{
                 padding: 24,
-                fontSize: 12,
                 color: "#888",
                 textAlign: "center",
               }}

@@ -98,7 +98,7 @@ export const APPS: Record<AppId, AppDefinition> = {
     icon: "/icons/w98_address_book_card.ico",
     component: asComponent(Contact),
     width: 440,
-    height: 480,
+    height: 300,
   },
   terminal: {
     id: "terminal",

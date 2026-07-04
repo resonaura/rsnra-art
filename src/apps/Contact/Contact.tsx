@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Button, GroupBox, TextInput } from "react95";
 import styled from "styled-components";
 import { CONTACT_EMAIL } from "../../data/content";
+import { R95_SCALE } from "../../react95.conf";
 
 const Layout = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
   height: 100%;
+  zoom: ${R95_SCALE};
 `;
 
 const Field = styled.div`
@@ -15,14 +17,10 @@ const Field = styled.div`
   flex-direction: column;
   gap: 4px;
   margin-bottom: 10px;
-  label {
-    font-size: 12px;
-  }
 `;
 
 const ErrorText = styled.span`
   color: #8b0000;
-  font-size: 11px;
 `;
 
 const Footer = styled.div`
@@ -33,7 +31,6 @@ const Footer = styled.div`
 `;
 
 const Status = styled.p`
-  font-size: 12px;
   margin: 0;
 `;
 
@@ -87,7 +84,7 @@ export function Contact() {
 
   return (
     <Layout as="form" onSubmit={handleSubmit}>
-      <GroupBox style={{ zoom: 0.9 }} label="Get in touch">
+      <GroupBox label="Get in touch">
         <Field>
           <label htmlFor="contact-name">Your name</label>
           <TextInput
@@ -136,7 +133,7 @@ export function Contact() {
           : `We read everything sent to ${CONTACT_EMAIL}.`}
       </Status>
 
-      <Footer style={{ zoom: 0.8 }}>
+      <Footer>
         <Button type="button" onClick={handleReset}>
           Reset
         </Button>

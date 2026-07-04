@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Counter, Frame } from "react95";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { R95_SCALE } from "../../react95.conf";
 import { useWindowStore } from "../../store/windowStore";
 import {
-  TileFlag,
-  TileMine,
-  TileMineRed,
-  TileMineX,
+  FaceDead,
+  FaceDepressedSmile,
+  FaceScared,
+  FaceSmile,
+  FaceSunglasses,
   TileCount1,
   TileCount2,
   TileCount3,
@@ -16,19 +18,18 @@ import {
   TileCount6,
   TileCount7,
   TileCount8,
-  FaceSmile,
-  FaceDead,
-  FaceSunglasses,
-  FaceScared,
-  FaceDepressedSmile,
+  TileFlag,
+  TileMine,
+  TileMineRed,
+  TileMineX,
 } from "./MinesweeperSprites";
 
 const CELL_SIZE = 24;
 
 const DIFFICULTIES = {
-  beginner:     { cols: 9,  rows: 9,  mines: 10 },
+  beginner: { cols: 9, rows: 9, mines: 10 },
   intermediate: { cols: 16, rows: 16, mines: 40 },
-  expert:       { cols: 30, rows: 16, mines: 99 },
+  expert: { cols: 30, rows: 16, mines: 99 },
 } as const;
 type DifficultyName = keyof typeof DIFFICULTIES;
 type Dims = (typeof DIFFICULTIES)[DifficultyName];
@@ -44,7 +45,7 @@ function difficultyName(dims: Dims): DifficultyName | null {
 
 function windowSizeFor(dims: Dims) {
   return {
-    width:  dims.cols * CELL_SIZE + 64,
+    width: dims.cols * CELL_SIZE + 64,
     height: dims.rows * CELL_SIZE + 168,
   };
 }
@@ -62,25 +63,38 @@ type Coord = { r: number; c: number };
 function emptyBoard(cols: number, rows: number): Cell[][] {
   return Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => ({
-      mine: false, adjacent: 0, revealed: false, flagged: false,
+      mine: false,
+      adjacent: 0,
+      revealed: false,
+      flagged: false,
     })),
   );
 }
 
-function neighborsOf(r: number, c: number, cols: number, rows: number): [number, number][] {
+function neighborsOf(
+  r: number,
+  c: number,
+  cols: number,
+  rows: number,
+): [number, number][] {
   const result: [number, number][] = [];
   for (let dr = -1; dr <= 1; dr++)
     for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
-      const nr = r + dr, nc = c + dc;
+      const nr = r + dr,
+        nc = c + dc;
       if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) result.push([nr, nc]);
     }
   return result;
 }
 
 function plantMines(
-  board: Cell[][], avoidR: number, avoidC: number,
-  cols: number, rows: number, mines: number,
+  board: Cell[][],
+  avoidR: number,
+  avoidC: number,
+  cols: number,
+  rows: number,
+  mines: number,
 ): Cell[][] {
   const next = board.map((row) => row.map((cell) => ({ ...cell })));
   let placed = 0;
@@ -95,8 +109,9 @@ function plantMines(
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
       if (next[r][c].mine) continue;
-      next[r][c].adjacent = neighborsOf(r, c, cols, rows)
-        .filter(([nr, nc]) => next[nr][nc].mine).length;
+      next[r][c].adjacent = neighborsOf(r, c, cols, rows).filter(
+        ([nr, nc]) => next[nr][nc].mine,
+      ).length;
     }
   return next;
 }
@@ -113,16 +128,16 @@ const Layout = styled.div`
   height: 100%;
 
   /* ── sprite CSS variables from the active react95 theme ── */
-  --ms-hl:     ${({ theme }) => theme.borderLightest};
-  --ms-sh:     ${({ theme }) => theme.borderDark};
-  --ms-fg:     ${({ theme }) => theme.borderDarkest};
+  --ms-hl: ${({ theme }) => theme.borderLightest};
+  --ms-sh: ${({ theme }) => theme.borderDark};
+  --ms-fg: ${({ theme }) => theme.borderDarkest};
 
   /* semantic sprite colours — intentionally theme-independent */
-  --ms-red:    #ff0000;
+  --ms-red: #ff0000;
   --ms-yellow: #ffff00;
-  --ms-ydark:  #7b7b00;
-  --ms-c1:     #0000ff;   /* digit 1 — blue  */
-  --ms-c2:     #007b00;   /* digit 2 — green */
+  --ms-ydark: #7b7b00;
+  --ms-c1: #0000ff; /* digit 1 — blue  */
+  --ms-c2: #007b00; /* digit 2 — green */
 `;
 
 const GameArea = styled.div`
@@ -159,10 +174,14 @@ const FaceButton = styled.button<{ $pressed: boolean }>`
 
   border-style: solid;
   border-width: 2px;
-  border-top-color:    ${({ $pressed, theme }) => $pressed ? theme.borderDarkest : theme.borderLightest};
-  border-left-color:   ${({ $pressed, theme }) => $pressed ? theme.borderDarkest : theme.borderLightest};
-  border-right-color:  ${({ $pressed, theme }) => $pressed ? theme.borderLightest : theme.borderDark};
-  border-bottom-color: ${({ $pressed, theme }) => $pressed ? theme.borderLightest : theme.borderDark};
+  border-top-color: ${({ $pressed, theme }) =>
+    $pressed ? theme.borderDarkest : theme.borderLightest};
+  border-left-color: ${({ $pressed, theme }) =>
+    $pressed ? theme.borderDarkest : theme.borderLightest};
+  border-right-color: ${({ $pressed, theme }) =>
+    $pressed ? theme.borderLightest : theme.borderDark};
+  border-bottom-color: ${({ $pressed, theme }) =>
+    $pressed ? theme.borderLightest : theme.borderDark};
 
   outline: none;
 
@@ -177,7 +196,7 @@ const FaceButton = styled.button<{ $pressed: boolean }>`
 const Board = styled(Frame)<{ $cols: number; $rows: number }>`
   display: inline-grid;
   grid-template-columns: repeat(${({ $cols }) => $cols}, ${CELL_SIZE}px);
-  grid-template-rows:    repeat(${({ $rows }) => $rows}, ${CELL_SIZE}px);
+  grid-template-rows: repeat(${({ $rows }) => $rows}, ${CELL_SIZE}px);
   background: ${({ theme }) => theme.material};
   padding: 4px;
 `;
@@ -200,7 +219,7 @@ const CellButton = styled.button<{ $revealed: boolean; $redBg?: boolean }>`
 
   ${({ $revealed, theme }) =>
     $revealed
-      ? /* sunken / revealed */`
+      ? /* sunken / revealed */ `
         border-style: solid;
         border-width: 1px;
         border-top-color:    ${theme.borderDark};
@@ -208,7 +227,7 @@ const CellButton = styled.button<{ $revealed: boolean; $redBg?: boolean }>`
         border-right-color:  ${theme.borderLightest};
         border-bottom-color: ${theme.borderLightest};
       `
-      : /* raised / covered */`
+      : /* raised / covered */ `
         border-style: solid;
         border-width: 2px;
         border-top-color:    ${theme.borderLightest};
@@ -222,63 +241,88 @@ const CellButton = styled.button<{ $revealed: boolean; $redBg?: boolean }>`
 
 type FaceState = "smile" | "dead" | "sunglasses" | "scared" | "depressed-smile";
 
-const FACE_COMPONENTS: Record<FaceState, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
-  "smile":            FaceSmile,
-  "dead":             FaceDead,
-  "sunglasses":       FaceSunglasses,
-  "scared":           FaceScared,
-  "depressed-smile":  FaceDepressedSmile,
+const FACE_COMPONENTS: Record<
+  FaceState,
+  React.ComponentType<React.SVGProps<SVGSVGElement>>
+> = {
+  smile: FaceSmile,
+  dead: FaceDead,
+  sunglasses: FaceSunglasses,
+  scared: FaceScared,
+  "depressed-smile": FaceDepressedSmile,
 };
 
 const COUNT_COMPONENTS = [
-  null, TileCount1, TileCount2, TileCount3,
-  TileCount4, TileCount5, TileCount6, TileCount7, TileCount8,
+  null,
+  TileCount1,
+  TileCount2,
+  TileCount3,
+  TileCount4,
+  TileCount5,
+  TileCount6,
+  TileCount7,
+  TileCount8,
 ] as const;
 
 function faceState(
-  status: GameStatus, digging: boolean, pressed: boolean,
+  status: GameStatus,
+  digging: boolean,
+  pressed: boolean,
 ): FaceState {
-  if (pressed)             return "smile";
-  if (status === "won")    return "sunglasses";
-  if (status === "lost")   return "dead";
-  if (digging)             return "scared";
+  if (pressed) return "smile";
+  if (status === "won") return "sunglasses";
+  if (status === "lost") return "dead";
+  if (digging) return "scared";
   return "smile";
 }
 
 // ── Konami code ───────────────────────────────────────────────────────────────
 const KONAMI_CODE = [
-  "arrowup","arrowup","arrowdown","arrowdown",
-  "arrowleft","arrowright","arrowleft","arrowright","b","a",
+  "arrowup",
+  "arrowup",
+  "arrowdown",
+  "arrowdown",
+  "arrowleft",
+  "arrowright",
+  "arrowleft",
+  "arrowright",
+  "b",
+  "a",
 ];
 const AUTO_PLAY_INTERVAL_MS = 180;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Minesweeper({ windowId }: { windowId: string }) {
-  const closeWindow  = useWindowStore((s) => s.closeWindow);
+  const closeWindow = useWindowStore((s) => s.closeWindow);
   const updateBounds = useWindowStore((s) => s.updateBounds);
-  const isFocused    = useWindowStore(
+  const isFocused = useWindowStore(
     (s) => s.windows.find((w) => w.id === windowId)?.isFocused ?? false,
   );
 
-  const [dims, setDims]       = useState<Dims>(DIFFICULTIES.beginner);
-  const [board, setBoard]     = useState<Cell[][]>(() => emptyBoard(dims.cols, dims.rows));
-  const [status, setStatus]   = useState<GameStatus>("idle");
+  const [dims, setDims] = useState<Dims>(DIFFICULTIES.beginner);
+  const [board, setBoard] = useState<Cell[][]>(() =>
+    emptyBoard(dims.cols, dims.rows),
+  );
+  const [status, setStatus] = useState<GameStatus>("idle");
   const [seconds, setSeconds] = useState(0);
   const [digging, setDigging] = useState(false);
   const [facePressed, setFacePressed] = useState(false);
-  const [losingCell, setLosingCell]   = useState<Coord | null>(null);
+  const [losingCell, setLosingCell] = useState<Coord | null>(null);
   const [chordCenter, setChordCenter] = useState<Coord | null>(null);
-  const timerRef     = useRef<number | null>(null);
-  const didChordRef  = useRef(false);
+  const timerRef = useRef<number | null>(null);
+  const didChordRef = useRef(false);
 
   useEffect(() => {
     if (status === "playing") {
       timerRef.current = window.setInterval(
-        () => setSeconds((s) => Math.min(999, s + 1)), 1000,
+        () => setSeconds((s) => Math.min(999, s + 1)),
+        1000,
       );
     }
-    return () => { if (timerRef.current) window.clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    };
   }, [status]);
 
   const flagCount = board.flat().filter((c) => c.flagged).length;
@@ -377,7 +421,10 @@ export function Minesweeper({ windowId }: { windowId: string }) {
     let hitMine: Coord | null = null;
     for (const [nr, nc] of around) {
       if (working[nr][nc].flagged || working[nr][nc].revealed) continue;
-      if (working[nr][nc].mine) { hitMine = { r: nr, c: nc }; continue; }
+      if (working[nr][nc].mine) {
+        hitMine = { r: nr, c: nc };
+        continue;
+      }
       revealFlood(working, nr, nc);
     }
 
@@ -395,11 +442,11 @@ export function Minesweeper({ windowId }: { windowId: string }) {
   };
 
   // ── Konami autoplay easter egg ────────────────────────────────────────────
-  const boardRef   = useRef(board);
-  const statusRef  = useRef(status);
-  const revealRef  = useRef(handleReveal);
+  const boardRef = useRef(board);
+  const statusRef = useRef(status);
+  const revealRef = useRef(handleReveal);
   useEffect(() => {
-    boardRef.current  = board;
+    boardRef.current = board;
     statusRef.current = status;
     revealRef.current = handleReveal;
   });
@@ -409,14 +456,18 @@ export function Minesweeper({ windowId }: { windowId: string }) {
     autoPlayIntervalRef.current = window.setInterval(() => {
       const b = boardRef.current;
       if (statusRef.current === "won" || statusRef.current === "lost") {
-        stopAutoPlay(); return;
+        stopAutoPlay();
+        return;
       }
       const safe: Coord[] = [];
       for (let r = 0; r < b.length; r++)
         for (let c = 0; c < b[r].length; c++)
           if (!b[r][c].mine && !b[r][c].revealed && !b[r][c].flagged)
             safe.push({ r, c });
-      if (!safe.length) { stopAutoPlay(); return; }
+      if (!safe.length) {
+        stopAutoPlay();
+        return;
+      }
       const pick = safe[Math.floor(Math.random() * safe.length)];
       revealRef.current(pick.r, pick.c);
     }, AUTO_PLAY_INTERVAL_MS);
@@ -450,16 +501,22 @@ export function Minesweeper({ windowId }: { windowId: string }) {
         { label: "New\tF2", action: resetGame },
         { label: "", divider: true },
         {
-          label: currentDifficulty === "beginner" ? "✓ Beginner" : "Beginner",
+          label: "Beginner",
           action: () => newGame(DIFFICULTIES.beginner),
+          checked: currentDifficulty === "beginner",
+          radio: true,
         },
         {
-          label: currentDifficulty === "intermediate" ? "✓ Intermediate" : "Intermediate",
+          label: "Intermediate",
           action: () => newGame(DIFFICULTIES.intermediate),
+          checked: currentDifficulty === "intermediate",
+          radio: true,
         },
         {
-          label: currentDifficulty === "expert" ? "✓ Expert" : "Expert",
+          label: "Expert",
           action: () => newGame(DIFFICULTIES.expert),
+          checked: currentDifficulty === "expert",
+          radio: true,
         },
         { label: "", divider: true },
         { label: "Best Times...", disabled: true },
@@ -470,9 +527,9 @@ export function Minesweeper({ windowId }: { windowId: string }) {
     {
       label: "Help",
       items: [
-        { label: "Help Topics",          disabled: true },
+        { label: "Help Topics", disabled: true },
         { label: "", divider: true },
-        { label: "About Minesweeper",    disabled: true },
+        { label: "About Minesweeper", disabled: true },
       ],
     },
   ];
@@ -482,7 +539,10 @@ export function Minesweeper({ windowId }: { windowId: string }) {
       <AppMenuBar menus={menus} />
       <GameArea>
         <Header variant="window" style={{ width: dims.cols * CELL_SIZE + 8 }}>
-          <Counter style={{ zoom: 0.67 }} value={Math.max(0, dims.mines - flagCount)} />
+          <Counter
+            style={{ zoom: R95_SCALE }}
+            value={Math.max(0, dims.mines - flagCount)}
+          />
           <FaceButton
             $pressed={facePressed}
             onClick={resetGame}
@@ -492,35 +552,47 @@ export function Minesweeper({ windowId }: { windowId: string }) {
           >
             <FaceIcon width={20} height={20} />
           </FaceButton>
-          <Counter style={{ zoom: 0.67 }} value={seconds} />
+          <Counter style={{ zoom: R95_SCALE }} value={seconds} />
         </Header>
 
         <Board
           variant="window"
           $cols={dims.cols}
           $rows={dims.rows}
-          onMouseLeave={() => { setDigging(false); setChordCenter(null); }}
+          onMouseLeave={() => {
+            setDigging(false);
+            setChordCenter(null);
+          }}
         >
           {board.map((row, r) =>
             row.map((cell, c) => {
               const diggable =
-                (status === "idle" || status === "playing") && !cell.revealed && !cell.flagged;
+                (status === "idle" || status === "playing") &&
+                !cell.revealed &&
+                !cell.flagged;
 
               // Chord preview: unflagged unrevealed neighbours appear "pressed" (flat)
               const isChordPreview =
-                !!chordCenter && !cell.revealed && !cell.flagged &&
-                Math.abs(r - chordCenter.r) <= 1 && Math.abs(c - chordCenter.c) <= 1;
+                !!chordCenter &&
+                !cell.revealed &&
+                !cell.flagged &&
+                Math.abs(r - chordCenter.r) <= 1 &&
+                Math.abs(c - chordCenter.c) <= 1;
 
               const isFlat = cell.revealed || isChordPreview;
               const isLosingRedCell =
-                cell.revealed && cell.mine &&
-                losingCell?.r === r && losingCell?.c === c;
+                cell.revealed &&
+                cell.mine &&
+                losingCell?.r === r &&
+                losingCell?.c === c;
 
               // ── choose inner sprite ──
-              let Sprite: React.ComponentType<React.SVGProps<SVGSVGElement>> | null = null;
+              let Sprite: React.ComponentType<
+                React.SVGProps<SVGSVGElement>
+              > | null = null;
 
               if (cell.flagged && !cell.revealed) {
-                Sprite = (status === "lost" && !cell.mine) ? TileMineX : TileFlag;
+                Sprite = status === "lost" && !cell.mine ? TileMineX : TileFlag;
               } else if (cell.revealed) {
                 if (cell.mine) {
                   Sprite = isLosingRedCell ? TileMineRed : TileMine;
@@ -535,7 +607,10 @@ export function Minesweeper({ windowId }: { windowId: string }) {
                   $revealed={isFlat}
                   $redBg={isLosingRedCell}
                   onClick={() => {
-                    if (didChordRef.current) { didChordRef.current = false; return; }
+                    if (didChordRef.current) {
+                      didChordRef.current = false;
+                      return;
+                    }
                     handleReveal(r, c);
                   }}
                   onContextMenu={(e) => handleFlag(e, r, c)}

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
+import { AppMenuBar, type MenuDef } from "../../components/AppMenuBar";
 import {
   ContextMenu,
   CtxDivider,
@@ -19,7 +20,7 @@ import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
-import { showMissingFileAlert } from "../../store/alertStore";
+import { showMissingFileAlert } from "../../lib/systemDialogs";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -108,73 +109,6 @@ function isSameOrDescendant(
 function isAudioFile(name: string): boolean {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   return ["wav", "mp3", "mid", "midi", "rmi", "ogg"].includes(ext);
-}
-
-const raised = css`
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
-`;
-
-const MenuBarRow = styled.div`
-  position: relative;
-  display: flex;
-  height: 22px;
-  flex-shrink: 0;
-  font-size: 12px;
-  border-bottom: 1px solid ${({ theme }) => theme.borderDark};
-`;
-const MenuTopItem = styled.button<{ $open: boolean }>`
-  background: ${({ $open, theme }) =>
-    $open ? theme.hoverBackground : "transparent"};
-  color: ${({ $open, theme }) =>
-    $open ? theme.headerText : theme.materialText};
-  border: none;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: default;
-`;
-const Dropdown = styled.div`
-  position: absolute;
-  top: 22px;
-  z-index: 50;
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  min-width: 180px;
-  padding: 2px;
-  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.4);
-`;
-const DropdownItem = styled.div<{ $disabled?: boolean }>`
-  padding: 4px 10px;
-  font-size: 12px;
-  white-space: pre;
-  color: ${({ $disabled, theme }) =>
-    $disabled ? theme.materialTextDisabled : theme.materialText};
-  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
-  &:hover {
-    background: ${({ $disabled, theme }) =>
-      $disabled ? "none" : theme.hoverBackground};
-    color: ${({ $disabled, theme }) =>
-      $disabled ? theme.materialTextDisabled : theme.headerText};
-  }
-`;
-const DropdownDivider = styled.div`
-  height: 1px;
-  margin: 3px 2px;
-  background: ${({ theme }) => theme.borderDark};
-  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
-`;
-
-interface MenuItemDef {
-  label: string;
-  action?: () => void;
-  disabled?: boolean;
-  divider?: boolean;
-}
-interface MenuDef {
-  label: string;
-  items: MenuItemDef[];
 }
 
 const Layout = styled.div`
@@ -655,7 +589,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
   } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("large");
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<"name" | "size" | "type" | "date">(
@@ -1249,27 +1182,36 @@ export function MyComputer({ windowId }: { windowId: string }) {
       label: "View",
       items: [
         {
-          label: `${view === "large" ? "✓" : " "} Large Icons`,
+          label: "Large Icons",
           action: () => setView("large"),
+          checked: view === "large",
+          radio: true,
         },
         {
-          label: `${view === "small" ? "✓" : " "} Small Icons`,
+          label: "Small Icons",
           action: () => setView("small"),
+          checked: view === "small",
+          radio: true,
         },
         {
-          label: `${view === "list" ? "✓" : " "} List`,
+          label: "List",
           action: () => setView("list"),
+          checked: view === "list",
+          radio: true,
         },
         {
-          label: `${view === "details" ? "✓" : " "} Details`,
+          label: "Details",
           action: () => setView("details"),
+          checked: view === "details",
+          radio: true,
         },
         { label: "", divider: true },
         { label: "Refresh", action: refresh },
         { label: "", divider: true },
         {
-          label: `${showHidden ? "✓" : " "} Show Hidden Files`,
+          label: "Show Hidden Files",
           action: () => useFilePrefsStore.getState().setShowHidden(!showHidden),
+          checked: showHidden,
         },
         { label: "", divider: true },
         {
@@ -1283,48 +1225,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
       items: [{ label: "About RSNRA.ART", disabled: true }],
     },
   ];
-
-  const menuRow = (
-    <MenuBarRow
-      onMouseLeave={() => setOpenMenu(null)}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {menus.map((menu) => (
-        <div key={menu.label} style={{ position: "relative" }}>
-          <MenuTopItem
-            $open={openMenu === menu.label}
-            onClick={() =>
-              setOpenMenu((m) => (m === menu.label ? null : menu.label))
-            }
-            onMouseEnter={() => setOpenMenu((m) => (m ? menu.label : m))}
-          >
-            {menu.label}
-          </MenuTopItem>
-          {openMenu === menu.label && (
-            <Dropdown>
-              {menu.items.map((item, i) =>
-                item.divider ? (
-                  <DropdownDivider key={i} />
-                ) : (
-                  <DropdownItem
-                    key={item.label}
-                    $disabled={item.disabled}
-                    onClick={() => {
-                      if (item.disabled) return;
-                      item.action?.();
-                      setOpenMenu(null);
-                    }}
-                  >
-                    {item.label}
-                  </DropdownItem>
-                ),
-              )}
-            </Dropdown>
-          )}
-        </div>
-      ))}
-    </MenuBarRow>
-  );
 
   /** Shared drag/drop + selection wiring for one real VFS entry, regardless
    *  of which view mode renders it. */
@@ -1465,13 +1365,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
   );
 
   return (
-    <Layout
-      onClick={() => {
-        closeCtx();
-        setOpenMenu(null);
-      }}
-    >
-      {menuRow}
+    <Layout onClick={closeCtx}>
+      <AppMenuBar menus={menus} />
       <Separator />
       <NavToolbar>
         <NavBtn onClick={goUp} disabled={isRoot} title="Up one level">
@@ -1492,10 +1387,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
       <IconGrid
         onContextMenu={(e) => openCtx(e, null)}
-        onClick={() => {
-          setSelected(null);
-          setOpenMenu(null);
-        }}
+        onClick={() => setSelected(null)}
         onDragOver={(e) => {
           if (isRoot || driveNotReady || !acceptsDrop(e)) return;
           e.preventDefault();

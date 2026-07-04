@@ -1,4 +1,4 @@
-import { showMissingFileAlert } from "../store/alertStore";
+import { showMissingFileAlert } from "../lib/systemDialogs";
 import type { VfsNode } from "../store/vfsStore";
 import type { AppId } from "../types/window";
 import { APPS, openApp } from "./apps";

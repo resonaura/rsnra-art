@@ -5,11 +5,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button, TextInput } from "react95";
+import { Button, TextInput, WindowContent } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
+import { AppMenuBar, type MenuDef } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
+import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 import { openApp } from "../../data/apps";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { useUnsavedStore } from "../../store/unsavedStore";
@@ -41,12 +43,6 @@ const MAGNIFICATIONS = [1, 2, 4, 8] as const;
 const LINE_WIDTHS = [1, 2, 3, 4, 5];
 const ERASER_SIZES = [4, 6, 8, 10];
 
-const raised = css`
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
-`;
 const sunken = css`
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
@@ -67,59 +63,6 @@ const Root = styled.div`
   width: 100%;
   background: ${({ theme }) => theme.material};
   user-select: none;
-`;
-
-const MenuBarRow = styled.div`
-  position: relative;
-  display: flex;
-  height: 22px;
-  flex-shrink: 0;
-  font-size: 12px;
-  border-bottom: 1px solid ${({ theme }) => theme.borderDark};
-`;
-
-const MenuTopItem = styled.button<{ $open: boolean }>`
-  background: ${({ $open, theme }) =>
-    $open ? theme.hoverBackground : "transparent"};
-  color: ${({ $open, theme }) =>
-    $open ? theme.headerText : theme.materialText};
-  border: none;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: default;
-`;
-
-const Dropdown = styled.div`
-  position: absolute;
-  top: 22px;
-  z-index: 50;
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  min-width: 170px;
-  padding: 2px;
-  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.4);
-`;
-
-const DropdownItem = styled.div<{ $disabled?: boolean }>`
-  padding: 4px 10px;
-  font-size: 12px;
-  white-space: pre;
-  color: ${({ $disabled, theme }) =>
-    $disabled ? theme.materialTextDisabled : theme.materialText};
-  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
-  &:hover {
-    background: ${({ $disabled, theme }) =>
-      $disabled ? "none" : theme.hoverBackground};
-    color: ${({ $disabled, theme }) =>
-      $disabled ? theme.materialTextDisabled : theme.headerText};
-  }
-`;
-
-const DropdownDivider = styled.div`
-  height: 1px;
-  margin: 3px 2px;
-  background: ${({ theme }) => theme.borderDark};
-  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
 `;
 
 const Workspace = styled.div`
@@ -410,32 +353,7 @@ const ResizePreview = styled.div<{ $w: number; $h: number; $zoom: number }>`
   z-index: 70;
 `;
 
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const DialogBox = styled.div`
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  width: 320px;
-`;
-
-const DialogHeader = styled.div`
-  background: ${({ theme }) => theme.headerBackground};
-  color: ${({ theme }) => theme.headerText};
-  padding: 4px 8px;
-  font-weight: bold;
-  font-size: 13px;
-`;
-
-const DialogBody = styled.div`
-  padding: 14px;
+const DialogBody = styled(WindowContent)`
   font-size: 12px;
 `;
 
@@ -443,7 +361,7 @@ const DialogFooter = styled.div`
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 0 14px 14px;
+  margin-top: 14px;
 `;
 
 const RgbRow = styled.div`
@@ -455,17 +373,6 @@ const RgbRow = styled.div`
     width: 16px;
   }
 `;
-
-interface MenuItemDef {
-  label: string;
-  action?: () => void;
-  disabled?: boolean;
-  divider?: boolean;
-}
-interface MenuDef {
-  label: string;
-  items: MenuItemDef[];
-}
 
 type SelMode = "select" | "lasso";
 type SelStage = "idle" | "drawing" | "selected" | "dragging";
@@ -633,7 +540,6 @@ export function Paint({ windowId }: { windowId: string }) {
   const [fontsWindowId, setFontsWindowId] = useState<string | null>(null);
   const fontsWindowIdRef = useRef<string | null>(null);
   fontsWindowIdRef.current = fontsWindowId;
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [cursorLabel, setCursorLabel] = useState("");
   const [textEditing, setTextEditing] = useState<{
     x: number;
@@ -1991,7 +1897,6 @@ export function Paint({ windowId }: { windowId: string }) {
   const openColorEditor = (target: "fg" | "bg") => {
     const [r, g, b] = hexToRgba(target === "fg" ? fgColor : bgColor);
     setColorEditor({ target, r, g, b });
-    setOpenMenu(null);
   };
 
   const applyColorEditor = () => {
@@ -2456,42 +2361,7 @@ export function Paint({ windowId }: { windowId: string }) {
 
   return (
     <Root onContextMenu={(e) => e.preventDefault()}>
-      <MenuBarRow onMouseLeave={() => setOpenMenu(null)}>
-        {menus.map((menu) => (
-          <div key={menu.label} style={{ position: "relative" }}>
-            <MenuTopItem
-              $open={openMenu === menu.label}
-              onClick={() =>
-                setOpenMenu((m) => (m === menu.label ? null : menu.label))
-              }
-              onMouseEnter={() => setOpenMenu((m) => (m ? menu.label : m))}
-            >
-              {menu.label}
-            </MenuTopItem>
-            {openMenu === menu.label && (
-              <Dropdown>
-                {menu.items.map((item, i) =>
-                  item.divider ? (
-                    <DropdownDivider key={i} />
-                  ) : (
-                    <DropdownItem
-                      key={item.label}
-                      $disabled={item.disabled}
-                      onClick={() => {
-                        if (item.disabled) return;
-                        item.action?.();
-                        setOpenMenu(null);
-                      }}
-                    >
-                      {item.label}
-                    </DropdownItem>
-                  ),
-                )}
-              </Dropdown>
-            )}
-          </div>
-        ))}
-      </MenuBarRow>
+      <AppMenuBar menus={menus} />
 
       <Workspace>
         <ToolboxCol>
@@ -2643,66 +2513,68 @@ export function Paint({ windowId }: { windowId: string }) {
       </StatusBarRow>
 
       {showNewConfirm && (
-        <Overlay onMouseDown={() => setShowNewConfirm(false)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Paint</DialogHeader>
-            <DialogBody>
-              Starting a new picture will erase any unsaved changes. Continue?
-            </DialogBody>
+        <SystemDialog
+          title="Paint"
+          width={320}
+          onClose={() => setShowNewConfirm(false)}
+        >
+          <DialogBody>
+            Starting a new picture will erase any unsaved changes. Continue?
             <DialogFooter>
               <Button onClick={doNew}>OK</Button>
               <Button onClick={() => setShowNewConfirm(false)}>Cancel</Button>
             </DialogFooter>
-          </DialogBox>
-        </Overlay>
+          </DialogBody>
+        </SystemDialog>
       )}
 
       {colorEditor && (
-        <Overlay onMouseDown={() => setColorEditor(null)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Edit Colors</DialogHeader>
-            <DialogBody>
-              <div
-                style={{
-                  width: "100%",
-                  height: 32,
-                  marginBottom: 12,
-                  background: rgbaToHex(
-                    colorEditor.r,
-                    colorEditor.g,
-                    colorEditor.b,
-                  ),
-                  border: "2px solid #000",
-                }}
-              />
-              {(["r", "g", "b"] as const).map((channel) => (
-                <RgbRow key={channel}>
-                  <label>{channel.toUpperCase()}</label>
-                  <TextInput
-                    type="number"
-                    value={colorEditor[channel]}
-                    onChange={(e) =>
-                      setColorEditor({
-                        ...colorEditor,
-                        [channel]: Math.max(
-                          0,
-                          Math.min(255, Number(e.target.value) || 0),
-                        ),
-                      })
-                    }
-                    fullWidth
-                  />
-                </RgbRow>
-              ))}
-            </DialogBody>
+        <SystemDialog
+          title="Edit Colors"
+          width={320}
+          onClose={() => setColorEditor(null)}
+        >
+          <DialogBody>
+            <div
+              style={{
+                width: "100%",
+                height: 32,
+                marginBottom: 12,
+                background: rgbaToHex(
+                  colorEditor.r,
+                  colorEditor.g,
+                  colorEditor.b,
+                ),
+                border: "2px solid #000",
+              }}
+            />
+            {(["r", "g", "b"] as const).map((channel) => (
+              <RgbRow key={channel}>
+                <label>{channel.toUpperCase()}</label>
+                <TextInput
+                  type="number"
+                  value={colorEditor[channel]}
+                  onChange={(e) =>
+                    setColorEditor({
+                      ...colorEditor,
+                      [channel]: Math.max(
+                        0,
+                        Math.min(255, Number(e.target.value) || 0),
+                      ),
+                    })
+                  }
+                  fullWidth
+                />
+              </RgbRow>
+            ))}
             <DialogFooter>
               <Button onClick={applyColorEditor} primary>
                 OK
               </Button>
               <Button onClick={() => setColorEditor(null)}>Cancel</Button>
             </DialogFooter>
-          </DialogBox>
-        </Overlay>
+          </DialogBody>
+        </SystemDialog>
       )}
       {fileDialog}
     </Root>

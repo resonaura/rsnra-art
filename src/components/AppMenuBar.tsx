@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import styled, { css } from 'styled-components';
-
-const raised = css`
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
-`;
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { MenuList, MenuListItem, Separator } from "react95";
+import styled from "styled-components";
+import { R95_SCALE, R95_SCALE_COMPENSATION } from "../react95.conf";
 
 export const MenuBarRow = styled.div`
   position: relative;
@@ -21,7 +16,7 @@ export const MenuBarRow = styled.div`
 
 const MenuTopItem = styled.button<{ $open: boolean }>`
   background: ${({ $open, theme }) =>
-    $open ? theme.hoverBackground : 'transparent'};
+    $open ? theme.hoverBackground : "transparent"};
   color: ${({ $open, theme }) =>
     $open ? theme.headerText : theme.materialText};
   border: none;
@@ -30,36 +25,38 @@ const MenuTopItem = styled.button<{ $open: boolean }>`
   cursor: default;
 `;
 
-const Dropdown = styled.div`
-  position: fixed;
-  z-index: 999999;
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  min-width: 180px;
-  padding: 2px;
-  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.4);
+const StyledMenuList = styled(MenuList)`
+  padding: 6px 4px;
 `;
 
-const DropdownItem = styled.div<{ $disabled?: boolean }>`
-  padding: 4px 10px;
-  font-size: 12px;
-  white-space: pre;
-  color: ${({ $disabled, theme }) =>
-    $disabled ? theme.materialTextDisabled : theme.materialText};
-  cursor: ${({ $disabled }) => ($disabled ? 'default' : 'pointer')};
-  &:hover {
-    background: ${({ $disabled, theme }) =>
-      $disabled ? 'none' : theme.hoverBackground};
-    color: ${({ $disabled, theme }) =>
-      $disabled ? theme.materialTextDisabled : theme.headerText};
-  }
+const ItemContent = styled.span`
+  display: flex;
+  align-items: center;
+  width: 100%;
 `;
 
-const DropdownDivider = styled.div`
-  height: 1px;
-  margin: 3px 2px;
-  background: ${({ theme }) => theme.borderDark};
-  border-bottom: 1px solid ${({ theme }) => theme.borderLightest};
+const ItemGutter = styled.span`
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  align-self: stretch;
+`;
+
+const RadioDot = styled.span`
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+`;
+
+const CheckMark = styled.svg`
+  display: block;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
 `;
 
 export interface MenuItemDef {
@@ -67,6 +64,8 @@ export interface MenuItemDef {
   action?: () => void;
   disabled?: boolean;
   divider?: boolean;
+  checked?: boolean;
+  radio?: boolean;
 }
 
 export interface MenuDef {
@@ -74,30 +73,45 @@ export interface MenuDef {
   items: MenuItemDef[];
 }
 
-export function AppMenuBar({ menus }: { menus: MenuDef[] }) {
+export function AppMenuBar({
+  menus,
+  isInReact95,
+}: {
+  menus: MenuDef[];
+  isInReact95?: boolean;
+}) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!openMenu) return;
     const handleGlobalClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest('.app-menu-bar-dropdown') || target.closest('.app-menu-bar-row')) {
+      if (
+        target.closest(".app-menu-bar-dropdown") ||
+        target.closest(".app-menu-bar-row")
+      ) {
         return;
       }
       setOpenMenu(null);
       setDropdownPos(null);
     };
-    window.addEventListener('click', handleGlobalClick);
-    return () => window.removeEventListener('click', handleGlobalClick);
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
   }, [openMenu]);
 
   const activeMenu = menus.find((m) => m.label === openMenu);
 
   return (
-    <MenuBarRow className="app-menu-bar-row">
+    <MenuBarRow
+      className="app-menu-bar-row"
+      style={{ zoom: isInReact95 ? R95_SCALE_COMPENSATION : 1 }}
+    >
       {menus.map((menu) => (
-        <div key={menu.label} style={{ position: 'relative' }}>
+        <div key={menu.label} style={{ position: "relative" }}>
           <MenuTopItem
             $open={openMenu === menu.label}
             onClick={(e) => {
@@ -124,33 +138,61 @@ export function AppMenuBar({ menus }: { menus: MenuDef[] }) {
         </div>
       ))}
 
-      {activeMenu && dropdownPos && createPortal(
-        <Dropdown
-          className="app-menu-bar-dropdown"
-          style={{ top: dropdownPos.top, left: dropdownPos.left }}
-        >
-          {activeMenu.items.map((item, i) =>
-            item.divider ? (
-              <DropdownDivider key={i} />
-            ) : (
-              <DropdownItem
-                key={item.label + i}
-                $disabled={item.disabled}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (item.disabled) return;
-                  item.action?.();
-                  setOpenMenu(null);
-                  setDropdownPos(null);
-                }}
-              >
-                {item.label}
-              </DropdownItem>
-            )
-          )}
-        </Dropdown>,
-        document.body
-      )}
+      {activeMenu &&
+        dropdownPos &&
+        createPortal(
+          <StyledMenuList
+            className="app-menu-bar-dropdown"
+            style={{
+              position: "fixed",
+              zIndex: 999999,
+              top: dropdownPos.top * R95_SCALE_COMPENSATION,
+              left: dropdownPos.left * R95_SCALE_COMPENSATION,
+              zoom: R95_SCALE,
+            }}
+          >
+            {activeMenu.items.map((item, i) =>
+              item.divider ? (
+                <Separator key={i} />
+              ) : (
+                <MenuListItem
+                  key={item.label + i}
+                  size="sm"
+                  disabled={item.disabled}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (item.disabled) return;
+                    item.action?.();
+                    setOpenMenu(null);
+                    setDropdownPos(null);
+                  }}
+                >
+                  <ItemContent>
+                    <ItemGutter>
+                      {item.checked &&
+                        (item.radio ? (
+                          <RadioDot />
+                        ) : (
+                          <CheckMark viewBox="0 0 12 12" aria-hidden>
+                            <path
+                              d="M2 6.5 L5 9.5 L10 3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </CheckMark>
+                        ))}
+                    </ItemGutter>
+                    {item.label}
+                  </ItemContent>
+                </MenuListItem>
+              ),
+            )}
+          </StyledMenuList>,
+          document.body,
+        )}
     </MenuBarRow>
   );
 }

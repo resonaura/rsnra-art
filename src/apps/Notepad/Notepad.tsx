@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button, Checkbox, Separator, TextInput } from "react95";
+import { Button, Checkbox, Separator, TextInput, WindowContent } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
+import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
@@ -81,39 +82,7 @@ const StatusBar = styled.div`
   color: ${({ theme }) => theme.materialText};
 `;
 
-const raised = css`
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
-`;
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const DialogBox = styled.div`
-  ${raised}
-  background: ${({ theme }) => theme.material};
-  width: 340px;
-`;
-
-const DialogHeader = styled.div`
-  background: ${({ theme }) => theme.headerBackground};
-  color: ${({ theme }) => theme.headerText};
-  padding: 4px 8px;
-  font-weight: bold;
-  font-size: 13px;
-`;
-
-const DialogBody = styled.div`
-  padding: 14px;
+const DialogBody = styled(WindowContent)`
   font-size: 12px;
 `;
 
@@ -516,8 +485,9 @@ export function Notepad({ windowId }: { windowId: string }) {
         { label: "Time/Date", action: insertDateTime },
         { label: "", divider: true },
         {
-          label: wordWrap ? "✓ Word Wrap" : "Word Wrap",
+          label: "Word Wrap",
           action: () => setWordWrap((w) => !w),
+          checked: wordWrap,
         },
       ],
     },
@@ -568,127 +538,118 @@ export function Notepad({ windowId }: { windowId: string }) {
       {dialog}
 
       {findOpen && (
-        <Overlay onMouseDown={() => setFindOpen(false)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Find</DialogHeader>
-            <DialogBody>
-              <DialogRow>
-                <label>Find what:</label>
-                <TextInput
-                  fullWidth
-                  autoFocus
-                  value={findQuery}
-                  onChange={(e) => setFindQuery(e.target.value)}
-                  style={{ zoom: 0.8 }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") findNext(findQuery);
-                  }}
-                />
-              </DialogRow>
-              <Checkbox
-                style={{ zoom: 0.8 }}
-                label="Match case"
-                checked={matchCase}
-                onChange={() => setMatchCase((m) => !m)}
+        <SystemDialog title="Find" width={340} onClose={() => setFindOpen(false)}>
+          <DialogBody>
+            <DialogRow>
+              <label>Find what:</label>
+              <TextInput
+                fullWidth
+                autoFocus
+                value={findQuery}
+                onChange={(e) => setFindQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") findNext(findQuery);
+                }}
               />
-              <DialogFooter style={{ zoom: 0.8 }}>
-                <Button
-                  disabled={!findQuery}
-                  onClick={() => findNext(findQuery)}
-                  style={{ width: 90 }}
-                >
-                  Find Next
-                </Button>
-                <Button
-                  onClick={() => setFindOpen(false)}
-                  style={{ width: 75 }}
-                >
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </DialogBody>
-          </DialogBox>
-        </Overlay>
+            </DialogRow>
+            <Checkbox
+              label="Match case"
+              checked={matchCase}
+              onChange={() => setMatchCase((m) => !m)}
+            />
+            <DialogFooter>
+              <Button
+                disabled={!findQuery}
+                onClick={() => findNext(findQuery)}
+                style={{ width: 90 }}
+              >
+                Find Next
+              </Button>
+              <Button onClick={() => setFindOpen(false)} style={{ width: 75 }}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </SystemDialog>
       )}
 
       {replaceOpen && (
-        <Overlay onMouseDown={() => setReplaceOpen(false)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Replace</DialogHeader>
-            <DialogBody>
-              <DialogRow>
-                <label>Find what:</label>
-                <TextInput
-                  fullWidth
-                  autoFocus
-                  value={findQuery}
-                  onChange={(e) => setFindQuery(e.target.value)}
-                />
-              </DialogRow>
-              <DialogRow>
-                <label>Replace with:</label>
-                <TextInput
-                  fullWidth
-                  value={replaceQuery}
-                  onChange={(e) => setReplaceQuery(e.target.value)}
-                />
-              </DialogRow>
-              <Checkbox
-                label="Match case"
-                checked={matchCase}
-                onChange={() => setMatchCase((m) => !m)}
+        <SystemDialog
+          title="Replace"
+          width={340}
+          onClose={() => setReplaceOpen(false)}
+        >
+          <DialogBody>
+            <DialogRow>
+              <label>Find what:</label>
+              <TextInput
+                fullWidth
+                autoFocus
+                value={findQuery}
+                onChange={(e) => setFindQuery(e.target.value)}
               />
-              <DialogFooter>
-                <Button
-                  disabled={!findQuery}
-                  onClick={() => findNext(findQuery)}
-                  style={{ width: 90 }}
-                >
-                  Find Next
-                </Button>
-                <Button
-                  disabled={!findQuery}
-                  onClick={handleReplaceNext}
-                  style={{ width: 75 }}
-                >
-                  Replace
-                </Button>
-                <Button
-                  disabled={!findQuery}
-                  onClick={handleReplaceAll}
-                  style={{ width: 90 }}
-                >
-                  Replace All
-                </Button>
-                <Button
-                  onClick={() => setReplaceOpen(false)}
-                  style={{ width: 75 }}
-                >
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </DialogBody>
-          </DialogBox>
-        </Overlay>
+            </DialogRow>
+            <DialogRow>
+              <label>Replace with:</label>
+              <TextInput
+                fullWidth
+                value={replaceQuery}
+                onChange={(e) => setReplaceQuery(e.target.value)}
+              />
+            </DialogRow>
+            <Checkbox
+              label="Match case"
+              checked={matchCase}
+              onChange={() => setMatchCase((m) => !m)}
+            />
+            <DialogFooter>
+              <Button
+                disabled={!findQuery}
+                onClick={() => findNext(findQuery)}
+                style={{ width: 90 }}
+              >
+                Find Next
+              </Button>
+              <Button
+                disabled={!findQuery}
+                onClick={handleReplaceNext}
+                style={{ width: 75 }}
+              >
+                Replace
+              </Button>
+              <Button
+                disabled={!findQuery}
+                onClick={handleReplaceAll}
+                style={{ width: 90 }}
+              >
+                Replace All
+              </Button>
+              <Button
+                onClick={() => setReplaceOpen(false)}
+                style={{ width: 75 }}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </SystemDialog>
       )}
 
       {notFound && (
-        <Overlay onMouseDown={() => setNotFound(false)}>
-          <DialogBox onMouseDown={(e) => e.stopPropagation()}>
-            <DialogHeader>Notepad</DialogHeader>
-            <DialogBody>
-              Cannot find "{findQuery}"
-              <DialogFooter>
-                <Button
-                  onClick={() => setNotFound(false)}
-                  style={{ width: 75 }}
-                >
-                  OK
-                </Button>
-              </DialogFooter>
-            </DialogBody>
-          </DialogBox>
-        </Overlay>
+        <SystemDialog
+          title="Notepad"
+          width={340}
+          onClose={() => setNotFound(false)}
+        >
+          <DialogBody>
+            Cannot find "{findQuery}"
+            <DialogFooter>
+              <Button onClick={() => setNotFound(false)} style={{ width: 75 }}>
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </SystemDialog>
       )}
     </Layout>
   );

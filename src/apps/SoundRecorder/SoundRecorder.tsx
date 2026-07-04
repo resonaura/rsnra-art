@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Window, WindowContent, WindowHeader } from "react95";
+import { Button, WindowContent } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { LegacyIframeApp } from "../../components/LegacyIframeApp";
+import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
@@ -70,20 +71,6 @@ const Layout = styled.div`
   height: 100%;
   width: 100%;
   overflow: hidden;
-`;
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 600000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 340px;
 `;
 
 const DialogBody = styled(WindowContent)`
@@ -320,64 +307,61 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
       {dialog}
 
       {pendingAction && (
-        <Overlay onMouseDown={() => setPendingAction(null)}>
-          <Dialog onMouseDown={(e) => e.stopPropagation()} shadow={false}>
-            <WindowHeader
-              active
-              className="window-drag-handle"
-              style={{ display: "flex", alignItems: "center", zoom: 0.8 }}
-            >
-              <span>Save Changes</span>
-            </WindowHeader>
-            <WindowContent>
-              <DialogBody>
-                <WarnIcon
-                  src="/icons/w2k_warning.ico"
-                  alt="Warning"
-                  draggable={false}
-                />
-                <Message>
-                  Sound Recorder
-                  {"\n"}The file "{filePath ? basename(filePath) : "Sound.wav"}" has changed.
-                  {"\n\n"}Do you want to save the changes?
-                </Message>
-              </DialogBody>
-            </WindowContent>
-            <Footer style={{ zoom: 0.68 }}>
-              <Button
-                style={{ width: "80px" }}
-                primary
-                onClick={async () => {
-                  const action = pendingAction;
-                  setPendingAction(null);
-                  if (action) {
-                    const ok = await handleSave();
-                    if (ok) {
-                      action();
-                    }
+        <SystemDialog
+          title="Save Changes"
+          width={340}
+          onClose={() => setPendingAction(null)}
+          closable={false}
+          zIndex={600000}
+        >
+          <WindowContent>
+            <DialogBody>
+              <WarnIcon
+                src="/icons/w2k_warning.ico"
+                alt="Warning"
+                draggable={false}
+              />
+              <Message>
+                Sound Recorder
+                {"\n"}The file "{filePath ? basename(filePath) : "Sound.wav"}" has changed.
+                {"\n\n"}Do you want to save the changes?
+              </Message>
+            </DialogBody>
+          </WindowContent>
+          <Footer>
+            <Button
+              style={{ width: "80px" }}
+              primary
+              onClick={async () => {
+                const action = pendingAction;
+                setPendingAction(null);
+                if (action) {
+                  const ok = await handleSave();
+                  if (ok) {
+                    action();
                   }
-                }}
-              >
-                Yes
-              </Button>
-              <Button
-                style={{ width: "80px" }}
-                onClick={() => {
-                  setDirty(false);
-                  const win = getWin();
-                  if (win) win.saved = true;
-                  pendingAction();
-                  setPendingAction(null);
-                }}
-              >
-                No
-              </Button>
-              <Button style={{ width: "80px" }} onClick={() => setPendingAction(null)}>
-                Cancel
-              </Button>
-            </Footer>
-          </Dialog>
-        </Overlay>
+                }
+              }}
+            >
+              Yes
+            </Button>
+            <Button
+              style={{ width: "80px" }}
+              onClick={() => {
+                setDirty(false);
+                const win = getWin();
+                if (win) win.saved = true;
+                pendingAction();
+                setPendingAction(null);
+              }}
+            >
+              No
+            </Button>
+            <Button style={{ width: "80px" }} onClick={() => setPendingAction(null)}>
+              Cancel
+            </Button>
+          </Footer>
+        </SystemDialog>
       )}
     </Layout>
   );

@@ -5,12 +5,13 @@ import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { APPS } from "../../data/apps";
-import { Icon } from "../Icon/Icon";
 import { CURSOR_ROLE_MAP, cursorCss } from "../../data/cursors";
+import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useCursorStore } from "../../store/cursorStore";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { WindowInstance } from "../../types/window";
+import { Icon } from "../Icon/Icon";
 import {
   CloseGlyph,
   MaximizeGlyph,
@@ -25,6 +26,7 @@ const StyledHeader = styled(WindowHeader)`
   cursor: default;
   user-select: none;
   touch-action: none;
+  height: 36px;
 
   color: ${({ active, theme }) =>
     active ? theme.headerText : theme.headerNotActiveText} !important;
@@ -39,10 +41,11 @@ const StyledHeader = styled(WindowHeader)`
 const HeaderTitle = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 16px;
   img {
     width: 16px;
     height: 16px;
@@ -63,7 +66,6 @@ const HeaderButtons = styled.div`
 `;
 
 const GlyphButton = styled(Button)`
-  zoom: 0.8;
   padding: 0 !important;
   display: flex;
   align-items: center;
@@ -162,6 +164,7 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
           height: "100%",
           display: "flex",
           flexDirection: "column",
+          zoom: R95_SCALE,
         }}
       >
         <StyledHeader
@@ -170,12 +173,9 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
           onDoubleClick={() =>
             def.resizable !== false && toggleMaximize(win.id)
           }
-          style={{
-            height: "30px",
-          }}
         >
-          <HeaderTitle style={{ fontSize: "12px" }}>
-            <Icon src={win.icon} size={16} />
+          <HeaderTitle>
+            <Icon src={win.icon} size={16} isInReact95 />
             <span>{win.title}</span>
           </HeaderTitle>
           <HeaderButtons>
@@ -215,6 +215,7 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
             padding: def.noPadding ? 0 : 12,
             display: "flex",
             flexDirection: "column",
+            zoom: R95_SCALE_COMPENSATION,
           }}
           onMouseDown={() => focusWindow(win.id)}
         >

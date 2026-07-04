@@ -3,7 +3,7 @@ import { playSound } from "../lib/audio";
 
 import { dirIcon, iconForNode } from "./fileIcons";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
-import { showMissingFileAlert } from "../store/alertStore";
+import { showMissingFileAlert } from "../lib/systemDialogs";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";

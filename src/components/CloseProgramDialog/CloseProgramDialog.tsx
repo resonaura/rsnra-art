@@ -1,30 +1,11 @@
 import { useState } from "react";
-import {
-  Button,
-  Separator,
-  Window,
-  WindowContent,
-  WindowHeader,
-} from "react95";
+import { Button, Separator, WindowContent } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
 import { requestShutdown } from "../../data/startMenu";
 import { useWindowStore } from "../../store/windowStore";
 import { Icon } from "../Icon/Icon";
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 360px;
-`;
+import { SystemDialog } from "../SystemDialog/SystemDialog";
 
 const Intro = styled.p`
   font-size: 12px;
@@ -82,49 +63,48 @@ export function CloseProgramDialog() {
   };
 
   return (
-    <Overlay onMouseDown={() => setOpen(false)}>
-      <Dialog onMouseDown={(e) => e.stopPropagation()}>
-        <WindowHeader>
-          <span>Close Program</span>
-        </WindowHeader>
-        <WindowContent>
-          <Intro>
-            RSNRA.ART is not responding to your... actually, it's fine. Here's
-            what's currently running:
-          </Intro>
-          <ListFrame orientation="vertical">
-            <Row $selected={false}>
-              <Icon src="/icons/explorer.exe/000.ico" size={16} />
-              RSNRA.ART Desktop (system)
+    <SystemDialog
+      title="Close Program"
+      width={360}
+      onClose={() => setOpen(false)}
+    >
+      <WindowContent>
+        <Intro>
+          RSNRA.ART is not responding to your... actually, it's fine. Here's
+          what's currently running:
+        </Intro>
+        <ListFrame orientation="vertical">
+          <Row $selected={false}>
+            <Icon src="/icons/explorer.exe/000.ico" size={16} />
+            RSNRA.ART Desktop (system)
+          </Row>
+          {windows.map((w) => (
+            <Row
+              key={w.id}
+              $selected={selected === w.id}
+              onClick={() => setSelected(w.id)}
+              onDoubleClick={() => closeWindow(w.id)}
+            >
+              <Icon src={w.icon} size={16} />
+              {w.title}
+              {w.isMinimized ? " (minimized)" : ""}
             </Row>
-            {windows.map((w) => (
-              <Row
-                key={w.id}
-                $selected={selected === w.id}
-                onClick={() => setSelected(w.id)}
-                onDoubleClick={() => closeWindow(w.id)}
-              >
-                <Icon src={w.icon} size={16} />
-                {w.title}
-                {w.isMinimized ? " (minimized)" : ""}
-              </Row>
-            ))}
-            {windows.length === 0 && (
-              <Row $selected={false} style={{ color: "#888" }}>
-                No other programs are running.
-              </Row>
-            )}
-          </ListFrame>
-          <Separator />
-          <Footer style={{ marginTop: 12 }}>
-            <Button onClick={requestShutdown}>Shut Down</Button>
-            <Button onClick={endTask} disabled={!selected} primary>
-              End Task
-            </Button>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-          </Footer>
-        </WindowContent>
-      </Dialog>
-    </Overlay>
+          ))}
+          {windows.length === 0 && (
+            <Row $selected={false} style={{ color: "#888" }}>
+              No other programs are running.
+            </Row>
+          )}
+        </ListFrame>
+        <Separator />
+        <Footer style={{ marginTop: 12 }}>
+          <Button onClick={requestShutdown}>Shut Down</Button>
+          <Button onClick={endTask} disabled={!selected} primary>
+            End Task
+          </Button>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+        </Footer>
+      </WindowContent>
+    </SystemDialog>
   );
 }

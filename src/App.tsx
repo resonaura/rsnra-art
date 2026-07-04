@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
-import { AlertDialog } from "./components/AlertDialog/AlertDialog";
 import { BootScreen } from "./components/BootScreen/BootScreen";
 import { CloseProgramDialog } from "./components/CloseProgramDialog/CloseProgramDialog";
 import { Desktop } from "./components/Desktop/Desktop";
 import { RunDialog } from "./components/RunDialog/RunDialog";
 import { ShutdownScreen } from "./components/ShutdownScreen/ShutdownScreen";
 import { StartMenu } from "./components/StartMenu/StartMenu";
+import { MessageBoxHost } from "./components/SystemDialog/MessageBoxHost";
 import { Taskbar } from "./components/Taskbar/Taskbar";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { WebampHost } from "./components/WebampHost";
@@ -53,7 +53,7 @@ function Desk() {
       <CloseProgramDialog />
       <RunDialog />
       <UnsavedChangesDialog />
-      <AlertDialog />
+      <MessageBoxHost />
       <WebampHost />
     </>
   );

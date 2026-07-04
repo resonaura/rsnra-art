@@ -75,7 +75,6 @@ const SettingRow = styled.div<{ $indent?: 0 | 1 | 2 }>`
   align-items: center;
   gap: 6px;
   padding-left: ${({ $indent }) => ($indent ? `${$indent * 20}px` : "0")};
-  font-size: 11px;
 `;
 
 const TreeHeader = styled.div<{ $indent?: 0 | 1 }>`
@@ -707,7 +706,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
 
             {showOpenWith && selectedExt && (
               <OpenWithDialog
-                isInReact95
                 fileName={`file.${selectedExt}`}
                 associateOnly
                 onClose={() => setShowOpenWith(false)}
@@ -715,7 +713,6 @@ export function FolderOptions({ windowId }: { windowId: string }) {
             )}
             {showIconPicker && selectedExt && (
               <IconPickerDialog
-                isInReact95
                 title={`Choose an icon for '.${selectedExt}' files:`}
                 icons={Array.from(
                   new Set([typeIcon(selectedExt), ...iconPickerPool()]),

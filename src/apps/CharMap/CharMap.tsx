@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Select, TextInput } from "react95";
 import styled from "styled-components";
 import { ScrollArea } from "../../components/ScrollArea";
+import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 
 const Layout = styled.div`
   display: flex;
@@ -9,7 +10,6 @@ const Layout = styled.div`
   height: 100%;
   padding: 8px;
   gap: 8px;
-  font-size: 12px;
 `;
 
 const TopRow = styled.div`
@@ -24,8 +24,8 @@ const GridFrame = styled(ScrollArea)`
   background: white;
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
 const Grid = styled.div`
@@ -35,13 +35,13 @@ const Grid = styled.div`
 
 const Cell = styled.button<{ $selected: boolean }>`
   aspect-ratio: 1;
-  min-width: 26px;
+  min-width: ${26 * R95_SCALE_COMPENSATION}px;
   border: 1px solid ${({ theme }) => theme.borderDark};
   background: ${({ $selected, theme }) =>
     $selected ? theme.hoverBackground : "white"};
   color: ${({ $selected, theme }) => ($selected ? theme.headerText : "#000")};
   cursor: pointer;
-  font-size: 16px;
+  font-size: ${16 * R95_SCALE_COMPENSATION}px;
   line-height: 1;
 
   &:hover {
@@ -51,18 +51,18 @@ const Cell = styled.button<{ $selected: boolean }>`
 `;
 
 const PreviewBox = styled.div`
-  width: 64px;
-  height: 64px;
+  width: ${64 * R95_SCALE_COMPENSATION}px;
+  height: ${64 * R95_SCALE_COMPENSATION}px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 40px;
+  font-size: ${40 * R95_SCALE_COMPENSATION}px;
   background: white;
-  border: 2px solid;
+  border: ${2 * R95_SCALE_COMPENSATION}px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
 `;
 
 const BottomRow = styled.div`
@@ -103,11 +103,11 @@ export function CharMap() {
   };
 
   return (
-    <Layout>
+    <Layout style={{ zoom: R95_SCALE }}>
       <TopRow>
         <span>Font:</span>
         <Select
-          style={{ zoom: 0.8, flex: 1 }}
+          style={{ flex: 1 }}
           value={font}
           options={fontOptions}
           width="100%"
@@ -116,7 +116,7 @@ export function CharMap() {
       </TopRow>
 
       <div style={{ display: "flex", gap: 8, flex: 1, minHeight: 0 }}>
-        <GridFrame orientation="vertical">
+        <GridFrame isInReact95 orientation="vertical">
           <Grid style={{ fontFamily: font }}>
             {CODES.map((code) => (
               <Cell
@@ -138,7 +138,7 @@ export function CharMap() {
         <PreviewBox style={{ fontFamily: font }}>{selectedChar}</PreviewBox>
       </div>
 
-      <div style={{ fontSize: 11 }}>
+      <div>
         Character code: U+
         {selected.toString(16).toUpperCase().padStart(4, "0")}
       </div>
@@ -146,16 +146,16 @@ export function CharMap() {
       <BottomRow>
         <span>Characters to copy:</span>
         <TextInput
-          style={{ zoom: 0.8, flex: 1 }}
+          style={{ flex: 1 }}
           value={toCopy}
           onChange={(e) => setToCopy(e.target.value)}
         />
       </BottomRow>
       <BottomRow style={{ justifyContent: "flex-end" }}>
-        <Button style={{ zoom: 0.8, width: 96 }} onClick={addToCopy}>
+        <Button style={{ width: 96 }} onClick={addToCopy}>
           Select
         </Button>
-        <Button style={{ zoom: 0.8, width: 96 }} disabled={!toCopy} onClick={copy}>
+        <Button style={{ width: 96 }} disabled={!toCopy} onClick={copy}>
           Copy
         </Button>
       </BottomRow>

@@ -1,24 +1,10 @@
 import { useState } from "react";
-import { Button, Checkbox, Window, WindowContent, WindowHeader } from "react95";
+import { Button, Checkbox, WindowContent } from "react95";
 import styled from "styled-components";
 import { candidatesFor, type OpenWithApp } from "../../data/fileOpen";
-import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { Icon } from "../Icon/Icon";
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 400px;
-`;
+import { SystemDialog } from "../SystemDialog/SystemDialog";
 
 const Prompt = styled.p`
   margin: 0 0 10px;
@@ -81,7 +67,6 @@ export interface OpenWithDialogProps {
    * "remember" checkbox is needed since associating *is* the point.
    */
   associateOnly?: boolean;
-  isInReact95?: boolean;
 }
 
 /** Windows ME-style "Open With" picker for right-click ▸ Open With. */
@@ -90,7 +75,6 @@ export function OpenWithDialog({
   filePath,
   onClose,
   associateOnly,
-  isInReact95 = false,
 }: OpenWithDialogProps) {
   const candidates = candidatesFor(fileName);
   const [selected, setSelected] = useState<OpenWithApp | null>(
@@ -116,60 +100,49 @@ export function OpenWithDialog({
   };
 
   return (
-    <Overlay
-      style={{ zoom: isInReact95 ? R95_SCALE_COMPENSATION : 1 }}
-      onMouseDown={onClose}
-    >
-      <Dialog
-        style={{ zoom: R95_SCALE }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <WindowHeader>
-          <span>Open With</span>
-        </WindowHeader>
-        <WindowContent>
-          <Prompt>
-            {associateOnly
-              ? `Choose the program you want Windows to use to open '.${ext}' files:`
-              : `Click the program you want to use to open '${fileName}':`}
-          </Prompt>
-          <Grid>
-            {candidates.map((app) => (
-              <IconItem
-                key={app.appId}
-                $selected={selected?.appId === app.appId}
-                onClick={() => setSelected(app)}
-                onDoubleClick={confirm}
-              >
-                <Icon src={app.icon} size={32} isInReact95 />
-                <span>{app.label}</span>
-              </IconItem>
-            ))}
-          </Grid>
-          {!associateOnly && (
-            <RememberRow>
-              <Checkbox
-                label="Always use this program to open this type of file"
-                checked={remember}
-                onChange={() => setRemember((r) => !r)}
-              />
-            </RememberRow>
-          )}
-          <Footer>
-            <Button
-              primary
-              disabled={!selected}
-              onClick={confirm}
-              style={{ width: 75 }}
+    <SystemDialog title="Open With" width={400} onClose={onClose}>
+      <WindowContent>
+        <Prompt>
+          {associateOnly
+            ? `Choose the program you want Windows to use to open '.${ext}' files:`
+            : `Click the program you want to use to open '${fileName}':`}
+        </Prompt>
+        <Grid>
+          {candidates.map((app) => (
+            <IconItem
+              key={app.appId}
+              $selected={selected?.appId === app.appId}
+              onClick={() => setSelected(app)}
+              onDoubleClick={confirm}
             >
-              OK
-            </Button>
-            <Button onClick={onClose} style={{ width: 75 }}>
-              Cancel
-            </Button>
-          </Footer>
-        </WindowContent>
-      </Dialog>
-    </Overlay>
+              <Icon src={app.icon} size={32} isInReact95 />
+              <span>{app.label}</span>
+            </IconItem>
+          ))}
+        </Grid>
+        {!associateOnly && (
+          <RememberRow>
+            <Checkbox
+              label="Always use this program to open this type of file"
+              checked={remember}
+              onChange={() => setRemember((r) => !r)}
+            />
+          </RememberRow>
+        )}
+        <Footer>
+          <Button
+            primary
+            disabled={!selected}
+            onClick={confirm}
+            style={{ width: 75 }}
+          >
+            OK
+          </Button>
+          <Button onClick={onClose} style={{ width: 75 }}>
+            Cancel
+          </Button>
+        </Footer>
+      </WindowContent>
+    </SystemDialog>
   );
 }

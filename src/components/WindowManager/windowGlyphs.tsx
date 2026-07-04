@@ -1,13 +1,15 @@
 // Pixel-art window control glyphs (16x16 viewBox).
 // Path data borrowed from a classic retro UI kit's picto set.
 
+import { R95_SCALE_COMPENSATION } from "../../react95.conf";
+
 // Pixel-art window control glyphs (16x16 viewBox). Rendered at 1:1 (16px) so
 // shapeRendering: crispEdges maps every path unit to exactly one device pixel —
 // scaling to a non-integer size (e.g. 12px) fragments the close-X.
 const GLYPH_PROPS = {
   viewBox: "0 0 16 16",
-  width: 16,
-  height: 16,
+  width: 16 * R95_SCALE_COMPENSATION,
+  height: 16 * R95_SCALE_COMPENSATION,
   "aria-hidden": true,
   shapeRendering: "crispEdges" as const,
 };

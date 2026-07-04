@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
+import { R95_SCALE } from "../../react95.conf";
 import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
 import { THEMES, useThemeStore } from "../../store/themeStore";
 import { useWindowStore } from "../../store/windowStore";
@@ -28,7 +29,6 @@ const Preview = styled(Frame)<{ $bg: string }>`
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
   text-shadow: 1px 1px black;
 `;
 
@@ -106,7 +106,6 @@ const MiniScreen = styled.div`
   align-items: center;
   justify-content: center;
   color: #ccc;
-  font-size: 11px;
 `;
 
 export function DisplayProperties({ windowId }: { windowId: string }) {
@@ -120,12 +119,8 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
   const [tab, setTab] = useState("Background");
 
   return (
-    <Layout>
-      <Tabs
-        value={tab}
-        onChange={(v: string) => setTab(v)}
-        style={{ fontSize: 11, zoom: 0.8 }}
-      >
+    <Layout style={{ zoom: R95_SCALE }}>
+      <Tabs value={tab} onChange={(v: string) => setTab(v)}>
         <Tab value="Background">Background</Tab>
         <Tab value="Screen Saver">Screen Saver</Tab>
         <Tab value="Appearance">Appearance</Tab>
@@ -134,7 +129,7 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
       </Tabs>
       <Body>
         {tab === "Background" && (
-          <GroupBox style={{ zoom: 0.8 }} label="Desktop wallpaper">
+          <GroupBox label="Desktop wallpaper">
             <Preview $bg={current.background}>{current.label}</Preview>
             <Swatches>
               {WALLPAPERS.map((wp) => (
@@ -152,7 +147,7 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
 
         {tab === "Screen Saver" && (
           <GroupBox
-            style={{ zoom: 0.8, display: "flex", flexDirection: "column" }}
+            style={{ display: "flex", flexDirection: "column" }}
             label="Screen Saver"
           >
             <MiniScreen>(None)</MiniScreen>
@@ -168,8 +163,8 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
         )}
 
         {tab === "Appearance" && (
-          <GroupBox style={{ zoom: 0.8 }} label="Scheme">
-            <p style={{ fontSize: 14, margin: "0 0 8px" }}>
+          <GroupBox label="Scheme">
+            <p style={{ margin: "0 0 8px" }}>
               Current: <b>{THEMES.find((t) => t.id === themeId)?.label}</b>
             </p>
             <Swatches>
@@ -190,7 +185,7 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
 
         {tab === "Effects" && (
           <GroupBox
-            style={{ zoom: 0.8, display: "flex", flexDirection: "column" }}
+            style={{ display: "flex", flexDirection: "column" }}
             label="Visual effects"
           >
             <Checkbox label="Use large icons" disabled />
@@ -211,16 +206,16 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
 
         {tab === "Settings" && (
           <GroupBox label="Display">
-            <p style={{ fontSize: 12 }}>
+            <p>
               Colors: <b>True Color (32 bit)</b>
             </p>
-            <p style={{ fontSize: 12 }}>
+            <p>
               Screen area: <b>Fits your browser window</b>
             </p>
           </GroupBox>
         )}
 
-        <BtnRow style={{ zoom: 0.8, marginTop: "auto" }}>
+        <BtnRow style={{ marginTop: "auto" }}>
           <Button
             style={{ width: "80px" }}
             onClick={() => closeWindow(windowId)}

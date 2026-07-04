@@ -1,23 +1,10 @@
 import { useState } from "react";
-import { Button, Window, WindowContent, WindowHeader } from "react95";
+import { Button, WindowContent } from "react95";
 import styled from "styled-components";
-import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
+import { R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { Icon } from "../Icon/Icon";
 import { ScrollArea } from "../ScrollArea";
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 500000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-`;
-
-const Dialog = styled(Window)`
-  width: 500px;
-`;
+import { SystemDialog } from "../SystemDialog/SystemDialog";
 
 const Prompt = styled.p`
   margin: 0 0 10px;
@@ -64,7 +51,6 @@ export interface IconPickerDialogProps {
   current?: string;
   onPick: (icon: string) => void;
   onClose: () => void;
-  isInReact95?: boolean;
 }
 
 /** Curated icon grid for Folder Options ▸ File Types ▸ Change Icon. */
@@ -74,7 +60,6 @@ export function IconPickerDialog({
   current,
   onPick,
   onClose,
-  isInReact95 = false,
 }: IconPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(current ?? null);
 
@@ -85,56 +70,45 @@ export function IconPickerDialog({
   };
 
   return (
-    <Overlay
-      style={{ zoom: isInReact95 ? R95_SCALE_COMPENSATION : 1 }}
-      onMouseDown={onClose}
-    >
-      <Dialog
-        style={{ zoom: R95_SCALE }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <WindowHeader>
-          <span>Change Icon</span>
-        </WindowHeader>
-        <WindowContent>
-          <Prompt>{title}</Prompt>
-          <Grid
-            isInReact95
-            orientation="vertical"
-            contentStyle={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 2,
-              padding: 6,
-            }}
-          >
-            {icons.map((src) => (
-              <IconItem
-                key={src}
-                $selected={selected === src}
-                onClick={() => setSelected(src)}
-                onDoubleClick={confirm}
-                title={src}
-              >
-                <Icon src={src} size={32} isInReact95 />
-              </IconItem>
-            ))}
-          </Grid>
-          <Footer>
-            <Button
-              primary
-              disabled={!selected}
-              onClick={confirm}
-              style={{ width: 75 }}
+    <SystemDialog title="Change Icon" width={500} onClose={onClose}>
+      <WindowContent>
+        <Prompt>{title}</Prompt>
+        <Grid
+          isInReact95
+          orientation="vertical"
+          contentStyle={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 2,
+            padding: 6,
+          }}
+        >
+          {icons.map((src) => (
+            <IconItem
+              key={src}
+              $selected={selected === src}
+              onClick={() => setSelected(src)}
+              onDoubleClick={confirm}
+              title={src}
             >
-              OK
-            </Button>
-            <Button onClick={onClose} style={{ width: 75 }}>
-              Cancel
-            </Button>
-          </Footer>
-        </WindowContent>
-      </Dialog>
-    </Overlay>
+              <Icon src={src} size={32} isInReact95 />
+            </IconItem>
+          ))}
+        </Grid>
+        <Footer>
+          <Button
+            primary
+            disabled={!selected}
+            onClick={confirm}
+            style={{ width: 75 }}
+          >
+            OK
+          </Button>
+          <Button onClick={onClose} style={{ width: 75 }}>
+            Cancel
+          </Button>
+        </Footer>
+      </WindowContent>
+    </SystemDialog>
   );
 }
