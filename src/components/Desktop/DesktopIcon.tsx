@@ -1,7 +1,8 @@
 import styled from "styled-components";
+import { useDisplayStore } from "../../store/displayStore";
 import { Icon } from "../Icon/Icon";
 
-const IconButton = styled.button<{ $selected: boolean }>`
+const IconButton = styled.button<{ $selected: boolean; $iconSize: number }>`
   position: relative;
   width: 84px;
   display: flex;
@@ -16,8 +17,8 @@ const IconButton = styled.button<{ $selected: boolean }>`
   font-family: inherit;
 
   img {
-    width: 32px;
-    height: 32px;
+    width: ${({ $iconSize }) => $iconSize}px;
+    height: ${({ $iconSize }) => $iconSize}px;
     image-rendering: pixelated;
   }
 `;
@@ -52,8 +53,6 @@ const RenameInput = styled.input`
 const ShortcutOverlay = styled(Icon)`
   position: absolute;
   inset: 0;
-  width: 32px;
-  height: 32px;
   image-rendering: pixelated;
   pointer-events: none;
 `;
@@ -102,10 +101,14 @@ export function DesktopIcon({
   underline = "none",
   tooltip,
 }: DesktopIconProps) {
+  // Display Properties ▸ Effects ▸ "Use large icons".
+  const largeIcons = useDisplayStore((s) => s.largeIcons);
+  const iconSize = largeIcons ? 48 : 32;
   return (
     <IconButton
       type="button"
       $selected={selected}
+      $iconSize={iconSize}
       title={tooltip}
       onClick={() => {
         onSelect();
@@ -125,7 +128,7 @@ export function DesktopIcon({
       onDragEnd={onDragEnd}
     >
       <div style={{ position: "relative" }}>
-        <Icon src={icon} size={32} />
+        <Icon src={icon} size={iconSize} />
         {shortcut && (
           <ShortcutOverlay
             src="/icons/w2k_shortcut_overlay.ico"

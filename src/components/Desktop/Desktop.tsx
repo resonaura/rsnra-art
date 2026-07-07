@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import styled from "styled-components";
 import { openApp } from "../../data/apps";
 import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
+import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
+import { patternDataUri } from "../../lib/patterns";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
-import { useDesktopStore, WALLPAPERS } from "../../store/desktopStore";
+import { screenSaverByFile } from "../../screensavers";
+import { useDesktopStore } from "../../store/desktopStore";
+import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
+import { useSaverRunStore } from "../../store/saverRunStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { AppId } from "../../types/window";
@@ -15,16 +20,11 @@ import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
 import { DesktopContextMenu } from "./DesktopContextMenu";
 import { DesktopIcon } from "./DesktopIcon";
 
-const Wrapper = styled.div<{ $bg: string }>`
+const Wrapper = styled.div`
   position: absolute;
   inset: 0;
-  background: ${({ $bg }) => $bg};
-  background-image: radial-gradient(
-    rgba(255, 255, 255, 0.04) 1px,
-    transparent 1px
-  );
-  background-size: 4px 4px;
   overflow: hidden;
+  image-rendering: pixelated;
 `;
 
 // The desktop folder lives at C:\Windows\Desktop (the classic Win95 location).
@@ -58,6 +58,14 @@ function openLnk(lnk: LnkData) {
 }
 
 function openNode(node: VfsNode, abs: string) {
+  // .scr — run the screen saver, like double-clicking one in real Windows.
+  if (node.type === "file" && node.name.toLowerCase().endsWith(".scr")) {
+    const saver = screenSaverByFile(node.name);
+    if (saver) {
+      useSaverRunStore.getState().run(saver.id);
+      return;
+    }
+  }
   if (node.type === "file" && !node.name.toLowerCase().endsWith(".lnk")) {
     const preferred = getPreferredApp(node.name);
     if (preferred) {
@@ -136,10 +144,43 @@ function getAutoArrangedPosition(index: number, heightLimit: number) {
 }
 
 export function Desktop() {
-  const wallpaperId = useDesktopStore((s) => s.wallpaperId);
-  const background =
-    WALLPAPERS.find((w) => w.id === wallpaperId)?.background ??
-    WALLPAPERS[0].background;
+  const wallpaperPath = useDisplayStore((s) => s.wallpaperPath);
+  const wallpaperMode = useDisplayStore((s) => s.wallpaperMode);
+  const pattern = useDisplayStore((s) => s.pattern);
+  const desktopColor = useDisplayStore((s) => s.desktopColor);
+  const desktopIcons = useDisplayStore((s) => s.desktopIcons);
+  const zoom = useDisplayStore((s) => s.zoom);
+  const readVfs = useVfsStore((s) => s.read);
+
+  const backgroundStyle = useMemo<CSSProperties>(() => {
+    const wpUrl = wallpaperPath ? wallpaperUrl(wallpaperPath, readVfs) : null;
+    const patternUri = patternDataUri(pattern);
+    const layers: { img: string; repeat: string; size: string; pos: string }[] =
+      [];
+    if (wpUrl) {
+      layers.push({
+        img: `url("${wpUrl}")`,
+        repeat: wallpaperMode === "tile" ? "repeat" : "no-repeat",
+        size: wallpaperMode === "stretch" ? "100% 100%" : "auto",
+        pos: wallpaperMode === "center" ? "center" : "0 0",
+      });
+    }
+    if (patternUri) {
+      layers.push({
+        img: `url("${patternUri}")`,
+        repeat: "repeat",
+        size: "8px 8px",
+        pos: "0 0",
+      });
+    }
+    return {
+      backgroundColor: desktopColor,
+      backgroundImage: layers.map((l) => l.img).join(", ") || undefined,
+      backgroundRepeat: layers.map((l) => l.repeat).join(", ") || undefined,
+      backgroundSize: layers.map((l) => l.size).join(", ") || undefined,
+      backgroundPosition: layers.map((l) => l.pos).join(", ") || undefined,
+    };
+  }, [wallpaperPath, wallpaperMode, pattern, desktopColor, readVfs]);
 
   const { iconPositions, setIconPosition, autoArrange, sortBy } = useDesktopStore();
 
@@ -149,6 +190,8 @@ export function Desktop() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+  // With a body zoom active, the usable layout height shrinks accordingly.
+  const layoutHeight = winHeight / zoom;
 
   const showHidden = useFilePrefsStore((s) => s.showHidden);
   const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
@@ -195,9 +238,7 @@ export function Desktop() {
   const [renameVal, setRenameVal] = useState("");
 
   const recycleBinIcon =
-    recycledCount > 0
-      ? "/icons/w2k_recycle_bin_full.ico"
-      : "/icons/w2k_recycle_bin_empty.ico";
+    recycledCount > 0 ? desktopIcons.recycleFull : desktopIcons.recycleEmpty;
 
   const closeAll = () => {
     setBgMenu(null);
@@ -246,11 +287,16 @@ export function Desktop() {
     const lnk = parseLnk(node);
     if (!lnk) return null;
     const label = node.name.replace(/\.lnk$/i, "");
+    // Effects ▸ "Change Icon…" override for the My Computer desktop icon.
+    const lnkIcon =
+      node.name.toLowerCase() === "my computer.lnk"
+        ? desktopIcons.myComputer
+        : lnk.icon || "/icons/w2k_shortcut.ico";
     return (
       <DesktopIcon
         key={node.name}
         label={label}
-        icon={lnk.icon || "/icons/w2k_shortcut.ico"}
+        icon={lnkIcon}
         shortcut={lnk.shortcut}
         selected={selected === node.name}
         renaming={renaming === node.name}
@@ -389,18 +435,18 @@ export function Desktop() {
     return sortedItems.map((item, index) => {
       let pos: { x: number; y: number };
       if (autoArrange) {
-        pos = getAutoArrangedPosition(index, winHeight);
+        pos = getAutoArrangedPosition(index, layoutHeight);
       } else {
         const saved = iconPositions[item.key];
         if (saved) {
           pos = saved;
         } else {
-          pos = getAutoArrangedPosition(index, winHeight);
+          pos = getAutoArrangedPosition(index, layoutHeight);
         }
       }
       return { ...item, pos };
     });
-  }, [sortedItems, autoArrange, iconPositions, winHeight]);
+  }, [sortedItems, autoArrange, iconPositions, layoutHeight]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -413,8 +459,9 @@ export function Desktop() {
     const desktopIconName = e.dataTransfer.getData("desktop-icon-name");
     const srcAbs = e.dataTransfer.getData("application/x-rsnra-vfs-path");
     
-    const dropX = e.clientX;
-    const dropY = e.clientY;
+    // clientX/Y are visual-viewport px; layout coords need dividing by zoom.
+    const dropX = e.clientX / zoom;
+    const dropY = e.clientY / zoom;
 
     if (desktopIconName) {
       if (!autoArrange) {
@@ -442,7 +489,7 @@ export function Desktop() {
 
   return (
     <Wrapper
-      $bg={background}
+      style={backgroundStyle}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           setSelected(null);
@@ -522,7 +569,7 @@ export function Desktop() {
             >
               <DesktopIcon
                 label="My Documents"
-                icon="/icons/w2k_my_documents.ico"
+                icon={desktopIcons.myDocuments}
                 selected={selected === "__mydocs__"}
                 onSelect={() => {
                   setSelected("__mydocs__");

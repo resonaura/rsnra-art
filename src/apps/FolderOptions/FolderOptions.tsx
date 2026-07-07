@@ -35,18 +35,7 @@ const Layout = styled.div`
   height: 100%;
 `;
 
-const Content = styled(ScrollArea)`
-  flex: 1;
-  min-height: 0;
-  background: ${({ theme }) => theme.material};
-`;
 
-const contentInnerStyle = {
-  padding: 12,
-  display: "flex" as const,
-  flexDirection: "column" as const,
-  gap: 8,
-};
 
 const ButtonRow = styled.div`
   display: flex;

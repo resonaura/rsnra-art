@@ -11,13 +11,14 @@ import styled from "styled-components";
 import { R95_SCALE } from "../../react95.conf";
 import { CloseGlyph } from "../WindowManager/windowGlyphs";
 
-const Backdrop = styled.div<{ $zIndex: number }>`
+const Backdrop = styled.div<{ $zIndex: number; $placement: "center" | "top-left" }>`
   position: fixed;
   inset: 0;
   z-index: ${({ $zIndex }) => $zIndex};
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: ${({ $placement }) => ($placement === "top-left" ? "flex-start" : "center")};
+  justify-content: ${({ $placement }) => ($placement === "top-left" ? "flex-start" : "center")};
+  padding: ${({ $placement }) => ($placement === "top-left" ? "16px" : "0")};
 `;
 
 // Sits outside the zoomed DialogWindow so drag deltas (raw screen pixels)
@@ -76,7 +77,17 @@ export interface SystemDialogProps {
   /** Starting offset from screen-center, in CSS px — lets a stack of several
    *  dialogs cascade instead of landing exactly on top of each other. */
   initialOffset?: { x: number; y: number };
+  /** Where the dialog lands: screen center (default) or the top-left corner
+   *  (Windows' monitor-settings confirmation lives there). */
+  placement?: "center" | "top-left";
   children: ReactNode;
+}
+
+/** Active Display Properties ▸ Screen area zoom on <body>; drag deltas arrive
+ *  in unzoomed viewport px but the dialog moves in zoomed coordinates. */
+function bodyZoom(): number {
+  const z = parseFloat(document.body.style.zoom || "1");
+  return Number.isFinite(z) && z > 0 ? z : 1;
 }
 
 /**
@@ -95,6 +106,7 @@ export function SystemDialog({
   onHelp,
   zIndex = 500000,
   initialOffset,
+  placement = "center",
   children,
 }: SystemDialogProps) {
   const [offset, setOffset] = useState(initialOffset ?? { x: 0, y: 0 });
@@ -117,9 +129,10 @@ export function SystemDialog({
   useEffect(() => {
     const onMove = (e: globalThis.MouseEvent) => {
       if (!drag.current) return;
+      const z = bodyZoom();
       setOffset({
-        x: drag.current.baseX + (e.clientX - drag.current.startX),
-        y: drag.current.baseY + (e.clientY - drag.current.startY),
+        x: drag.current.baseX + (e.clientX - drag.current.startX) / z,
+        y: drag.current.baseY + (e.clientY - drag.current.startY) / z,
       });
     };
     const onUp = () => {
@@ -144,7 +157,7 @@ export function SystemDialog({
   };
 
   return createPortal(
-    <Backdrop $zIndex={zIndex} onMouseDown={onClose}>
+    <Backdrop $zIndex={zIndex} $placement={placement} onMouseDown={onClose}>
       <DragPositioner style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}>
         <DialogWindow
           shadow={false}

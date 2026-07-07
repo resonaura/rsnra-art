@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { BIO_TEXT, LINKS } from "../data/content";
 import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
+import { DEFAULT_WALLPAPER_FILES } from "../data/wallpapers";
+import { SCREENSAVERS } from "../screensavers";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type VfsNodeType = "dir" | "file";
@@ -381,7 +383,16 @@ function buildInitialTree(): VfsNode {
         system: true,
       }),
       file("winlogon.txt", { content: "", system: true, hidden: true }),
-      dir("System", [...systemDlls, ...fonts], true),
+      dir(
+        "System",
+        [
+          ...systemDlls,
+          ...fonts,
+          // Screen savers — opening a .scr runs it (see data/fileOpen.ts).
+          ...SCREENSAVERS.map((s) => file(s.file, { system: true })),
+        ],
+        true,
+      ),
       commandDir,
       dir(
         "Desktop",
@@ -494,6 +505,19 @@ function buildInitialTree(): VfsNode {
       ),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", CURSORS_VFS_NODES, true),
+      // Default wallpapers — real .bmp files, browsable and pickable from
+      // Display Properties ▸ Background, at the authentic Windows Me location.
+      dir(
+        "Web",
+        [
+          dir(
+            "Wallpaper",
+            DEFAULT_WALLPAPER_FILES.map((n) => file(n, { system: true })),
+            true,
+          ),
+        ],
+        true,
+      ),
       // System sounds — the real Windows Me/95 .wav files, browsable at
       // C:\Windows\Media just like in real Windows.
       dir(
@@ -640,6 +664,49 @@ function buildInitialTree(): VfsNode {
                 ],
                 true,
               ),
+              dir(
+                "System Tools",
+                [
+                  file("System Restore.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w98_help_book_big.ico",
+                      file: "rstrui.exe",
+                    }),
+                    system: true,
+                  }),
+                  file("Disk Cleanup.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w2k_control_panel.ico",
+                      file: "cleanmgr.exe",
+                    }),
+                    system: true,
+                  }),
+                  file("ScanDisk.lnk", {
+                    content: JSON.stringify({
+                      type: "missing",
+                      target: "",
+                      icon: "/icons/w98_directory_open.ico",
+                      file: "scandskw.exe",
+                    }),
+                    system: true,
+                  }),
+                ],
+                true,
+              ),
+              file("Windows Movie Maker.lnk", {
+                content: JSON.stringify({
+                  type: "missing",
+                  target: "",
+                  icon: "/icons/w98_cd_audio_cd.ico",
+                  file: "moviemk.exe",
+                }),
+                system: true,
+              }),
+
               file("Winamp.lnk", {
                 content: JSON.stringify({
                   type: "app",
@@ -648,6 +715,7 @@ function buildInitialTree(): VfsNode {
                 }),
                 system: true,
               }),
+
             ],
             true,
           ),
@@ -1177,7 +1245,7 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 8,
+      version: 9,
       migrate: () => ({
         root: buildInitialTree(),
         cwd: "C:\\My Documents",
