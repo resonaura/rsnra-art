@@ -4,25 +4,28 @@ import {
   Checkbox,
   GroupBox,
   Monitor,
+  NumberInput,
   Select,
   Separator,
   Tab,
   TabBody,
   Tabs,
-  NumberInput,
 } from "react95";
 import styled, { ThemeProvider } from "styled-components";
-import { R95_SCALE } from "../../react95.conf";
-import { PATTERN_NAMES, patternDataUri } from "../../lib/patterns";
-import { SCREENSAVERS, getScreenSaver } from "../../screensavers";
+import { FileDialog } from "../../components/FileDialog/FileDialog";
+import { IconPickerDialog } from "../../components/IconPickerDialog/IconPickerDialog";
+import { ScrollArea } from "../../components/ScrollArea";
+import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
+import { iconPickerPool } from "../../data/fileIcons";
 import {
-  WALLPAPER_DIR,
   DEFAULT_WALLPAPER_FILES,
+  WALLPAPER_DIR,
   wallpaperLabel,
   wallpaperUrl,
 } from "../../data/wallpapers";
-import { iconPickerPool } from "../../data/fileIcons";
-import { THEMES, getThemeById, useThemeStore } from "../../store/themeStore";
+import { PATTERN_NAMES, patternDataUri } from "../../lib/patterns";
+import { R95_SCALE } from "../../react95.conf";
+import { SCREENSAVERS, getScreenSaver } from "../../screensavers";
 import {
   DEFAULT_DESKTOP_ICONS,
   useDisplayStore,
@@ -30,12 +33,10 @@ import {
   type DesktopIconSlot,
   type WallpaperMode,
 } from "../../store/displayStore";
-import { useVfsStore } from "../../store/vfsStore";
 import { useSaverRunStore } from "../../store/saverRunStore";
+import { THEMES, getThemeById, useThemeStore } from "../../store/themeStore";
+import { useVfsStore } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
-import { FileDialog } from "../../components/FileDialog/FileDialog";
-import { IconPickerDialog } from "../../components/IconPickerDialog/IconPickerDialog";
-import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 
 // ─── staged state ─────────────────────────────────────────────────────────────
 
@@ -94,7 +95,6 @@ const Root = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  font-size: 11px;
 `;
 
 const Body = styled(TabBody)`
@@ -279,13 +279,12 @@ function MonitorPreview({
 
 // ─── Background tab ───────────────────────────────────────────────────────────
 
-const BgListWrap = styled.div`
+const BgListWrap = styled(ScrollArea)`
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   height: 110px;
-  overflow-y: auto;
   background: ${({ theme }) => theme.canvas};
 `;
 
@@ -296,7 +295,6 @@ const BgListItem = styled.div<{ $active: boolean }>`
   color: ${({ $active, theme }) =>
     $active ? theme.headerText : theme.canvasText};
   cursor: pointer;
-  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -347,7 +345,7 @@ function BackgroundTab({
       <GroupBox label="Wallpaper">
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span>Select an HTML Document or a picture:</span>
-          <BgListWrap>
+          <BgListWrap isInReact95>
             {wallpaperItems.map((item) => (
               <BgListItem
                 key={item.value ?? "__none__"}
@@ -359,7 +357,12 @@ function BackgroundTab({
             ))}
           </BgListWrap>
           <div
-            style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
           >
             <Button onClick={() => setShowBrowse(true)} style={{ width: 80 }}>
               Browse...
@@ -435,7 +438,9 @@ function ScreenSaverTab({
   const runSaver = useSaverRunStore((s) => s.run);
 
   const saverDef =
-    staged.screenSaverId !== "none" ? getScreenSaver(staged.screenSaverId) : null;
+    staged.screenSaverId !== "none"
+      ? getScreenSaver(staged.screenSaverId)
+      : null;
   const SaverComponent = saverDef?.Component ?? null;
 
   const saverOptions = [
@@ -513,18 +518,33 @@ function ScreenSaverTab({
 // ─── Appearance tab ───────────────────────────────────────────────────────────
 
 const WIN_PALETTE = [
-  "#000000", "#800000", "#008000", "#808000",
-  "#000080", "#800080", "#008080", "#808080",
-  "#C0C0C0", "#FF0000", "#00FF00", "#FFFF00",
-  "#0000FF", "#FF00FF", "#00FFFF", "#FFFFFF",
-  "#2d1b4e", "#3a6ea5", "#5f9ea0", "#654321",
+  "#000000",
+  "#800000",
+  "#008000",
+  "#808000",
+  "#000080",
+  "#800080",
+  "#008080",
+  "#808080",
+  "#C0C0C0",
+  "#FF0000",
+  "#00FF00",
+  "#FFFF00",
+  "#0000FF",
+  "#FF00FF",
+  "#00FFFF",
+  "#FFFFFF",
+  "#2d1b4e",
+  "#3a6ea5",
+  "#5f9ea0",
+  "#654321",
 ];
 
 const AppearancePreviewBox = styled.div<{ $bg: string }>`
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   height: 96px;
   position: relative;
   overflow: hidden;
@@ -592,7 +612,8 @@ const PreviewInactiveWin = styled.div`
 `;
 
 const InactiveTitleBar = styled.div`
-  background: ${({ theme }) => theme.headerNotActiveBackground ?? theme.borderDark};
+  background: ${({ theme }) =>
+    theme.headerNotActiveBackground ?? theme.borderDark};
   height: 14px;
   display: flex;
   align-items: center;
@@ -608,8 +629,8 @@ const Swatch = styled.button<{ $color: string; $disabled?: boolean }>`
   background: ${({ $color }) => $color};
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest};
+    ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
   cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
   opacity: ${({ $disabled }) => ($disabled ? 0.5 : 1)};
   padding: 0;
@@ -676,7 +697,9 @@ function AppearanceTab({
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Select
             value={staged.themeId}
-            onChange={(opt: { value: string }) => update({ themeId: opt.value })}
+            onChange={(opt: { value: string }) =>
+              update({ themeId: opt.value })
+            }
             options={schemeOptions}
             style={{ flex: 1 }}
           />
@@ -766,7 +789,8 @@ const IconSlot = styled.button<{ $selected: boolean }>`
   width: 76px;
   padding: 6px 2px 4px;
   border: 1px dotted
-    ${({ $selected, theme }) => ($selected ? theme.borderDarkest : "transparent")};
+    ${({ $selected, theme }) =>
+      $selected ? theme.borderDarkest : "transparent"};
   background: ${({ $selected, theme }) =>
     $selected ? theme.hoverBackground : "transparent"};
   color: ${({ $selected, theme }) =>
@@ -785,7 +809,8 @@ function EffectsTab({
   staged: StagedState;
   update: UpdateStaged;
 }) {
-  const [selectedSlot, setSelectedSlot] = useState<DesktopIconSlot>("myComputer");
+  const [selectedSlot, setSelectedSlot] =
+    useState<DesktopIconSlot>("myComputer");
   const [showPicker, setShowPicker] = useState(false);
 
   const setSlotIcon = (icon: string) =>
@@ -927,11 +952,21 @@ const DepthStrip = styled.div<{ $depth: ColorDepth }>`
   border: 1px solid ${({ theme }) => theme.borderDark};
   background: linear-gradient(
     90deg,
-    red, yellow, lime, cyan, blue, magenta, red
+    red,
+    yellow,
+    lime,
+    cyan,
+    blue,
+    magenta,
+    red
   );
   image-rendering: pixelated;
   filter: ${({ $depth }) =>
-    $depth === 4 ? "saturate(1.4) contrast(2)" : $depth === 8 ? "contrast(1.3)" : "none"};
+    $depth === 4
+      ? "saturate(1.4) contrast(2)"
+      : $depth === 8
+        ? "contrast(1.3)"
+        : "none"};
 `;
 
 function SettingsTab({
@@ -990,7 +1025,6 @@ function SettingsTab({
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: 10,
             }}
           >
             <span>Less</span>
@@ -1064,7 +1098,7 @@ function MonitorSettingsConfirm({
       closable={false}
       zIndex={600000}
     >
-      <div style={{ padding: "12px 14px 10px", fontSize: 12 }}>
+      <div style={{ padding: "12px 14px 10px" }}>
         <p style={{ margin: "0 0 8px" }}>
           Your desktop has been reconfigured. Do you want to keep these
           settings?

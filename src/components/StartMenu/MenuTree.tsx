@@ -1,4 +1,6 @@
+import type { MouseEvent } from 'react';
 import styled from 'styled-components';
+import { TASKBAR_HEIGHT } from '../../constants';
 import { Icon } from '../Icon/Icon';
 import type { MenuNode } from '../../data/startMenu';
 
@@ -81,6 +83,26 @@ interface MenuTreeProps {
   nested?: boolean;
 }
 
+/**
+ * Submenus open aligned to the top of their parent item; when a long submenu
+ * would extend below the taskbar it is shifted up just enough to stay above it
+ * (and never above the viewport top), like the real Win95 start menu.
+ */
+function clampSubmenu(e: MouseEvent<HTMLLIElement>) {
+  const sub = e.currentTarget.querySelector<HTMLUListElement>(':scope > ul');
+  if (!sub) return;
+  sub.style.top = '';
+  sub.style.display = 'block';
+  const itemTop = e.currentTarget.getBoundingClientRect().top;
+  const subHeight = sub.offsetHeight;
+  sub.style.display = '';
+  const limit = window.innerHeight - TASKBAR_HEIGHT - 2;
+  let top = itemTop - 5;
+  if (top + subHeight > limit) top = limit - subHeight;
+  if (top < 2) top = 2;
+  sub.style.top = `${top - itemTop}px`;
+}
+
 export function MenuTree({ nodes, nested }: MenuTreeProps) {
   return (
     <List $nested={nested}>
@@ -91,7 +113,10 @@ export function MenuTree({ nodes, nested }: MenuTreeProps) {
         }
 
         return (
-          <ItemWrap key={node.id}>
+          <ItemWrap
+            key={node.id}
+            onMouseEnter={node.children ? clampSubmenu : undefined}
+          >
             <Row
               $disabled={node.disabled}
               onClick={() => {

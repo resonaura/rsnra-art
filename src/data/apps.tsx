@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { TASKBAR_HEIGHT } from "../constants";
 import { useWindowStore } from "../store/windowStore";
 import type { AppId } from "../types/window";
 
@@ -374,16 +375,21 @@ export function openApp(appId: AppId, overrides?: OpenAppOverrides): string {
   const viewportW = typeof window !== "undefined" ? window.innerWidth : 1280;
   const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
 
-  const width = isMobile ? Math.min(def.width, viewportW - 16) : def.width;
-  const height = isMobile ? Math.min(def.height, viewportH - 80) : def.height;
+  const workAreaH = viewportH - TASKBAR_HEIGHT;
+
+  const width = Math.min(def.width, viewportW - (isMobile ? 16 : 0));
+  const height = Math.min(def.height, workAreaH - (isMobile ? 44 : 0));
 
   const offset = (cascade % 6) * 24;
   cascade += 1;
 
-  const baseX = Math.max(16, Math.round((viewportW - width) / 2) + offset - 60);
-  const baseY = Math.max(
-    16,
-    Math.round((viewportH - height) / 2) + offset - 80,
+  const baseX = Math.min(
+    Math.max(0, viewportW - width),
+    Math.max(16, Math.round((viewportW - width) / 2) + offset - 60),
+  );
+  const baseY = Math.min(
+    Math.max(0, workAreaH - height),
+    Math.max(16, Math.round((workAreaH - height) / 2) + offset - 80),
   );
 
   return useWindowStore.getState().openWindow({

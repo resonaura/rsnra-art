@@ -116,12 +116,12 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
 
   return (
     <Rnd
-      style={{ zIndex: win.zIndex, position: "absolute" }}
+      style={{ zIndex: win.zIndex, position: "absolute", pointerEvents: "auto" }}
       size={{ width: bounds.width, height: bounds.height }}
       position={{ x: bounds.x, y: bounds.y }}
       minWidth={def.minWidth ?? 280}
       minHeight={def.minHeight ?? 180}
-      bounds="window"
+      bounds="parent"
       disableDragging={win.isMaximized}
       enableResizing={
         !win.isMaximized && win.resizable
