@@ -257,7 +257,7 @@ export function Taskbar() {
       return {
         id: node.name, // The filename (e.g. "Notepad.lnk") acts as unique id
         title: lnk?.title ?? node.name.replace(/\.lnk$/i, ""),
-        icon: lnk?.icon ?? "/icons/w2k_shortcut.ico",
+        icon: lnk?.icon ?? "/icons/shell32.dll/109.ico",
         type: lnk?.target === "show-desktop" ? "show-desktop" : lnk?.type ?? "app",
         appId: lnk?.target,
         lnkPath: lnk?.target,
@@ -379,7 +379,7 @@ export function Taskbar() {
       if (isLnk && lnk) {
         store.addToQuickLaunch({
           title: label,
-          icon: targetIcon || "/icons/w2k_shortcut.ico",
+          icon: targetIcon || "/icons/shell32.dll/109.ico",
           type: lnk.type === "url" ? "lnk" : "app",
           appId: lnk.target,
           lnkPath: lnk.target,
@@ -389,7 +389,7 @@ export function Taskbar() {
         const preferred = getPreferredApp(node.name);
         store.addToQuickLaunch({
           title: label,
-          icon: targetIcon || "/icons/w2k_shortcut.ico",
+          icon: targetIcon || "/icons/shell32.dll/109.ico",
           type: "app",
           appId: (node.appId || preferred?.appId || "notepad") as any,
           data: { path: srcAbs },
@@ -417,7 +417,7 @@ export function Taskbar() {
           active={startMenuOpen}
           onClick={() => toggleStartMenu()}
         >
-          <Icon src="/icons/w98_windows.ico" size={18} />
+          <Icon src="/icons/explorer.exe/013.ico" size={18} />
           Start
         </StartButton>
         <Divider />

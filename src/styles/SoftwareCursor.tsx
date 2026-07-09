@@ -26,6 +26,7 @@ import {
   getCachedHotspot,
   getResolvedCursorUrl,
   initActiveSchemeCursors,
+  subscribeAniFrame,
 } from "../lib/cursorManager";
 import { useCursorStore } from "../store/cursorStore";
 import { useDisplayStore } from "../store/displayStore";
@@ -176,16 +177,16 @@ export function SoftwareCursor() {
     initActiveSchemeCursors(files, shadowEnabled);
   }, [schemeId, files, shadowEnabled]);
 
-  // Resolve a role to {url, hotX, hotY}
+  // Resolve a role to {url, hotX, hotY, file}
   const resolveRole = useCallback(
-    (role: CursorRoleId): { url: string; hotX: number; hotY: number } => {
+    (role: CursorRoleId): { url: string; hotX: number; hotY: number; file: string } => {
       const file =
         filesRef.current[role] ??
         CURSOR_ROLE_MAP[role]?.file ??
         "arrow_i.cur";
       const [hx, hy] = getCachedHotspot(file);
       const url = getResolvedCursorUrl(file);
-      return { url, hotX: hx, hotY: hy };
+      return { url, hotX: hx, hotY: hy, file };
     },
     [],
   );
@@ -196,6 +197,23 @@ export function SoftwareCursor() {
     let lastX = -100;
     let lastY = -100;
     let pending = false;
+
+    // Tracks the currently-subscribed .ani cursor role, so a running
+    // animation keeps updating the rendered frame even while the mouse sits
+    // still (an hourglass shouldn't freeze between pointer moves).
+    let aniFile: string | null = null;
+    let unsubscribeAni: (() => void) | null = null;
+    const setAniFile = (file: string | null) => {
+      if (file === aniFile) return;
+      unsubscribeAni?.();
+      unsubscribeAni = null;
+      aniFile = file;
+      if (file) {
+        unsubscribeAni = subscribeAniFrame(file, (url) => {
+          setState((s) => ({ ...s, imgUrl: url }));
+        });
+      }
+    };
 
     // What cursor would this element have without our hide-stylesheet?
     // `cursor` is inherited, so one computed-style read on the hit element is
@@ -238,11 +256,13 @@ export function SoftwareCursor() {
         imgUrl = parsed.url;
         hotX = parsed.hotX;
         hotY = parsed.hotY;
+        setAniFile(null);
       } else {
         const resolved = resolveRole(parsed.role);
         imgUrl = resolved.url;
         hotX = resolved.hotX;
         hotY = resolved.hotY;
+        setAniFile(resolved.file.endsWith(".ani") || resolved.file.endsWith(".ANI") ? resolved.file : null);
       }
 
       setState({ x: clientX, y: clientY, imgUrl, hotX, hotY, visible: true });
@@ -280,6 +300,7 @@ export function SoftwareCursor() {
       document.removeEventListener("pointermove", onPointerMove);
       document.documentElement.removeEventListener("pointerleave", onPointerLeave);
       document.documentElement.removeEventListener("pointerenter", onPointerEnter);
+      unsubscribeAni?.();
     };
   }, [resolveRole]);
 

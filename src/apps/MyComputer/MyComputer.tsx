@@ -419,119 +419,119 @@ interface AppletItem {
 const APPLETS: AppletItem[] = [
   {
     label: "Accessibility Options",
-    icon: "/icons/w98_access_wheelchair_big.ico",
+    icon: "/icons/access.cpl/000.ico",
     file: "access.cpl",
   },
   {
     label: "Add New Hardware",
-    icon: "/icons/w98_hardware.ico",
+    icon: "/icons/sysdm.cpl/001.ico",
     file: "sysdm.cpl",
   },
   {
     label: "Add/Remove Programs",
-    icon: "/icons/w98_program_manager.ico",
+    icon: "/icons/appwiz.cpl/000.ico",
     file: "appwiz.cpl",
   },
   {
     label: "Automatic Updates",
-    icon: "/icons/w98_windows_update_large.ico",
+    icon: "/icons/wuaucpl.cpl/000.ico",
     file: "wuaucpl.cpl",
   },
   {
     label: "Date/Time",
-    icon: "/icons/w98_time_and_date.ico",
+    icon: "/icons/timedate.cpl/000.ico",
     onOpen: () => openApp("datetime"),
     file: "timedate.cpl",
   },
   {
     label: "Dial-Up Networking",
-    icon: "/icons/w98_conn_dialup.ico",
+    icon: "/icons/rnaui.dll/000.ico",
     file: "rnaui.dll",
   },
   {
     label: "Display",
-    icon: "/icons/w98_display_properties.ico",
+    icon: "/icons/desk.cpl/000.ico",
     onOpen: () => openApp("display-properties"),
     file: "desk.cpl",
   },
   {
     label: "Folder Options",
-    icon: "/icons/w98_directory_open.ico",
+    icon: "/icons/shell32.dll/116.ico",
     onOpen: () => openApp("folder-options"),
     file: "shell32.dll",
   },
-  { label: "Fonts", icon: "/icons/w98_font_tt.ico", file: "fontext.dll" },
-  { label: "Gaming Options", icon: "/icons/w98_joystick.ico", file: "joy.cpl" },
+  { label: "Fonts", icon: "/icons/fontext.dll/000.ico", file: "fontext.dll" },
+  { label: "Gaming Options", icon: "/icons/games.exe/000.ico", file: "joy.cpl" },
   {
     label: "Internet Options",
-    icon: "/icons/w98_internet_options.ico",
+    icon: "/icons/inetcpl.cpl/000.ico",
     file: "inetcpl.cpl",
   },
-  { label: "Keyboard", icon: "/icons/w98_keyboard.ico", file: "main.cpl" },
+  { label: "Keyboard", icon: "/icons/main.cpl/000.ico", file: "main.cpl" },
   {
     label: "Modems",
-    icon: "/icons/w98_conn_dialup_alt.ico",
+    icon: "/icons/modem.cpl/000.ico",
     file: "modem.cpl",
   },
   {
     label: "Mouse",
-    icon: "/icons/w98_mouse.ico",
+    icon: "/icons/mouse.cpl/000.ico",
     onOpen: () => openApp("mouse-properties"),
     file: "main.cpl",
   },
-  { label: "Network", icon: "/icons/w98_network.ico", file: "netcpl.cpl" },
+  { label: "Network", icon: "/icons/netcpl.cpl/000.ico", file: "netcpl.cpl" },
   {
     label: "ODBC Data Sources (32bit)",
-    icon: "/icons/w98_odbc.ico",
+    icon: "/icons/odbccp32.cpl/000.ico",
     file: "odbccp32.cpl",
   },
   {
     label: "Passwords",
-    icon: "/icons/w98_users_key.ico",
+    icon: "/icons/password.cpl/000.ico",
     file: "password.cpl",
   },
   {
     label: "Power Options",
-    icon: "/icons/w98_power_management.ico",
+    icon: "/icons/powercfg.cpl/000.ico",
     file: "powercfg.cpl",
   },
   {
     label: "Printers",
-    icon: "/icons/w98_printer_big.ico",
+    icon: "/icons/printers.dll/000.ico",
     file: "printers.dll",
   },
   {
     label: "Regional Settings",
-    icon: "/icons/w98_entire_network_globe.ico",
+    icon: "/icons/intl.cpl/000.ico",
     file: "intl.cpl",
   },
   {
     label: "Scanners and Cameras",
-    icon: "/icons/w98_scanner_camera.ico",
+    icon: "/icons/sticpl.cpl/000.ico",
     file: "sticpl.cpl",
   },
   {
     label: "Scheduled Tasks",
-    icon: "/icons/w2k_scheduled_tasks.ico",
+    icon: "/icons/mstask.dll/000.ico",
     file: "mstask.dll",
   },
   {
     label: "Sounds and Multimedia",
-    icon: "/icons/w98_mixer_sound.ico",
+    icon: "/icons/mmsys.cpl/000.ico",
     file: "mmsys.cpl",
   },
   {
     label: "System",
-    icon: "/icons/w2k_computer.ico",
+    icon: "/icons/sysdm.cpl/000.ico",
     onOpen: () => openApp("system-properties"),
     file: "sysdm.cpl",
   },
   {
     label: "Telephony",
-    icon: "/icons/w98_telephony.ico",
+    icon: "/icons/telephon.cpl/000.ico",
     file: "telephon.cpl",
   },
-  { label: "Users", icon: "/icons/w98_users.ico", file: "nwc.cpl" },
+  { label: "Users", icon: "/icons/nwc.cpl/000.ico", file: "nwc.cpl" },
 ];
 
 interface CtxState {
@@ -718,13 +718,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
       windowId,
       isRoot ? MY_COMPUTER : fullPathInTitleBar ? path : leafName(path),
     );
-    let icon = "/icons/w98_directory_open.ico";
+    let icon = "/icons/shell32.dll/116.ico";
     if (isRoot) {
       icon = "/icons/explorer.exe/000.ico";
     } else if (path === "Control Panel") {
-      icon = "/icons/w2k_control_panel.ico";
+      icon = "/icons/shell32.dll/112.ico";
     } else if (path === "Games") {
-      icon = "/icons/w98_joystick.ico";
+      icon = "/icons/games.exe/000.ico";
     } else if (isDriveRoot) {
       icon =
         DRIVES.find((d) => d.target === path)?.icon ??

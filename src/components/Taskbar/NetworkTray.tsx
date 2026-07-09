@@ -12,7 +12,7 @@ const Wrap = styled.div`
 export function NetworkTray() {
   return (
     <Wrap title={"Internet Connection\nConnected"}>
-      <Icon src="/icons/w98_conn_pcs_on_on.ico" size={16} />
+      <Icon src="/icons/netshell.dll/000.ico" size={16} />
     </Wrap>
   );
 }

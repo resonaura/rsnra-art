@@ -14,6 +14,26 @@ const activeAnimations: Record<string, AniState> = {};
 const curHotspotCache: Record<string, [number, number]> = {};
 const aniHotspotCache: Record<string, [number, number]> = {};
 const curBlobUrlCache: Record<string, string> = {};
+const aniFrameListeners: Record<string, Set<(url: string) => void>> = {};
+
+function currentAniFrameUrl(file: string): string {
+  const state = activeAnimations[file];
+  if (!state) return "";
+  const frameIdx = state.seq ? state.seq[state.currentStep] : state.currentStep;
+  return state.frames[frameIdx] ?? "";
+}
+
+// Lets a consumer (e.g. SoftwareCursor) keep displaying the current frame of
+// a running .ani animation instead of a single static snapshot. Calls back
+// immediately with the current frame, if one is already available.
+export function subscribeAniFrame(file: string, cb: (url: string) => void): () => void {
+  (aniFrameListeners[file] ??= new Set()).add(cb);
+  const url = currentAniFrameUrl(file);
+  if (url) cb(url);
+  return () => {
+    aniFrameListeners[file]?.delete(cb);
+  };
+}
 
 async function fetchCurHotspot(url: string): Promise<[number, number]> {
   try {
@@ -61,6 +81,9 @@ export function getCachedHotspot(file: string): [number, number] {
 }
 
 export function getResolvedCursorUrl(file: string): string {
+  if (file.endsWith(".ani") || file.endsWith(".ANI")) {
+    return currentAniFrameUrl(file);
+  }
   return curBlobUrlCache[file] || `/cursors/${file}`;
 }
 
@@ -106,6 +129,7 @@ export async function startAni(file: string, url: string, shadowEnabled = true):
           `--cursor-anim-url-${safeName}`,
           `url("${frameUrl}")`
         );
+        aniFrameListeners[file]?.forEach((cb) => cb(frameUrl));
       }
 
       const duration = state.rate[step] || 100;

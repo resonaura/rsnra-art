@@ -185,7 +185,7 @@ export function RunDialog() {
     >
       <WindowContent>
         <IntroRow>
-          <Icon src="/icons/w2k_run.ico" size={32} isInReact95 />
+          <Icon src="/icons/shell32.dll/111.ico" size={32} isInReact95 />
           <IntroText>
             Type the name of a program, folder, document, or Internet
             resource, and RSNRA.ART will open it for you.

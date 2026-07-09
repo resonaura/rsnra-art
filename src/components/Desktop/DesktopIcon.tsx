@@ -131,7 +131,7 @@ export function DesktopIcon({
         <Icon src={icon} size={iconSize} />
         {shortcut && (
           <ShortcutOverlay
-            src="/icons/w2k_shortcut_overlay.ico"
+            src="/icons/shell32.dll/110.ico"
             alt=""
             draggable={false}
             aria-hidden

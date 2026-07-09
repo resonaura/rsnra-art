@@ -308,22 +308,22 @@ export function TaskManager(_props: { windowId: string }) {
                 </TableHead>
                 <TableBody>
                   {sortedProcs.map((row) => {
-                    let iconPath = "/icons/w98_executable.ico";
+                    let iconPath = "/icons/shell32.dll/107.ico";
                     if (row.windowId) {
                       const w = windows.find((win) => win.id === row.windowId);
                       if (w) iconPath = w.icon;
                     } else if (row.pid === 0) {
-                      iconPath = "/icons/w98_standby_monitor_moon.ico";
+                      iconPath = "/icons/powercfg.cpl/001.ico";
                     } else if (row.pid === 4) {
                       iconPath = "/icons/explorer.exe/000.ico";
                     } else if (row.name === "explorer.exe") {
-                      iconPath = "/icons/w98_directory_open.ico";
+                      iconPath = "/icons/shell32.dll/116.ico";
                     } else if (row.name === REAL_PROCESS_NAME) {
-                      iconPath = "/icons/w98_windows.ico";
+                      iconPath = "/icons/explorer.exe/013.ico";
                     } else if (row.name === "winlogon.exe") {
-                      iconPath = "/icons/w98_shut_down_normal.ico";
+                      iconPath = "/icons/shell32.dll/115.ico";
                     } else if (row.name === "services.exe") {
-                      iconPath = "/icons/w98_settings_gear.ico";
+                      iconPath = "/icons/shell32.dll/114.ico";
                     }
 
                     return (

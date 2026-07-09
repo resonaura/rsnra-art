@@ -291,7 +291,7 @@ export function Desktop() {
     const lnkIcon =
       node.name.toLowerCase() === "my computer.lnk"
         ? desktopIcons.myComputer
-        : lnk.icon || "/icons/w2k_shortcut.ico";
+        : lnk.icon || "/icons/shell32.dll/109.ico";
     return (
       <DesktopIcon
         key={node.name}

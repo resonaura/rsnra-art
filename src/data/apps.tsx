@@ -69,7 +69,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   notepad: {
     id: "notepad",
     title: "Notepad",
-    icon: "/icons/w2k_notepad_2.ico",
+    icon: "/icons/notepad.exe/000.ico",
     component: asComponent(Notepad),
     width: 480,
     height: 420,
@@ -78,7 +78,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   music: {
     id: "music",
     title: "RSNRA Music",
-    icon: "/icons/w98_cd_audio_cd.ico",
+    icon: "/icons/mmsys.cpl/005.ico",
     component: asComponent(Music),
     width: 420,
     height: 460,
@@ -87,7 +87,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   social: {
     id: "social",
     title: "Follow RSNRA",
-    icon: "/icons/w98_entire_network_globe.ico",
+    icon: "/icons/intl.cpl/000.ico",
     component: asComponent(Social),
     width: 420,
     height: 320,
@@ -96,7 +96,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   contact: {
     id: "contact",
     title: "Contact RSNRA",
-    icon: "/icons/w98_address_book_card.ico",
+    icon: "/icons/wab.exe/000.ico",
     component: asComponent(Contact),
     width: 440,
     height: 300,
@@ -104,7 +104,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   terminal: {
     id: "terminal",
     title: "Command Prompt",
-    icon: "/icons/w98_console_prompt.ico",
+    icon: "/icons/cmd.exe/000.ico",
     component: asComponent(TerminalApp),
     width: 600,
     height: 380,
@@ -115,7 +115,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   minesweeper: {
     id: "minesweeper",
     title: "Minesweeper",
-    icon: "/icons/w98_minesweeper.ico",
+    icon: "/icons/winmine.exe/000.ico",
     component: asComponent(Minesweeper),
     width: 280,
     height: 384,
@@ -125,7 +125,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   snake: {
     id: "snake",
     title: "RSNRA Snake",
-    icon: "/icons/w98_joystick.ico",
+    icon: "/icons/games.exe/000.ico",
     component: asComponent(Snake),
     width: 340,
     height: 400,
@@ -134,7 +134,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "games-folder": {
     id: "games-folder",
     title: "Games",
-    icon: "/icons/w98_joystick.ico",
+    icon: "/icons/games.exe/000.ico",
     component: asComponent(MyComputer),
     width: 440,
     height: 360,
@@ -143,7 +143,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "recycle-bin": {
     id: "recycle-bin",
     title: "Recycle Bin",
-    icon: "/icons/w2k_recycle_bin_empty.ico",
+    icon: "/icons/shell32.dll/079.ico",
     component: asComponent(RecycleBin),
     width: 380,
     height: 300,
@@ -152,7 +152,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   help: {
     id: "help",
     title: "Help Topics",
-    icon: "/icons/w98_help_book_big.ico",
+    icon: "/icons/winhlp32.exe/000.ico",
     component: asComponent(Help),
     width: 460,
     height: 440,
@@ -161,7 +161,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "control-panel": {
     id: "control-panel",
     title: "Control Panel",
-    icon: "/icons/w2k_control_panel.ico",
+    icon: "/icons/shell32.dll/112.ico",
     component: asComponent(MyComputer),
     width: 440,
     height: 440,
@@ -170,7 +170,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "display-properties": {
     id: "display-properties",
     title: "Display Properties",
-    icon: "/icons/w98_display_properties.ico",
+    icon: "/icons/desk.cpl/000.ico",
     component: asComponent(DisplayProperties),
     width: 480,
     height: 600,
@@ -180,7 +180,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "mouse-properties": {
     id: "mouse-properties",
     title: "Mouse Properties",
-    icon: "/icons/w98_mouse.ico",
+    icon: "/icons/mouse.cpl/000.ico",
     component: asComponent(MouseProperties),
     width: 420,
     height: 480,
@@ -200,7 +200,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   paint: {
     id: "paint",
     title: "untitled - Paint",
-    icon: "/icons/w98_paint.ico",
+    icon: "/icons/mspaint.exe/000.ico",
     component: asComponent(Paint),
     width: 720,
     height: 540,
@@ -211,7 +211,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "paint-fonts": {
     id: "paint-fonts",
     title: "Fonts",
-    icon: "/icons/w98_paint.ico",
+    icon: "/icons/mspaint.exe/000.ico",
     component: asComponent(PaintFonts),
     width: 340,
     height: 78,
@@ -221,7 +221,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   find: {
     id: "find",
     title: "Find: All Files",
-    icon: "/icons/w98_search_file.ico",
+    icon: "/icons/shell32.dll/113.ico",
     component: asComponent(Find),
     width: 480,
     height: 360,
@@ -233,7 +233,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   properties: {
     id: "properties",
     title: "Properties",
-    icon: "/icons/w98_directory_open.ico",
+    icon: "/icons/shell32.dll/116.ico",
     component: asComponent(Properties),
     width: 340,
     height: 490,
@@ -243,7 +243,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "folder-options": {
     id: "folder-options",
     title: "Folder Options",
-    icon: "/icons/w98_directory_open.ico",
+    icon: "/icons/shell32.dll/116.ico",
     component: asComponent(FolderOptions),
     width: 380,
     height: 580,
@@ -252,7 +252,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   datetime: {
     id: "datetime",
     title: "Date/Time Properties",
-    icon: "/icons/w98_clock.ico",
+    icon: "/icons/timedate.cpl/001.ico",
     component: asComponent(DateTime),
     width: 340,
     height: 460,
@@ -262,7 +262,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   calculator: {
     id: "calculator",
     title: "Calculator",
-    icon: "/icons/w98_calculator.ico",
+    icon: "/icons/calc.exe/000.ico",
     component: asComponent(Calculator),
     width: 260,
     height: 360,
@@ -273,7 +273,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "sound-recorder": {
     id: "sound-recorder",
     title: "Sound Recorder",
-    icon: "/icons/w98_cassette_tape.ico",
+    icon: "/icons/mmsys.cpl/004.ico",
     component: asComponent(SoundRecorder),
     width: 380,
     height: 220,
@@ -284,7 +284,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   solitaire: {
     id: "solitaire",
     title: "Solitaire",
-    icon: "/icons/w98_game_solitaire.ico",
+    icon: "/icons/sol.exe/000.ico",
     component: asComponent(Solitaire),
     width: 640,
     height: 480,
@@ -307,7 +307,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "task-manager": {
     id: "task-manager",
     title: "Task Manager",
-    icon: "/icons/w98_computer_taskmgr.ico",
+    icon: "/icons/taskmgr.exe/000.ico",
     component: asComponent(TaskManager),
     width: 420,
     height: 420,
@@ -319,7 +319,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   charmap: {
     id: "charmap",
     title: "Character Map",
-    icon: "/icons/w98_charmap.ico",
+    icon: "/icons/charmap.exe/000.ico",
     component: asComponent(CharMap),
     width: 420,
     height: 420,
@@ -334,7 +334,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   winamp: {
     id: "winamp",
     title: "Winamp",
-    icon: "/icons/WinAMP_7.ico",
+    icon: "/icons/winamp.exe/000.ico",
     component: asComponent(() => null),
     width: 275,
     height: 116,

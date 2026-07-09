@@ -33,48 +33,48 @@ import { lnkIcon, parseLnk } from "./shortcuts";
 // Keep sorted alphabetically for readability.
 const EXT_ICONS: Readonly<Record<string, string>> = {
   // Text / documents (Notepad)
-  txt: "/icons/w98_file_lines.ico",
-  log: "/icons/w98_file_lines.ico",
+  txt: "/icons/notepad.exe/001.ico",
+  log: "/icons/notepad.exe/001.ico",
   // Images (Paint)
-  bmp: "/icons/w98_paint.ico",
-  png: "/icons/w98_imagPNG.ico",
-  jpg: "/icons/w98_imagJPEG.ico",
-  jpeg: "/icons/w98_imagJPEG.ico",
-  gif: "/icons/w98_imagGIF.ico",
+  bmp: "/icons/mspaint.exe/000.ico",
+  png: "/icons/shimgvw.dll/000.ico",
+  jpg: "/icons/shimgvw.dll/001.ico",
+  jpeg: "/icons/shimgvw.dll/001.ico",
+  gif: "/icons/shimgvw.dll/002.ico",
   // Audio (Sound Recorder / Winamp)
-  wav: "/icons/w2k_wave_sound.ico",
-  mp3: "/icons/w98_cd_audio_cd.ico",
-  mid: "/icons/w2k_midi_sequence.ico",
-  midi: "/icons/w2k_midi_sequence.ico",
-  rmi: "/icons/w2k_midi_sequence.ico",
-  ogg: "/icons/w98_cd_audio_cd.ico",
+  wav: "/icons/mmsys.cpl/002.ico",
+  mp3: "/icons/mmsys.cpl/005.ico",
+  mid: "/icons/mmsys.cpl/003.ico",
+  midi: "/icons/mmsys.cpl/003.ico",
+  rmi: "/icons/mmsys.cpl/003.ico",
+  ogg: "/icons/mmsys.cpl/005.ico",
   // System / config
-  ini: "/icons/w2k_ini_&_inf.ico",
-  inf: "/icons/w2k_ini_&_inf.ico",
-  sys: "/icons/w2k_ini_&_inf.ico",
-  reg: "/icons/w2k_ini_&_inf.ico",
-  dll: "/icons/w2k_ini_&_inf.ico",
+  ini: "/icons/shell32.dll/106.ico",
+  inf: "/icons/shell32.dll/106.ico",
+  sys: "/icons/shell32.dll/106.ico",
+  reg: "/icons/shell32.dll/106.ico",
+  dll: "/icons/shell32.dll/106.ico",
   // Executables
-  exe: "/icons/w98_executable.ico",
-  com: "/icons/w98_executable_script.ico",
-  bat: "/icons/w2k_ms-dos_batch_file.ico",
+  exe: "/icons/shell32.dll/107.ico",
+  com: "/icons/shell32.dll/108.ico",
+  bat: "/icons/moricons.dll/000.ico",
   // Help / docs
-  hlp: "/icons/w2k_help.ico",
-  chm: "/icons/w2k_help.ico",
+  hlp: "/icons/shell32.dll/069.ico",
+  chm: "/icons/shell32.dll/069.ico",
   // Fonts
-  fon: "/icons/w2k_font_2.ico",
-  ttf: "/icons/w2k_font_2.ico",
+  fon: "/icons/shell32.dll/027.ico",
+  ttf: "/icons/shell32.dll/027.ico",
   // Cursors
-  cur: "/icons/w98_mouse.ico",
-  ani: "/icons/w98_mouse.ico",
+  cur: "/icons/mouse.cpl/000.ico",
+  ani: "/icons/mouse.cpl/000.ico",
   // Shortcuts
-  lnk: "/icons/w2k_shortcut.ico",
+  lnk: "/icons/shell32.dll/109.ico",
   // Archives
-  zip: "/icons/w98_zip.ico",
-  cab: "/icons/w98_zip.ico",
+  zip: "/icons/zipfldr.dll/000.ico",
+  cab: "/icons/zipfldr.dll/000.ico",
   // WordPad / rich text
-  doc: "/icons/w98_wordpad.ico",
-  rtf: "/icons/w98_wordpad.ico",
+  doc: "/icons/wordpad.exe/000.ico",
+  rtf: "/icons/wordpad.exe/000.ico",
 };
 
 // ─── Extension → descriptive type name ────────────────────────────────────────
@@ -141,20 +141,20 @@ export function iconPickerPool(): string[] {
 // ─── Named folder icons ───────────────────────────────────────────────────────
 // Key = lowercase folder name. Add entries here for well-known directories.
 const SPECIAL_FOLDER_ICONS: Readonly<Record<string, string>> = {
-  windows: "/icons/explorer.exe/095.ico",
-  "program files": "/icons/explorer.exe/095.ico",
+  windows: "/icons/shell32.dll/095.ico",
+  "program files": "/icons/shell32.dll/095.ico",
   "my documents": "/icons/explorer.exe/011.ico",
   "my pictures": "/icons/explorer.exe/012.ico",
   "start menu": "/icons/shell32.dll/095.ico",
   programs: "/icons/shell32.dll/083.ico",
   accessories: "/icons/shell32.dll/095.ico",
-  games: "/icons/games/000.ico",
+  games: "/icons/games.exe/000.ico",
   desktop: "/icons/shell32.dll/095.ico",
   recycled: "/icons/shell32.dll/078.ico",
   temp: "/icons/shell32.dll/095.ico",
   system: "/icons/shell32.dll/095.ico",
   cursors: "/icons/mouse.cpl/000.ico",
-  media: "/icons/sndrec32.dll/001.ico",
+  media: "/icons/sndrec32.exe/001.ico",
   fonts: "/icons/shell32.dll/027.ico",
   help: "/icons/shell32.dll/069.ico",
   winamp: "/icons/winamp.exe/000.ico",

@@ -191,7 +191,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         {isEmpty ? (
           <EmptyState>
             <Icon
-              src="/icons/w2k_recycle_bin_empty.ico"
+              src="/icons/shell32.dll/079.ico"
               size={48}
               style={{ width: 48, height: 48 }}
             />

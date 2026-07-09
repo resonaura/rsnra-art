@@ -87,7 +87,7 @@ export function VolumeControl() {
         }}
       >
         <Icon
-          src="/icons/w98_loudspeaker_rays.ico"
+          src="/icons/mmsys.cpl/001.ico"
           size={16}
           style={{ opacity: muted || volume === 0 ? 0.5 : 1 }}
         />
