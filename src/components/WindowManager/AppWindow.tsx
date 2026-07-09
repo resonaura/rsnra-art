@@ -36,6 +36,13 @@ const StyledHeader = styled(WindowHeader)`
     color: ${({ active, theme }) =>
       active ? theme.headerText : theme.headerNotActiveText} !important;
   }
+
+  /* Active Title Bar "Color 2": always a gradient, falling back to a flat
+     headerBackground->headerBackground stop when no second color is set, so
+     it reads as solid until the user actually picks one in Appearance. */
+  ${({ active, theme }) =>
+    active &&
+    `background: linear-gradient(to right, ${theme.headerBackground}, var(--rsnra-header-gradient-end, ${theme.headerBackground})) !important;`}
 `;
 
 const HeaderTitle = styled.div`
@@ -45,7 +52,10 @@ const HeaderTitle = styled.div`
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 16px;
+  font-family: var(--rsnra-font-window-family, inherit);
+  font-size: var(--rsnra-font-window-size, 16px);
+  font-weight: var(--rsnra-font-window-weight, bold);
+  font-style: var(--rsnra-font-window-style, normal);
   img {
     width: 16px;
     height: 16px;

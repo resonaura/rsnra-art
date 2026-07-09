@@ -77,9 +77,26 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   showDesktopStash: null,
   desktopRestartCount: 0,
   quickLaunchItems: [
-    { id: "show-desktop", title: "Show Desktop", icon: "/icons/w2k_desktop.ico", type: "show-desktop" },
-    { id: "terminal", title: "MS-DOS Prompt", icon: "/icons/w98_console_prompt.ico", type: "app", appId: "terminal" },
-    { id: "notepad", title: "Notepad", icon: "/icons/w2k_notepad_2.ico", type: "app", appId: "notepad" },
+    {
+      id: "show-desktop",
+      title: "Show Desktop",
+      icon: "/icons/shell32.dll/003.ico",
+      type: "show-desktop",
+    },
+    {
+      id: "terminal",
+      title: "Command Prompt",
+      icon: "/icons/cmd.exe/000.ico",
+      type: "app",
+      appId: "terminal",
+    },
+    {
+      id: "notepad",
+      title: "Notepad",
+      icon: "/icons/notepad.exe/000.ico",
+      type: "app",
+      appId: "notepad",
+    },
   ],
 
   openWindow: (config) => {
@@ -281,11 +298,16 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   },
   addToQuickLaunch: (item) => {
     const vfs = useVfsStore.getState();
-    const name = item.title.toLowerCase().endsWith(".lnk") ? item.title : `${item.title}.lnk`;
+    const name = item.title.toLowerCase().endsWith(".lnk")
+      ? item.title
+      : `${item.title}.lnk`;
     const qlPath = `C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch\\${name}`;
     const content = JSON.stringify({
       type: item.type === "show-desktop" ? "url" : item.type,
-      target: item.type === "show-desktop" ? "show-desktop" : item.appId || item.lnkPath,
+      target:
+        item.type === "show-desktop"
+          ? "show-desktop"
+          : item.appId || item.lnkPath,
       icon: item.icon,
       title: item.title,
       data: item.data,

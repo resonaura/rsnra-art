@@ -9,7 +9,10 @@ export const MenuBarRow = styled.div`
   display: flex;
   height: 22px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-family: var(--rsnra-font-menu-family, inherit);
+  font-size: var(--rsnra-font-menu-size, 12px);
+  font-weight: var(--rsnra-font-menu-weight, normal);
+  font-style: var(--rsnra-font-menu-style, normal);
   background: ${({ theme }) => theme.material};
   border-bottom: 1px solid ${({ theme }) => theme.borderDark};
 `;
@@ -21,12 +24,14 @@ const MenuTopItem = styled.button<{ $open: boolean }>`
     $open ? theme.headerText : theme.materialText};
   border: none;
   padding: 2px 8px;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: inherit;
   cursor: default;
 `;
 
 const StyledMenuList = styled(MenuList)`
   padding: 6px 4px;
+  font-family: var(--rsnra-font-menu-family, inherit);
 `;
 
 const ItemContent = styled.span`

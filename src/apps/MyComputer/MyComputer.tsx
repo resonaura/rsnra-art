@@ -18,9 +18,9 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
+import { showMissingFileAlert } from "../../lib/systemDialogs";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
-import { showMissingFileAlert } from "../../lib/systemDialogs";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
@@ -376,39 +376,33 @@ interface Drive {
 const DRIVES: Drive[] = [
   {
     label: "3½ Floppy (A:)",
-    icon: "/icons/w2k_floppy_2.ico",
+    icon: "/icons/shell32.dll/102.ico",
     target: "A:\\",
     kind: "drive",
     notReady: true,
   },
   {
     label: "Local Disk (C:)",
-    icon: "/icons/w2k_hard_drive.ico",
+    icon: "/icons/shell32.dll/105.ico",
     target: "C:\\",
     kind: "drive",
   },
   {
     label: "Audio CD (D:)",
-    icon: "/icons/w2k_cd_audio.ico",
+    icon: "/icons/shell32.dll/003.ico",
     target: "D:\\",
     kind: "drive",
     notReady: true,
   },
   {
     label: "Control Panel",
-    icon: "/icons/w2k_control_panel.ico",
+    icon: "/icons/shell32.dll/008.ico",
     target: "Control Panel",
     kind: "drive",
   },
   {
     label: "Printers",
-    icon: "/icons/w2k_printers.ico",
-    target: "",
-    kind: "app",
-  },
-  {
-    label: "Dial-Up Networking",
-    icon: "/icons/w2k_folder_open.ico",
+    icon: "/icons/shell32.dll/009.ico",
     target: "",
     kind: "app",
   },

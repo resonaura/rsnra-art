@@ -5,17 +5,25 @@ import {
   GroupBox,
   Monitor,
   NumberInput,
+  Window as R95Window,
   Select,
   Separator,
   Tab,
   TabBody,
   Tabs,
+  TextInput,
+  WindowHeader,
 } from "react95";
+import type { Theme } from "react95/dist/themes/types";
 import styled, { ThemeProvider } from "styled-components";
+import { ColorPickerDialog } from "../../components/ColorPickerDialog/ColorPickerDialog";
 import { FileDialog } from "../../components/FileDialog/FileDialog";
+import { Icon } from "../../components/Icon/Icon";
 import { IconPickerDialog } from "../../components/IconPickerDialog/IconPickerDialog";
 import { ScrollArea } from "../../components/ScrollArea";
+import { Slider95 } from "../../components/Slider95/Slider95";
 import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
+import { CloseGlyph } from "../../components/WindowManager/windowGlyphs";
 import { iconPickerPool } from "../../data/fileIcons";
 import {
   DEFAULT_WALLPAPER_FILES,
@@ -24,6 +32,7 @@ import {
   wallpaperUrl,
 } from "../../data/wallpapers";
 import { PATTERN_NAMES, patternDataUri } from "../../lib/patterns";
+import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { R95_SCALE } from "../../react95.conf";
 import { SCREENSAVERS, getScreenSaver } from "../../screensavers";
 import {
@@ -31,10 +40,21 @@ import {
   useDisplayStore,
   type ColorDepth,
   type DesktopIconSlot,
+  type FontSizeOption,
   type WallpaperMode,
 } from "../../store/displayStore";
 import { useSaverRunStore } from "../../store/saverRunStore";
-import { THEMES, getThemeById, useThemeStore } from "../../store/themeStore";
+import {
+  FONT_FAMILIES,
+  ITEM_FONT_SIZES,
+  THEMES,
+  fontFamilyCss,
+  isBuiltinLabel,
+  resolveThemeId,
+  useThemeStore,
+  type AppearanceItemId,
+  type ItemFont,
+} from "../../store/themeStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -59,8 +79,15 @@ interface StagedState {
   largeIcons: boolean;
   fullColorIcons: boolean;
   dragFullWindows: boolean;
+  fontSize: FontSizeOption;
   desktopIcons: Record<DesktopIconSlot, string>;
   themeId: string;
+  /** Unsaved Appearance ▸ Item color tweaks layered on top of `themeId`. */
+  themeOverrides: Partial<Theme>;
+  /** Unsaved Appearance ▸ Item font tweaks. */
+  itemFonts: Partial<Record<AppearanceItemId, ItemFont>>;
+  /** Unsaved Active Title Bar "Color 2" (gradient end) tweak. */
+  headerGradientEnd: string | null;
 }
 
 type UpdateStaged = (partial: Partial<StagedState>) => void;
@@ -80,6 +107,7 @@ const SCALAR_KEYS = [
   "largeIcons",
   "fullColorIcons",
   "dragFullWindows",
+  "fontSize",
 ] as const;
 
 const ICON_SLOTS: { slot: DesktopIconSlot; label: string }[] = [
@@ -517,93 +545,101 @@ function ScreenSaverTab({
 
 // ─── Appearance tab ───────────────────────────────────────────────────────────
 
-const WIN_PALETTE = [
-  "#000000",
-  "#800000",
-  "#008000",
-  "#808000",
-  "#000080",
-  "#800080",
-  "#008080",
-  "#808080",
-  "#C0C0C0",
-  "#FF0000",
-  "#00FF00",
-  "#FFFF00",
-  "#0000FF",
-  "#FF00FF",
-  "#00FFFF",
-  "#FFFFFF",
-  "#2d1b4e",
-  "#3a6ea5",
-  "#5f9ea0",
-  "#654321",
-];
-
 const AppearancePreviewBox = styled.div<{ $bg: string }>`
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest}
     ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest};
-  height: 96px;
+  height: 245px;
   position: relative;
   overflow: hidden;
   background: ${({ $bg }) => $bg};
 `;
 
-const PreviewMiniWin = styled.div`
+// Real react95 Window + WindowHeader, shrunk via `zoom` (the same technique
+// AppWindow/SystemDialog use) so the preview is pixel-identical to an actual
+// window — not an approximation — for whatever scheme is being edited.
+const PreviewWinWrap = styled.div`
   position: absolute;
-  top: 24px;
-  left: 12px;
-  width: 150px;
-  height: 66px;
-  background: ${({ theme }) => theme.material};
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
 `;
 
-const PreviewTitleBar = styled.div`
-  background: linear-gradient(
-    90deg,
-    ${({ theme }) => theme.headerBackground},
-    ${({ theme }) => theme.headerNotActiveBackground ?? theme.headerBackground}
-  );
-  color: ${({ theme }) => theme.headerText};
-  height: 14px;
+const PreviewHeaderRow = styled(WindowHeader)`
   display: flex;
   align-items: center;
-  padding: 0 4px;
-  font-size: 9px;
-  font-weight: bold;
+  justify-content: space-between;
+  gap: 6px;
 `;
 
-const PreviewMiniBtn = styled.div`
-  width: 12px;
-  height: 10px;
-  background: ${({ theme }) => theme.material};
-  border: 1px solid ${({ theme }) => theme.borderDark};
-  margin-left: auto;
+// No size override here on purpose: react95's WindowHeader already sizes its
+// own Button children (27×31, see react95's internal CSS) — matching that
+// natively, rather than guessing pixel values, is what makes this read as a
+// real window's close button instead of an approximation.
+const PreviewCloseBtn = styled(Button)`
+  flex-shrink: 0;
+`;
+
+// CloseGlyph bakes in R95_SCALE_COMPENSATION (1/0.7) so it renders at a crisp
+// 16px once shrunk by the real app's `zoom: R95_SCALE` window wrapper. This
+// preview zooms by a different factor, so wrapping the glyph in its own
+// `zoom: R95_SCALE` span first cancels that bake-in back to a native 16px —
+// which the preview's own outer zoom then scales consistently with
+// everything else around it, instead of coming out oversized.
+const GlyphZoomFix = styled.span`
+  display: inline-flex;
+  zoom: ${R95_SCALE};
+`;
+
+// "Normal / Disabled / Selected" sample row, demonstrating the scheme's
+// regular, disabled, and selection colors side by side — same idea as the
+// real dialog's listbox-state sample.
+const StatesRow = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 7px;
+  gap: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: ${({ theme }) => theme.material};
+  border-bottom: 1px solid ${({ theme }) => theme.borderDark};
+`;
+
+const NormalSample = styled.span`
   color: ${({ theme }) => theme.materialText};
+`;
+const DisabledSample = styled.span`
+  color: ${({ theme }) => theme.materialTextDisabled};
+`;
+const SelectedSample = styled.span`
+  padding: 0 3px;
+  background: ${({ theme }) => theme.headerBackground};
+  color: ${({ theme }) => theme.headerText};
 `;
 
 const PreviewBody = styled.div`
-  padding: 4px;
-  font-size: 9px;
-  color: ${({ theme }) => theme.materialText};
+  position: relative;
+  display: flex;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  background: ${({ theme }) => theme.canvas};
+  color: ${({ theme }) => theme.canvasText};
+  flex: 1;
 `;
 
-const PreviewInactiveWin = styled.div`
+// Decorative (non-interactive) Win95 scrollbar, just for preview authenticity.
+const FakeScrollbar = styled.div`
   position: absolute;
-  top: 8px;
-  left: 34px;
-  width: 150px;
-  height: 60px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15px;
+  background: ${({ theme }) => theme.material};
+  border-left: 1px solid ${({ theme }) => theme.borderDark};
+`;
+const FakeScrollThumb = styled.div`
+  position: absolute;
+  top: 4px;
+  left: 1px;
+  right: 1px;
+  height: 40px;
   background: ${({ theme }) => theme.material};
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderLightest}
@@ -611,22 +647,31 @@ const PreviewInactiveWin = styled.div`
     ${({ theme }) => theme.borderLightest};
 `;
 
-const InactiveTitleBar = styled.div`
-  background: ${({ theme }) =>
-    theme.headerNotActiveBackground ?? theme.borderDark};
-  height: 14px;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  font-size: 9px;
-  font-weight: bold;
-  color: ${({ theme }) => theme.headerNotActiveText ?? "#c0c0c0"};
+const MsgBoxWrap = styled.div`
+  position: absolute;
 `;
 
-const Swatch = styled.button<{ $color: string; $disabled?: boolean }>`
+const MsgBoxBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  background: ${({ theme }) => theme.canvas};
+  color: ${({ theme }) => theme.canvasText};
+`;
+
+const MsgBoxOkBtn = styled(Button)`
+  width: 56px !important;
+  height: 18px !important;
+  font-size: 11px;
+`;
+
+const Swatch = styled.button<{ $color: string | null; $disabled?: boolean }>`
   width: 40px;
   height: 20px;
-  background: ${({ $color }) => $color};
+  background: ${({ $color, theme }) => $color ?? theme.canvas};
   border: 2px solid;
   border-color: ${({ theme }) => theme.borderDarkest}
     ${({ theme }) => theme.borderLightest}
@@ -634,33 +679,133 @@ const Swatch = styled.button<{ $color: string; $disabled?: boolean }>`
   cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
   opacity: ${({ $disabled }) => ($disabled ? 0.5 : 1)};
   padding: 0;
+  ${({ $color, theme, $disabled }) =>
+    $color === null &&
+    !$disabled &&
+    `background-image: linear-gradient(45deg, ${theme.borderDark} 25%, transparent 25%, transparent 75%, ${theme.borderDark} 75%), linear-gradient(45deg, ${theme.borderDark} 25%, transparent 25%, transparent 75%, ${theme.borderDark} 75%);
+     background-size: 8px 8px;
+     background-position: 0 0, 4px 4px;`}
 `;
 
-const PaletteWrap = styled.div`
-  position: absolute;
-  z-index: 10;
-  top: 24px;
-  left: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 20px);
-  gap: 2px;
-  padding: 4px;
-  background: ${({ theme }) => theme.material};
-  border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderLightest};
+const ToggleBtn = styled(Button)`
+  width: 26px !important;
+  height: 22px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  font-size: 12px;
+  flex-shrink: 0;
 `;
 
-const PaletteCell = styled.button<{ $color: string; $active: boolean }>`
-  width: 20px;
-  height: 16px;
-  padding: 0;
-  background: ${({ $color }) => $color};
-  border: 1px solid ${({ $active }) => ($active ? "#fff" : "#000")};
-  outline: ${({ $active }) => ($active ? "1px solid #000" : "none")};
-  cursor: pointer;
-`;
+// Real Windows 95 Appearance ▸ Item list, reduced to the items this app
+// actually renders distinct chrome for. `bgKey`/`textKey` point at the Theme
+// fields that item's swatches edit; `fontId` (when present) is which
+// itemFonts slot its Font/Size controls edit. Desktop has no theme keys of
+// its own — it edits the Background tab's live desktop color directly, same
+// as real Windows (Desktop is one setting shared by both tabs).
+interface AppearanceItemDef {
+  id: string;
+  label: string;
+  bgKey?: keyof Theme;
+  textKey?: keyof Theme;
+  fontId?: AppearanceItemId;
+}
+
+const APPEARANCE_ITEMS: AppearanceItemDef[] = [
+  { id: "desktop", label: "Desktop" },
+  {
+    id: "window",
+    label: "Active Title Bar",
+    bgKey: "headerBackground",
+    textKey: "headerText",
+    fontId: "window",
+  },
+  {
+    id: "inactive",
+    label: "Inactive Title Bar",
+    bgKey: "headerNotActiveBackground",
+    textKey: "headerNotActiveText",
+  },
+  {
+    id: "menu",
+    label: "Menu",
+    bgKey: "material",
+    textKey: "materialText",
+    fontId: "menu",
+  },
+  {
+    id: "msgbox",
+    label: "Message Box",
+    bgKey: "canvas",
+    textKey: "canvasText",
+    fontId: "msgbox",
+  },
+  { id: "tooltip", label: "ToolTip", bgKey: "tooltip" },
+];
+
+const DEFAULT_ITEM_FONT_SIZE: Record<AppearanceItemId, number> = {
+  window: 16,
+  menu: 12,
+  msgbox: 13,
+};
+
+function SaveSchemeDialog({
+  initialName,
+  onSave,
+  onCancel,
+}: {
+  initialName: string;
+  onSave: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const trimmed = name.trim();
+
+  return (
+    <SystemDialog title="Save Scheme" width={300} onClose={onCancel}>
+      <div
+        style={{
+          padding: "12px 14px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <span>Save this color scheme as:</span>
+        <TextInput
+          value={name}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setName(e.target.value)
+          }
+          fullWidth
+          autoFocus
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" && trimmed) onSave(trimmed);
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 6,
+            marginTop: 4,
+          }}
+        >
+          <Button
+            primary
+            style={{ width: 72 }}
+            disabled={!trimmed}
+            onClick={() => onSave(trimmed)}
+          >
+            OK
+          </Button>
+          <Button style={{ width: 72 }} onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </SystemDialog>
+  );
+}
 
 function AppearanceTab({
   staged,
@@ -670,43 +815,256 @@ function AppearanceTab({
   update: UpdateStaged;
 }) {
   const [item, setItem] = useState("desktop");
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState<"bg" | "text" | "gradient2" | null>(
+    null,
+  );
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+
+  const customThemes = useThemeStore((s) => s.customThemes);
 
   const schemeOptions = THEMES.map((t) => ({ value: t.id, label: t.label }));
-  const stagedTheme = getThemeById(staged.themeId);
-  const colorEditable = item === "desktop";
+  const allSchemeOptions = [
+    ...schemeOptions,
+    ...customThemes.map((c) => ({ value: c.id, label: c.label })),
+  ];
+
+  const stagedTheme = useMemo(
+    () => ({
+      ...resolveThemeId(staged.themeId, customThemes),
+      ...staged.themeOverrides,
+    }),
+    [staged.themeId, staged.themeOverrides, customThemes],
+  );
+
+  const currentCustom = customThemes.find((c) => c.id === staged.themeId);
+  const hasPendingEdits =
+    Object.keys(staged.themeOverrides).length > 0 ||
+    JSON.stringify(staged.itemFonts) !==
+      JSON.stringify(currentCustom?.itemFonts ?? {});
+  const currentLabel =
+    allSchemeOptions.find((o) => o.value === staged.themeId)?.label ?? "Custom";
+  const displaySchemeOptions = hasPendingEdits
+    ? [
+        ...allSchemeOptions,
+        { value: "__modified__", label: `${currentLabel} (Modified)` },
+      ]
+    : allSchemeOptions;
+  const schemeSelectValue = hasPendingEdits ? "__modified__" : staged.themeId;
+
+  const itemDef = APPEARANCE_ITEMS.find((i) => i.id === item);
+
+  const itemBg =
+    item === "desktop"
+      ? staged.desktopColor
+      : itemDef?.bgKey
+        ? (stagedTheme[itemDef.bgKey] as string)
+        : "#c0c0c0";
+  const itemText = itemDef?.textKey
+    ? (stagedTheme[itemDef.textKey] as string)
+    : null;
+
+  const setItemBg = (color: string) => {
+    if (item === "desktop") {
+      update({ desktopColor: color });
+      return;
+    }
+    if (!itemDef?.bgKey) return;
+    update({
+      themeOverrides: { ...staged.themeOverrides, [itemDef.bgKey]: color },
+    });
+  };
+  const setItemText = (color: string) => {
+    if (!itemDef?.textKey) return;
+    update({
+      themeOverrides: { ...staged.themeOverrides, [itemDef.textKey]: color },
+    });
+  };
+
+  const itemFont = itemDef?.fontId
+    ? staged.itemFonts[itemDef.fontId]
+    : undefined;
+  const fontEditable = !!itemDef?.fontId;
+  const currentFamily = itemFont?.family ?? "ms_sans_serif";
+  const currentSize =
+    itemFont?.size ??
+    (itemDef?.fontId ? DEFAULT_ITEM_FONT_SIZE[itemDef.fontId] : 12);
+
+  const setItemFont = (patch: Partial<ItemFont>) => {
+    if (!itemDef?.fontId) return;
+    update({
+      itemFonts: {
+        ...staged.itemFonts,
+        [itemDef.fontId]: {
+          family: currentFamily,
+          size: currentSize,
+          ...patch,
+        },
+      },
+    });
+  };
+
+  const windowFont = staged.itemFonts.window;
+  const windowFontStyle: CSSProperties | undefined = windowFont
+    ? {
+        fontFamily: fontFamilyCss(windowFont.family),
+        fontSize: `${windowFont.size}px`,
+        fontWeight: windowFont.bold === false ? "normal" : "bold",
+        fontStyle: windowFont.italic ? "italic" : "normal",
+      }
+    : undefined;
+
+  const menuFont = staged.itemFonts.menu;
+  const menuFontStyle: CSSProperties | undefined = menuFont
+    ? {
+        fontFamily: fontFamilyCss(menuFont.family),
+        fontSize: `${menuFont.size}px`,
+        fontWeight: menuFont.bold ? "bold" : "normal",
+        fontStyle: menuFont.italic ? "italic" : "normal",
+      }
+    : undefined;
+
+  const msgboxFont = staged.itemFonts.msgbox;
+  const msgboxFontStyle: CSSProperties | undefined = msgboxFont
+    ? {
+        fontFamily: fontFamilyCss(msgboxFont.family),
+        fontSize: `${msgboxFont.size}px`,
+        fontWeight: msgboxFont.bold ? "bold" : "normal",
+        fontStyle: msgboxFont.italic ? "italic" : "normal",
+      }
+    : undefined;
+
+  const activeHeaderStyle: CSSProperties = {
+    ...windowFontStyle,
+    background: `linear-gradient(to right, ${stagedTheme.headerBackground}, ${staged.headerGradientEnd ?? stagedTheme.headerBackground})`,
+  };
+
+  const handleSaveAs = async (name: string) => {
+    if (isBuiltinLabel(name)) {
+      await alertError(
+        "Save Scheme",
+        `"${name}" is a system color scheme and cannot be overwritten. Please choose a different name.`,
+      );
+      return;
+    }
+    const existing = customThemes.find(
+      (c) => c.label.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) {
+      const res = await confirmDialog(
+        "Save Scheme",
+        `The color scheme "${name}" already exists.\nDo you want to replace it?`,
+        "yesno",
+      );
+      if (res !== "yes") return;
+    }
+    const id = existing?.id ?? `custom:${crypto.randomUUID()}`;
+    useThemeStore
+      .getState()
+      .saveCustom(id, name, stagedTheme, staged.itemFonts, staged.headerGradientEnd);
+    update({ themeId: id, themeOverrides: {} });
+    setSaveAsOpen(false);
+  };
+
+  const handleDelete = async () => {
+    if (!currentCustom) return;
+    const res = await confirmDialog(
+      "Delete Scheme",
+      `Are you sure you want to delete the "${currentCustom.label}" scheme?`,
+      "yesno",
+    );
+    if (res !== "yes") return;
+    useThemeStore.getState().deleteCustom(currentCustom.id);
+    update({
+      themeId: "original",
+      themeOverrides: {},
+      itemFonts: {},
+      headerGradientEnd: null,
+    });
+  };
+
+  const isWindowItem = item === "window";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <ThemeProvider theme={stagedTheme}>
         <AppearancePreviewBox $bg={staged.desktopColor}>
-          <PreviewInactiveWin>
-            <InactiveTitleBar>Inactive Window</InactiveTitleBar>
-          </PreviewInactiveWin>
-          <PreviewMiniWin>
-            <PreviewTitleBar>
-              Active Window
-              <PreviewMiniBtn>×</PreviewMiniBtn>
-            </PreviewTitleBar>
-            <PreviewBody>Window Text</PreviewBody>
-          </PreviewMiniWin>
+          <PreviewWinWrap style={{ top: 8, left: 35, width: 220, zoom: 0.95 }}>
+            <R95Window shadow={false}>
+              <WindowHeader active={false} style={windowFontStyle}>
+                Inactive Window
+              </WindowHeader>
+            </R95Window>
+          </PreviewWinWrap>
+          <PreviewWinWrap style={{ top: 28, left: 8, width: 290, zoom: 0.95 }}>
+            <R95Window shadow>
+              <PreviewHeaderRow active style={activeHeaderStyle}>
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Active Window
+                </span>
+                <PreviewCloseBtn>
+                  <GlyphZoomFix>
+                    <CloseGlyph />
+                  </GlyphZoomFix>
+                </PreviewCloseBtn>
+              </PreviewHeaderRow>
+              <StatesRow style={menuFontStyle}>
+                <NormalSample>Normal</NormalSample>
+                <DisabledSample>Disabled</DisabledSample>
+                <SelectedSample>Selected</SelectedSample>
+              </StatesRow>
+              <PreviewBody>
+                <span>Window Text</span>
+                <FakeScrollbar>
+                  <FakeScrollThumb />
+                </FakeScrollbar>
+              </PreviewBody>
+            </R95Window>
+          </PreviewWinWrap>
+          <MsgBoxWrap style={{ top: 125, left: 95, width: 190, zoom: 0.95 }}>
+            <R95Window shadow>
+              <WindowHeader active style={windowFontStyle}>
+                Message Box
+              </WindowHeader>
+              <MsgBoxBody style={msgboxFontStyle}>
+                <span>Message Text</span>
+                <MsgBoxOkBtn>OK</MsgBoxOkBtn>
+              </MsgBoxBody>
+            </R95Window>
+          </MsgBoxWrap>
         </AppearancePreviewBox>
       </ThemeProvider>
 
       <GroupBox label="Scheme">
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Select
-            value={staged.themeId}
-            onChange={(opt: { value: string }) =>
-              update({ themeId: opt.value })
-            }
-            options={schemeOptions}
+            value={schemeSelectValue}
+            onChange={(opt: { value: string }) => {
+              if (opt.value === "__modified__") return;
+              const custom = customThemes.find((c) => c.id === opt.value);
+              update({
+                themeId: opt.value,
+                themeOverrides: {},
+                itemFonts: custom?.itemFonts ?? {},
+                headerGradientEnd: custom?.headerGradientEnd ?? null,
+              });
+            }}
+            options={displaySchemeOptions}
             style={{ flex: 1 }}
           />
-          <Button disabled style={{ width: 72 }}>
+          <Button style={{ width: 72 }} onClick={() => setSaveAsOpen(true)}>
             Save As...
           </Button>
-          <Button disabled style={{ width: 64 }}>
+          <Button
+            style={{ width: 64 }}
+            disabled={!currentCustom}
+            onClick={handleDelete}
+          >
             Delete
           </Button>
         </div>
@@ -714,67 +1072,107 @@ function AppearanceTab({
 
       <GroupBox label="Item">
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Select
+            value={item}
+            onChange={(opt: { value: string }) => {
+              setItem(opt.value);
+              setPaletteOpen(null);
+            }}
+            options={APPEARANCE_ITEMS.map((i) => ({
+              value: i.id,
+              label: i.label,
+            }))}
+            style={{ width: "100%" }}
+          />
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Select
-              value={item}
-              onChange={(opt: { value: string }) => {
-                setItem(opt.value);
-                setPaletteOpen(false);
-              }}
-              options={[
-                { value: "desktop", label: "Desktop" },
-                { value: "window", label: "Active Title Bar" },
-                { value: "inactive", label: "Inactive Title Bar" },
-                { value: "menu", label: "Menu" },
-                { value: "msgbox", label: "Message Box" },
-                { value: "tooltip", label: "Tooltip" },
-              ]}
-              style={{ flex: 1 }}
-            />
+            <span>Size:</span>
+            <NumberInput value={0} width={56} onChange={() => {}} disabled />
             <span style={{ whiteSpace: "nowrap" }}>Color:</span>
-            <div style={{ position: "relative" }}>
-              <Swatch
-                $color={colorEditable ? staged.desktopColor : "#c0c0c0"}
-                $disabled={!colorEditable}
-                onClick={() => colorEditable && setPaletteOpen((o) => !o)}
-              />
-              {paletteOpen && colorEditable && (
-                <PaletteWrap>
-                  {WIN_PALETTE.map((c) => (
-                    <PaletteCell
-                      key={c}
-                      $color={c}
-                      $active={c === staged.desktopColor}
-                      onClick={() => {
-                        update({ desktopColor: c });
-                        setPaletteOpen(false);
-                      }}
-                    />
-                  ))}
-                </PaletteWrap>
-              )}
-            </div>
+            <Swatch $color={itemBg} onClick={() => setPaletteOpen("bg")} />
+            <span style={{ whiteSpace: "nowrap" }}>Color 2:</span>
+            <Swatch
+              $color={isWindowItem ? (staged.headerGradientEnd ?? null) : null}
+              $disabled={!isWindowItem}
+              onClick={() => isWindowItem && setPaletteOpen("gradient2")}
+            />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span>Font:</span>
             <Select
-              value="sans"
-              onChange={() => {}}
-              options={[{ value: "sans", label: "MS Sans Serif" }]}
+              value={currentFamily}
+              onChange={(opt: { value: string }) =>
+                setItemFont({ family: opt.value })
+              }
+              options={FONT_FAMILIES.map((f) => ({
+                value: f.id,
+                label: f.label,
+              }))}
               style={{ flex: 1 }}
-              disabled
+              disabled={!fontEditable}
             />
             <span>Size:</span>
             <Select
-              value="8"
-              onChange={() => {}}
-              options={[{ value: "8", label: "8" }]}
-              style={{ width: 52 }}
-              disabled
+              value={currentSize}
+              onChange={(opt: { value: number }) =>
+                setItemFont({ size: opt.value })
+              }
+              options={ITEM_FONT_SIZES.map((s) => ({
+                value: s,
+                label: String(s),
+              }))}
+              style={{ width: 60 }}
+              disabled={!fontEditable}
             />
+            <span>Color:</span>
+            <Swatch
+              $color={itemText}
+              $disabled={itemText === null}
+              onClick={() => itemText !== null && setPaletteOpen("text")}
+            />
+            <ToggleBtn
+              active={!!itemFont?.bold}
+              disabled={!fontEditable}
+              onClick={() => setItemFont({ bold: !itemFont?.bold })}
+            >
+              <b>B</b>
+            </ToggleBtn>
+            <ToggleBtn
+              active={!!itemFont?.italic}
+              disabled={!fontEditable}
+              onClick={() => setItemFont({ italic: !itemFont?.italic })}
+            >
+              <i>I</i>
+            </ToggleBtn>
           </div>
         </div>
       </GroupBox>
+
+      {saveAsOpen && (
+        <SaveSchemeDialog
+          initialName={currentCustom ? currentCustom.label : ""}
+          onSave={handleSaveAs}
+          onCancel={() => setSaveAsOpen(false)}
+        />
+      )}
+
+      {paletteOpen && (
+        <ColorPickerDialog
+          color={
+            paletteOpen === "bg"
+              ? itemBg
+              : paletteOpen === "text"
+                ? (itemText ?? "#000000")
+                : (staged.headerGradientEnd ?? stagedTheme.headerBackground)
+          }
+          onPick={(c) => {
+            if (paletteOpen === "bg") setItemBg(c);
+            else if (paletteOpen === "text") setItemText(c);
+            else update({ headerGradientEnd: c });
+            setPaletteOpen(null);
+          }}
+          onClose={() => setPaletteOpen(null)}
+        />
+      )}
     </div>
   );
 }
@@ -785,7 +1183,7 @@ const IconSlot = styled.button<{ $selected: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   width: 76px;
   padding: 6px 2px 4px;
   border: 1px dotted
@@ -796,7 +1194,6 @@ const IconSlot = styled.button<{ $selected: boolean }>`
   color: ${({ $selected, theme }) =>
     $selected ? theme.headerText : theme.materialText};
   cursor: pointer;
-  font-size: 9px;
   font-family: inherit;
   text-align: center;
   white-space: pre-line;
@@ -835,10 +1232,10 @@ function EffectsTab({
               onClick={() => setSelectedSlot(slot)}
               onDoubleClick={() => setShowPicker(true)}
             >
-              <img
+              <Icon
                 src={staged.desktopIcons[slot]}
-                width={32}
-                height={32}
+                size={32}
+                isInReact95
                 style={{ imageRendering: "pixelated" }}
               />
               {label}
@@ -934,11 +1331,6 @@ function zoomToResLabel(zoom: number): string {
   return `${rw} by ${rh} pixels`;
 }
 
-const ResSlider = styled.input`
-  width: 100%;
-  accent-color: ${({ theme }) => theme.headerBackground};
-`;
-
 const ColorDepthOptions = [
   { value: 4, label: "16 Colors" },
   { value: 8, label: "256 Colors" },
@@ -1030,16 +1422,16 @@ function SettingsTab({
             <span>Less</span>
             <span>More</span>
           </div>
-          <ResSlider
-            type="range"
-            min={0}
-            max={ZOOM_STEPS.length - 1}
-            step={1}
-            value={stepIdx}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              update({ zoom: ZOOM_STEPS[Number(e.target.value)] })
-            }
-          />
+          <div style={{ padding: "4px 2px" }}>
+            <Slider95
+              value={stepIdx}
+              min={0}
+              max={ZOOM_STEPS.length - 1}
+              step={1}
+              size="100%"
+              onChange={(v) => update({ zoom: ZOOM_STEPS[v] })}
+            />
+          </div>
           <div style={{ textAlign: "center", fontWeight: "bold" }}>
             {zoomToResLabel(staged.zoom)}
           </div>
@@ -1050,15 +1442,16 @@ function SettingsTab({
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span>Font size:</span>
         <Select
-          value="normal"
-          onChange={() => {}}
+          value={staged.fontSize}
+          onChange={(opt: { value: FontSizeOption }) =>
+            update({ fontSize: opt.value })
+          }
           options={[
             { value: "small", label: "Small Fonts" },
             { value: "normal", label: "Normal Size" },
             { value: "large", label: "Large Fonts" },
           ]}
           style={{ flex: 1 }}
-          disabled
         />
         <Button disabled style={{ width: 90 }}>
           Advanced...
@@ -1125,7 +1518,13 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const display = useDisplayStore();
   const themeId = useThemeStore((s) => s.themeId);
+  const themeOverrides = useThemeStore((s) => s.overrides);
+  const themeItemFonts = useThemeStore((s) => s.itemFonts);
+  const themeHeaderGradientEnd = useThemeStore((s) => s.headerGradientEnd);
   const setThemeId = useThemeStore((s) => s.setThemeId);
+  const setThemeOverrides = useThemeStore((s) => s.setOverrides);
+  const setThemeItemFonts = useThemeStore((s) => s.setItemFonts);
+  const setThemeHeaderGradientEnd = useThemeStore((s) => s.setHeaderGradientEnd);
 
   const [tab, setTab] = useState("Background");
   const [staged, setStaged] = useState<StagedState>(() => ({
@@ -1143,8 +1542,12 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
     largeIcons: display.largeIcons,
     fullColorIcons: display.fullColorIcons,
     dragFullWindows: display.dragFullWindows,
+    fontSize: display.fontSize,
     desktopIcons: { ...display.desktopIcons },
     themeId,
+    themeOverrides: { ...themeOverrides },
+    itemFonts: { ...themeItemFonts },
+    headerGradientEnd: themeHeaderGradientEnd,
   }));
   const update: UpdateStaged = (partial) =>
     setStaged((s) => ({ ...s, ...partial }));
@@ -1158,17 +1561,29 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
   const dirty =
     SCALAR_KEYS.some((k) => staged[k] !== display[k]) ||
     staged.themeId !== themeId ||
+    JSON.stringify(staged.themeOverrides) !== JSON.stringify(themeOverrides) ||
+    JSON.stringify(staged.itemFonts) !== JSON.stringify(themeItemFonts) ||
+    staged.headerGradientEnd !== themeHeaderGradientEnd ||
     ICON_SLOTS.some(
       ({ slot }) => staged.desktopIcons[slot] !== display.desktopIcons[slot],
     );
 
   const commit = () => {
-    const { themeId: stagedThemeId, ...displayPartial } = staged;
+    const {
+      themeId: stagedThemeId,
+      themeOverrides: stagedOverrides,
+      itemFonts: stagedItemFonts,
+      headerGradientEnd: stagedHeaderGradientEnd,
+      ...displayPartial
+    } = staged;
     display.set({
       ...displayPartial,
       desktopIcons: { ...staged.desktopIcons },
     });
     if (stagedThemeId !== themeId) setThemeId(stagedThemeId);
+    setThemeOverrides(stagedOverrides);
+    setThemeItemFonts(stagedItemFonts);
+    setThemeHeaderGradientEnd(stagedHeaderGradientEnd);
   };
 
   const handleApply = (closeAfter: boolean) => {

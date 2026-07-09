@@ -207,7 +207,7 @@ function showTaskbarWindow(): void {
   ws.openWindow({
     appId: "winamp",
     title: "Winamp",
-    icon: "/icons/WinAMP_7.ico",
+    icon: "/icons/winamp.exe/000.ico",
     bounds: { x: 0, y: 0, width: 275, height: 116 },
     resizable: false,
     singleInstance: true,

@@ -86,10 +86,21 @@ export function ScreenSaverHost() {
         position: "fixed",
         inset: 0,
         zIndex: 3000000,
-        background: "#000",
+        background: "transparent",
         cursor: "none",
       }}
     >
+      {/* Lightning flash overlay used by RainyWindow */}
+      <div
+        id="lightning-flash-rw"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          mixBlendMode: "screen",
+          zIndex: 1,
+        }}
+      />
       <Saver />
     </div>
   );

@@ -35,8 +35,6 @@ const Layout = styled.div`
   height: 100%;
 `;
 
-
-
 const ButtonRow = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -447,11 +445,7 @@ export function FolderOptions({ windowId }: { windowId: string }) {
               style={{ maxHeight: 480 }}
             >
               <TreeHeader>
-                <Icon
-                  src="/icons/w98_directory_closed.ico"
-                  size={16}
-                  isInReact95
-                />
+                <Icon src="/icons/shell32.dll/086.ico" size={16} isInReact95 />
                 Files and Folders
               </TreeHeader>
               <SettingRow $indent={1}>
@@ -490,11 +484,7 @@ export function FolderOptions({ windowId }: { windowId: string }) {
               </SettingRow>
 
               <TreeHeader $indent={1} style={{ marginTop: 5 }}>
-                <Icon
-                  src="/icons/w98_directory_closed.ico"
-                  size={16}
-                  isInReact95
-                />
+                <Icon src="/icons/shell32.dll/095.ico" size={16} isInReact95 />
                 Hidden files and folders
               </TreeHeader>
               <SettingRow $indent={2}>

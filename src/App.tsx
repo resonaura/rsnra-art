@@ -14,7 +14,7 @@ import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { WebampHost } from "./components/WebampHost";
 import { WindowManager } from "./components/WindowManager/WindowManager";
 import { openApp } from "./data/apps";
-import { getThemeById, useThemeStore } from "./store/themeStore";
+import { useEffectiveTheme } from "./store/themeStore";
 import { useWindowStore } from "./store/windowStore";
 import { CursorGlobalStyle } from "./styles/CursorGlobalStyle";
 import { GlobalStyle } from "./styles/GlobalStyle";
@@ -65,8 +65,7 @@ function Desk() {
 
 function App() {
   const [booted, setBooted] = useState(false);
-  const themeId = useThemeStore((s) => s.themeId);
-  const theme = getThemeById(themeId);
+  const theme = useEffectiveTheme();
   const desktopRestartCount = useWindowStore((s) => s.desktopRestartCount);
 
   return (

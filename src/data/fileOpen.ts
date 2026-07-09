@@ -23,7 +23,7 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "notepad",
     label: "Notepad",
-    icon: "/icons/w2k_notepad_2.ico",
+    icon: "/icons/notepad.exe/000.ico",
     extensions: ["txt", "log", "ini"],
     open: (path, name) =>
       openApp("notepad", { title: `${name} - Notepad`, data: { path } }),
@@ -31,7 +31,7 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "paint",
     label: "Paint",
-    icon: "/icons/w98_paint.ico",
+    icon: "/icons/mspaint.exe/000.ico",
     extensions: ["png", "bmp"],
     open: (path, name) =>
       openApp("paint", { title: `${name} - Paint`, data: { path } }),
@@ -39,7 +39,7 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "sound-recorder",
     label: "Sound Recorder",
-    icon: "/icons/w98_cassette_tape.ico",
+    icon: "/icons/sndrec32.exe/000.ico",
     extensions: ["wav"],
     open: (path, name) =>
       openApp("sound-recorder", {
@@ -50,7 +50,7 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
   {
     appId: "winamp",
     label: "Winamp",
-    icon: "/icons/WinAMP_7.ico",
+    icon: "/icons/winamp.exe/000.ico",
     extensions: ["wav", "mp3", "mid", "midi", "rmi", "ogg"],
     open: (path) => void openVfsAudio(path),
   },

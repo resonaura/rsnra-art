@@ -3,6 +3,17 @@ import { persist } from "zustand/middleware";
 
 export type WallpaperMode = "center" | "tile" | "stretch";
 export type ColorDepth = 4 | 8 | 16 | 32;
+export type FontSizeOption = "small" | "normal" | "large";
+
+// Settings ▸ Font size scales the whole UI (not just text) — exactly how
+// real Windows 95's "Large Fonts (120 DPI)" worked, since it was a display
+// metric change, not a per-glyph one. Layered multiplicatively with Screen
+// area's zoom in DisplayHost.
+export const FONT_SIZE_SCALE: Record<FontSizeOption, number> = {
+  small: 0.9,
+  normal: 1,
+  large: 1.15,
+};
 
 /** Effects tab desktop-icon slots that can be re-themed via "Change Icon…". */
 export type DesktopIconSlot =
@@ -13,9 +24,9 @@ export type DesktopIconSlot =
 
 export const DEFAULT_DESKTOP_ICONS: Record<DesktopIconSlot, string> = {
   myComputer: "/icons/explorer.exe/000.ico",
-  myDocuments: "/icons/w2k_my_documents.ico",
-  recycleFull: "/icons/w2k_recycle_bin_full.ico",
-  recycleEmpty: "/icons/w2k_recycle_bin_empty.ico",
+  myDocuments: "/icons/shell32.dll/040.ico",
+  recycleFull: "/icons/shell32.dll/078.ico",
+  recycleEmpty: "/icons/shell32.dll/079.ico",
 };
 
 /**
@@ -39,6 +50,7 @@ export interface DisplayStoreState {
   /** Settings ▸ Screen area — zoom applied to <body>. 1 = native. */
   zoom: number;
   colorDepth: ColorDepth;
+  fontSize: FontSizeOption;
 
   // Effects ▸ Visual effects
   transitionEffects: boolean;
@@ -69,6 +81,7 @@ export const useDisplayStore = create<DisplayStoreState>()(
 
       zoom: 1,
       colorDepth: 32,
+      fontSize: "normal",
 
       transitionEffects: true,
       smoothFonts: false,

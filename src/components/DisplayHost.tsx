@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { useDisplayStore } from "../store/displayStore";
+import { FONT_SIZE_SCALE, useDisplayStore } from "../store/displayStore";
+import { fontFamilyCss, useThemeStore, type AppearanceItemId } from "../store/themeStore";
 
 // feComponentTransfer tables emulating lower color depths (Settings ▸ Colors).
 const DEPTH_TABLES: Record<number, string | null> = {
@@ -16,9 +17,12 @@ const DEPTH_TABLES: Record<number, string | null> = {
  */
 export function DisplayHost() {
   const zoom = useDisplayStore((s) => s.zoom);
+  const fontSize = useDisplayStore((s) => s.fontSize);
   const smoothFonts = useDisplayStore((s) => s.smoothFonts);
   const transitionEffects = useDisplayStore((s) => s.transitionEffects);
   const colorDepth = useDisplayStore((s) => s.colorDepth);
+  const itemFonts = useThemeStore((s) => s.itemFonts);
+  const headerGradientEnd = useThemeStore((s) => s.headerGradientEnd);
 
   useEffect(() => {
     document.body.style.zoom = String(zoom);
@@ -26,6 +30,54 @@ export function DisplayHost() {
       document.body.style.zoom = "";
     };
   }, [zoom]);
+
+  // Font size scales *text only*, via the root font-size — react95's own
+  // components already size their type in `rem`, so this alone rescales all
+  // of them. It must stay independent of Screen area's `zoom`: zoom is a
+  // real coordinate-space transform that SoftwareCursor divides pointer
+  // coordinates by, so folding fontSize into that same zoom desynced the
+  // cursor overlay (and hit-testing) from the actual rendered layout
+  // whenever fontSize wasn't "normal".
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${FONT_SIZE_SCALE[fontSize] * 100}%`;
+    return () => {
+      document.documentElement.style.fontSize = "";
+    };
+  }, [fontSize]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = (key: AppearanceItemId) => {
+      const font = itemFonts[key];
+      if (font) {
+        root.style.setProperty(`--rsnra-font-${key}-family`, fontFamilyCss(font.family));
+        root.style.setProperty(`--rsnra-font-${key}-size`, `${font.size}px`);
+        root.style.setProperty(`--rsnra-font-${key}-weight`, font.bold ? "bold" : "normal");
+        root.style.setProperty(`--rsnra-font-${key}-style`, font.italic ? "italic" : "normal");
+      } else {
+        root.style.removeProperty(`--rsnra-font-${key}-family`);
+        root.style.removeProperty(`--rsnra-font-${key}-size`);
+        root.style.removeProperty(`--rsnra-font-${key}-weight`);
+        root.style.removeProperty(`--rsnra-font-${key}-style`);
+      }
+    };
+    apply("window");
+    apply("menu");
+    apply("msgbox");
+  }, [itemFonts]);
+
+  // Active Title Bar "Color 2": AppWindow always renders the active header as
+  // a gradient from headerBackground to this var, falling back to
+  // headerBackground itself when unset — so it reads as solid until a
+  // second color is actually chosen.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (headerGradientEnd) {
+      root.style.setProperty("--rsnra-header-gradient-end", headerGradientEnd);
+    } else {
+      root.style.removeProperty("--rsnra-header-gradient-end");
+    }
+  }, [headerGradientEnd]);
 
   useEffect(() => {
     document.body.style.setProperty(

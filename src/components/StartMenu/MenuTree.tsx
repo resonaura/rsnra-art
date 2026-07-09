@@ -1,8 +1,8 @@
-import type { MouseEvent } from 'react';
-import styled from 'styled-components';
-import { TASKBAR_HEIGHT } from '../../constants';
-import { Icon } from '../Icon/Icon';
-import type { MenuNode } from '../../data/startMenu';
+import type { MouseEvent } from "react";
+import styled from "styled-components";
+import { TASKBAR_HEIGHT } from "../../constants";
+import type { MenuNode } from "../../data/startMenu";
+import { Icon } from "../Icon/Icon";
 
 const List = styled.ul<{ $nested?: boolean }>`
   list-style: none;
@@ -10,10 +10,12 @@ const List = styled.ul<{ $nested?: boolean }>`
   padding: 3px;
   background: ${({ theme }) => theme.material};
   border: 2px solid;
-  border-color: ${({ theme }) => theme.borderLightest} ${({ theme }) => theme.borderDarkest}
-    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderLightest};
+  border-color: ${({ theme }) => theme.borderLightest}
+    ${({ theme }) => theme.borderDarkest} ${({ theme }) => theme.borderDarkest}
+    ${({ theme }) => theme.borderLightest};
   box-shadow: 1px 1px 0 1px rgba(0, 0, 0, 0.3);
   width: 196px;
+  font-family: var(--rsnra-font-menu-family, inherit);
   ${({ $nested }) =>
     $nested &&
     `
@@ -45,9 +47,12 @@ const Row = styled.div<{ $disabled?: boolean }>`
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  font-size: 13px;
-  cursor: ${({ $disabled }) => ($disabled ? 'default' : 'pointer')};
-  color: ${({ $disabled, theme }) => ($disabled ? theme.materialTextDisabled : theme.materialText)};
+  font-size: var(--rsnra-font-menu-size, 13px);
+  font-weight: var(--rsnra-font-menu-weight, normal);
+  font-style: var(--rsnra-font-menu-style, normal);
+  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
+  color: ${({ $disabled, theme }) =>
+    $disabled ? theme.materialTextDisabled : theme.materialText};
   white-space: nowrap;
 
   .icon-wrap {
@@ -73,8 +78,10 @@ const Row = styled.div<{ $disabled?: boolean }>`
   }
 
   ${ItemWrap}:hover > & {
-    background: ${({ $disabled, theme }) => ($disabled ? 'none' : theme.hoverBackground)};
-    color: ${({ $disabled, theme }) => ($disabled ? theme.materialTextDisabled : theme.headerText)};
+    background: ${({ $disabled, theme }) =>
+      $disabled ? "none" : theme.hoverBackground};
+    color: ${({ $disabled, theme }) =>
+      $disabled ? theme.materialTextDisabled : theme.headerText};
   }
 `;
 
@@ -89,13 +96,13 @@ interface MenuTreeProps {
  * (and never above the viewport top), like the real Win95 start menu.
  */
 function clampSubmenu(e: MouseEvent<HTMLLIElement>) {
-  const sub = e.currentTarget.querySelector<HTMLUListElement>(':scope > ul');
+  const sub = e.currentTarget.querySelector<HTMLUListElement>(":scope > ul");
   if (!sub) return;
-  sub.style.top = '';
-  sub.style.display = 'block';
+  sub.style.top = "";
+  sub.style.display = "block";
   const itemTop = e.currentTarget.getBoundingClientRect().top;
   const subHeight = sub.offsetHeight;
-  sub.style.display = '';
+  sub.style.display = "";
   const limit = window.innerHeight - TASKBAR_HEIGHT - 2;
   let top = itemTop - 5;
   if (top + subHeight > limit) top = limit - subHeight;
@@ -128,7 +135,7 @@ export function MenuTree({ nodes, nested }: MenuTreeProps) {
                 <span className="icon-wrap">
                   <Icon
                     src={node.icon}
-                    size={22}
+                    size={24}
                     style={
                       node.iconScale
                         ? { transform: `scale(${node.iconScale})` }

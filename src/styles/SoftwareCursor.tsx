@@ -248,7 +248,13 @@ export function SoftwareCursor() {
       setState({ x: clientX, y: clientY, imgUrl, hotX, hotY, visible: true });
     };
 
-    const onMouseMove = (e: MouseEvent) => {
+    // Tracked via pointer events, not mousemove: several draggable controls
+    // (sliders, scrollbars, Paint's canvas) call preventDefault() on their own
+    // pointerdown to block text-selection/touch-scroll while dragging, which
+    // per spec suppresses the browser's synthesized *mouse* compatibility
+    // events (mousemove included) for the rest of that gesture — freezing this
+    // cursor overlay mid-drag. pointermove isn't part of that suppression.
+    const onPointerMove = (e: PointerEvent) => {
       lastX = e.clientX;
       lastY = e.clientY;
       if (!pending) {
@@ -260,20 +266,20 @@ export function SoftwareCursor() {
       }
     };
 
-    const onMouseLeave = () =>
+    const onPointerLeave = () =>
       setState((s) => ({ ...s, visible: false }));
-    const onMouseEnter = () =>
+    const onPointerEnter = () =>
       setState((s) => ({ ...s, visible: true }));
 
-    document.addEventListener("mousemove", onMouseMove, { passive: true });
-    document.documentElement.addEventListener("mouseleave", onMouseLeave);
-    document.documentElement.addEventListener("mouseenter", onMouseEnter);
+    document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onPointerLeave);
+    document.documentElement.addEventListener("pointerenter", onPointerEnter);
 
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
-      document.removeEventListener("mousemove", onMouseMove);
-      document.documentElement.removeEventListener("mouseleave", onMouseLeave);
-      document.documentElement.removeEventListener("mouseenter", onMouseEnter);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.documentElement.removeEventListener("pointerleave", onPointerLeave);
+      document.documentElement.removeEventListener("pointerenter", onPointerEnter);
     };
   }, [resolveRole]);
 

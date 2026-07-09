@@ -1,18 +1,18 @@
-import { playSound } from "./audio";
 import {
   useDialogStore,
   type MessageBoxButtons,
   type MessageBoxResult,
 } from "../store/dialogStore";
+import { playSound } from "./audio";
 
 // The single "call it like MsgBox" entry point for the whole app — any code,
 // anywhere, pops up a system message box without owning any dialog state or
 // markup itself. Multiple calls stack as independent, draggable dialogs
 // instead of one replacing another.
 
-const ERROR_ICON = "/icons/w98_msg_error.ico";
-const WARNING_ICON = "/icons/w2k_warning.ico";
-const INFO_ICON = "/icons/w98_msg_information.ico";
+const ERROR_ICON = "/icons/explorer.exe/009.ico";
+const WARNING_ICON = "/icons/explorer.exe/008.ico";
+const INFO_ICON = "/icons/explorer.exe/007.ico";
 
 let nextId = 0;
 
@@ -53,7 +53,10 @@ export function alertInfo(title: string, message: string): Promise<void> {
 export function confirmDialog(
   title: string,
   message: string,
-  buttons: Extract<MessageBoxButtons, "okcancel" | "yesno" | "yesnocancel"> = "yesno",
+  buttons: Extract<
+    MessageBoxButtons,
+    "okcancel" | "yesno" | "yesnocancel"
+  > = "yesno",
 ): Promise<MessageBoxResult> {
   return pushBox(title, message, WARNING_ICON, buttons);
 }

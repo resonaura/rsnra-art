@@ -1,10 +1,10 @@
 import { showMissingFileAlert } from "../lib/systemDialogs";
+import { openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import type { AppId } from "../types/window";
 import { APPS, openApp } from "./apps";
-import { openWebamp } from "../lib/webamp";
 
-const GENERIC_SHORTCUT_ICON = "/icons/w2k_shortcut.ico";
+const GENERIC_SHORTCUT_ICON = "/icons/shell32.dll/076.ico";
 
 // The single shared representation of a .lnk shortcut — its JSON `content`,
 // how to resolve its icon, and how to activate it. Desktop, the Start Menu

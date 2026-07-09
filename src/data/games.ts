@@ -15,29 +15,26 @@ export interface GameItem {
 export const GAMES: GameItem[] = [
   {
     label: "Minesweeper",
-    icon: "/icons/w98_minesweeper.ico",
+    icon: "/icons/winmine.exe/000.ico",
     onOpen: () => openApp("minesweeper"),
     file: "winmine.exe",
   },
   {
     label: "RSNRA Snake",
-    icon: "/icons/w98_joystick.ico",
+    icon: "/icons/games.exe/000.ico",
     onOpen: () => openApp("snake"),
     file: "snake.exe",
   },
   {
     label: "Solitaire",
-    icon: "/icons/w98_game_solitaire.ico",
+    icon: "/icons/sol.exe/000.ico",
     onOpen: () => openApp("solitaire"),
     file: "sol.exe",
   },
   {
     label: "3D Pinball",
-    icon: "/icons/pinball.png",
+    icon: "/icons/pinball.exe/000.ico",
     onOpen: () => openApp("pinball"),
     file: "pinball.exe",
   },
-  { label: "Hearts", icon: "/icons/w98_mshearts.ico", disabled: true, file: "mshearts.exe" },
-  { label: "FreeCell", icon: "/icons/w98_game_freecell.ico", disabled: true, file: "freecell.exe" },
-  { label: "Spider", icon: "/icons/w98_spider.ico", disabled: true, file: "spider.exe" },
 ];

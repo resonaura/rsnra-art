@@ -22,6 +22,10 @@ const Message = styled.div`
   line-height: 1.5;
   white-space: pre-line;
   padding-top: 4px;
+  font-family: var(--rsnra-font-msgbox-family, inherit);
+  font-size: var(--rsnra-font-msgbox-size, inherit);
+  font-weight: var(--rsnra-font-msgbox-weight, normal);
+  font-style: var(--rsnra-font-msgbox-style, normal);
 `;
 
 const Footer = styled.div`

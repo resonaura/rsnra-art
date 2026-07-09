@@ -1,16 +1,15 @@
 import { useMemo } from "react";
 import { playSound } from "../lib/audio";
 
-import { dirIcon, iconForNode } from "./fileIcons";
-import { openVfsAudio, openWebamp } from "../lib/webamp";
 import { showMissingFileAlert } from "../lib/systemDialogs";
+import { openVfsAudio, openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
+import { dirIcon, iconForNode } from "./fileIcons";
 import { getPreferredApp } from "./fileOpen";
 import { lnkIcon, openLnk, parseLnk } from "./shortcuts";
-
 
 export interface MenuNode {
   id: string;
@@ -66,8 +65,7 @@ function vfsDirToMenuNodes(
   for (const node of list) {
     if (node.hidden) continue;
 
-    const nodeAbs =
-      absPath.replace(/\\+$/, "") + "\\" + node.name;
+    const nodeAbs = absPath.replace(/\\+$/, "") + "\\" + node.name;
 
     if (node.type === "dir") {
       // Subdirectory → submenu — icon resolved via unified dirIcon()
@@ -89,7 +87,10 @@ function vfsDirToMenuNodes(
         disabled,
         action: run(() => {
           if (lnk.type === "missing") {
-            showMissingFileAlert(lnkLabel(node.name), lnk.file ?? `${lnkLabel(node.name)}.exe`);
+            showMissingFileAlert(
+              lnkLabel(node.name),
+              lnk.file ?? `${lnkLabel(node.name)}.exe`,
+            );
           } else if (lnk.target === "winamp") {
             void openWebamp();
           } else {
@@ -199,15 +200,15 @@ export function useStartMenuTree(): MenuNode[] {
     const sm = win?.children?.find(
       (c) => c.name.toLowerCase() === "start menu",
     );
-    return sm?.children?.find(
-      (c) => c.name.toLowerCase() === "programs",
-    ) ?? null;
+    return (
+      sm?.children?.find((c) => c.name.toLowerCase() === "programs") ?? null
+    );
   });
 
-  const docsNode = useVfsStore((s) =>
-    s.root.children?.find(
-      (c) => c.name.toLowerCase() === "my documents",
-    ) ?? null,
+  const docsNode = useVfsStore(
+    (s) =>
+      s.root.children?.find((c) => c.name.toLowerCase() === "my documents") ??
+      null,
   );
 
   // list() reads the store on demand; wrap in getState() so it doesn't create
@@ -215,15 +216,16 @@ export function useStartMenuTree(): MenuNode[] {
   const listFn = useVfsStore.getState().list;
 
   const programsChildren = useMemo(
-    () => vfsDirToMenuNodes("C:\\Windows\\Start Menu\\Programs", { list: listFn }),
+    () =>
+      vfsDirToMenuNodes("C:\\Windows\\Start Menu\\Programs", { list: listFn }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [programsNode],          // recompute only when the Programs folder changes
+    [programsNode], // recompute only when the Programs folder changes
   );
 
   const docs = useMemo(
     () => docChildren("C:\\My Documents", { list: listFn }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [docsNode],              // recompute only when My Documents changes
+    [docsNode], // recompute only when My Documents changes
   );
 
   // The static top-level items never change — stable reference via useMemo.
@@ -232,26 +234,26 @@ export function useStartMenuTree(): MenuNode[] {
       {
         id: "programs",
         label: "Programs",
-        icon: "/icons/w2k-programs.ico",
+        icon: "/icons/shell32.dll/083.ico",
         children: programsChildren,
       },
       {
         id: "documents",
         label: "Documents",
-        icon: "/icons/w2k_documents.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/065.ico",
+        iconScale: 32 / 24,
         children: docs,
       },
       {
         id: "settings",
         label: "Settings",
-        icon: "/icons/w2k_settings.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/067.ico",
+        iconScale: 32 / 24,
         children: [
           {
             id: "control-panel",
             label: "Control Panel",
-            icon: "/icons/w2k_control_panel.ico",
+            icon: "/icons/shell32.dll/082.ico",
             action: run(() => openApp("control-panel")),
           },
         ],
@@ -259,14 +261,14 @@ export function useStartMenuTree(): MenuNode[] {
       {
         id: "find",
         label: "Find",
-        icon: "/icons/w2k_search2.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/068.ico",
+        iconScale: 32 / 24,
         children: [
           {
             id: "find-files",
             label: "Files or Folders...",
-            icon: "/icons/w2k_search2.ico",
-            iconScale: 1.33,
+            icon: "/icons/shell32.dll/068.ico",
+            iconScale: 32 / 24,
             action: run(() => openApp("find")),
           },
         ],
@@ -274,15 +276,15 @@ export function useStartMenuTree(): MenuNode[] {
       {
         id: "help",
         label: "Help",
-        icon: "/icons/w2k_help.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/069.ico",
+        iconScale: 32 / 24,
         action: run(() => openApp("help")),
       },
       {
         id: "run",
         label: "Run...",
-        icon: "/icons/w2k_run.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/070.ico",
+        iconScale: 32 / 24,
         action: () => {
           useWindowStore.getState().setRunDialogOpen(true);
           closeStartMenu();
@@ -293,8 +295,8 @@ export function useStartMenuTree(): MenuNode[] {
       {
         id: "shut-down",
         label: "Shut Down...",
-        icon: "/icons/w2k_shutdown.ico",
-        iconScale: 1.33,
+        icon: "/icons/shell32.dll/073.ico",
+        iconScale: 32 / 24,
         action: requestShutdown,
       },
     ],

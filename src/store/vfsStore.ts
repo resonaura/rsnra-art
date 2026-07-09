@@ -409,7 +409,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.music,
-              icon: "/icons/w98_cd_audio_cd.ico",
+              icon: "/icons/shell32.dll/088.ico",
               shortcut: true,
             }),
             system: false,
@@ -418,7 +418,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.tiktok,
-              icon: "/icons/w98_entire_network_globe.ico",
+              icon: "/icons/tiktok.exe/000.ico",
               shortcut: true,
             }),
             system: false,
@@ -427,7 +427,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "url",
               target: LINKS.instagram,
-              icon: "/icons/w98_globe_map.ico",
+              icon: "/icons/instagram.exe/000.ico",
               shortcut: true,
             }),
             system: false,
@@ -436,7 +436,8 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "contact",
-              icon: "/icons/w98_address_book_card.ico",
+              icon: "/icons/shell32.dll/047.ico",
+              shortcut: true,
             }),
             system: false,
           }),
@@ -444,7 +445,7 @@ function buildInitialTree(): VfsNode {
             content: JSON.stringify({
               type: "app",
               target: "games-folder",
-              icon: "/icons/w98_joystick.ico",
+              icon: "/icons/games.exe/000.ico",
             }),
             system: false,
           }),
@@ -468,7 +469,7 @@ function buildInitialTree(): VfsNode {
                         content: JSON.stringify({
                           type: "url",
                           target: "show-desktop",
-                          icon: "/icons/w2k_desktop.ico",
+                          icon: "/icons/explorer.exe/003.ico",
                           title: "Show Desktop",
                         }),
                         system: true,
@@ -477,7 +478,7 @@ function buildInitialTree(): VfsNode {
                         content: JSON.stringify({
                           type: "app",
                           target: "terminal",
-                          icon: "/icons/w98_console_prompt.ico",
+                          icon: "/icons/cmd.exe/000.ico",
                           title: "Command Prompt",
                         }),
                         system: false,
@@ -486,7 +487,7 @@ function buildInitialTree(): VfsNode {
                         content: JSON.stringify({
                           type: "app",
                           target: "notepad",
-                          icon: "/icons/w2k_notepad_2.ico",
+                          icon: "/icons/notepad.exe/000.ico",
                           title: "Notepad",
                         }),
                         system: false,
@@ -549,7 +550,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "terminal",
-                      icon: "/icons/w98_console_prompt.ico",
+                      icon: "/icons/cmd.exe/000.ico",
                       title: "Command Prompt",
                     }),
                     system: true,
@@ -558,7 +559,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "notepad",
-                      icon: "/icons/w2k_notepad_2.ico",
+                      icon: "/icons/notepad.exe/000.ico",
                       title: "bio.txt - Notepad",
                       data: { docId: "bio" },
                     }),
@@ -568,7 +569,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "paint",
-                      icon: "/icons/w2k_paint.ico",
+                      icon: "/icons/mspaint.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -576,7 +577,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "calculator",
-                      icon: "/icons/w98_calculator.ico",
+                      icon: "/icons/calc.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -584,7 +585,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "sound-recorder",
-                      icon: "/icons/w98_cassette_tape.ico",
+                      icon: "/icons/sndrec32.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -592,7 +593,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "charmap",
-                      icon: "/icons/w98_charmap.ico",
+                      icon: "/icons/charmap.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -606,7 +607,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "minesweeper",
-                      icon: "/icons/w98_minesweeper.ico",
+                      icon: "/icons/winmine.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -614,7 +615,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "snake",
-                      icon: "/icons/w98_joystick.ico",
+                      icon: "/icons/games.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -622,7 +623,7 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "solitaire",
-                      icon: "/icons/w98_game_solitaire.ico",
+                      icon: "/icons/sol.exe/000.ico",
                     }),
                     system: true,
                   }),
@@ -634,88 +635,18 @@ function buildInitialTree(): VfsNode {
                     }),
                     system: true,
                   }),
-                  file("Hearts.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w98_mshearts.ico",
-                      file: "mshearts.exe",
-                    }),
-                    system: true,
-                  }),
-                  file("FreeCell.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w98_game_freecell.ico",
-                      file: "freecell.exe",
-                    }),
-                    system: true,
-                  }),
-                  file("Spider.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w98_spider.ico",
-                      file: "spider.exe",
-                    }),
-                    system: true,
-                  }),
                 ],
                 true,
               ),
-              dir(
-                "System Tools",
-                [
-                  file("System Restore.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w98_help_book_big.ico",
-                      file: "rstrui.exe",
-                    }),
-                    system: true,
-                  }),
-                  file("Disk Cleanup.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w2k_control_panel.ico",
-                      file: "cleanmgr.exe",
-                    }),
-                    system: true,
-                  }),
-                  file("ScanDisk.lnk", {
-                    content: JSON.stringify({
-                      type: "missing",
-                      target: "",
-                      icon: "/icons/w98_directory_open.ico",
-                      file: "scandskw.exe",
-                    }),
-                    system: true,
-                  }),
-                ],
-                true,
-              ),
-              file("Windows Movie Maker.lnk", {
-                content: JSON.stringify({
-                  type: "missing",
-                  target: "",
-                  icon: "/icons/w98_cd_audio_cd.ico",
-                  file: "moviemk.exe",
-                }),
-                system: true,
-              }),
 
               file("Winamp.lnk", {
                 content: JSON.stringify({
                   type: "app",
                   target: "winamp",
-                  icon: "/icons/WinAMP_7.ico",
+                  icon: "/icons/winamp.exe/000.ico",
                 }),
                 system: true,
               }),
-
             ],
             true,
           ),

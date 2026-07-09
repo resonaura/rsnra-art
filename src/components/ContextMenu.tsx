@@ -21,7 +21,10 @@ const Menu = styled.div<{ $visible: boolean }>`
   padding: 2px;
   min-width: 160px;
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
-  font-size: 12px;
+  font-family: var(--rsnra-font-menu-family, inherit);
+  font-size: var(--rsnra-font-menu-size, 12px);
+  font-weight: var(--rsnra-font-menu-weight, normal);
+  font-style: var(--rsnra-font-menu-style, normal);
 `;
 
 export const CtxItem = styled.button<{ $disabled?: boolean }>`
@@ -29,7 +32,8 @@ export const CtxItem = styled.button<{ $disabled?: boolean }>`
   width: 100%;
   text-align: left;
   padding: 4px 20px;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: inherit;
   background: transparent;
   border: 0;
   white-space: nowrap;
@@ -121,13 +125,14 @@ const SubmenuTrigger = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 4px 20px;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: inherit;
   background: transparent;
   white-space: nowrap;
   cursor: pointer;
   color: ${({ theme }) => theme.materialText};
   box-sizing: border-box;
-  
+
   &::after {
     content: "▶";
     font-size: 8px;
@@ -148,6 +153,8 @@ const SubmenuPopup = styled.div`
   padding: 2px;
   min-width: 160px;
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  font-family: inherit;
+  font-size: inherit;
   z-index: 1000000;
 `;
 

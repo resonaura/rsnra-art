@@ -2,6 +2,7 @@ import { DvdBounce } from "./DvdBounce";
 import { FlowerBox } from "./FlowerBox";
 import { Marquee } from "./Marquee";
 import { Mystify } from "./Mystify";
+import { RainyWindow } from "./RainyWindow";
 import { Starfield } from "./Starfield";
 import type { ScreenSaverDef } from "./types";
 
@@ -12,6 +13,12 @@ import type { ScreenSaverDef } from "./types";
  * C:\Windows\System automatically.
  */
 export const SCREENSAVERS: ScreenSaverDef[] = [
+  {
+    id: "rainy-window",
+    label: "Rainy Window",
+    file: "Rainy Window.scr",
+    Component: RainyWindow,
+  },
   {
     id: "dvd",
     label: "DVD Bounce",
