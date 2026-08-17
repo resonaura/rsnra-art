@@ -11,7 +11,8 @@
     "icons:list": "python3 scripts/icons/convert_icons.py list",
     "icons:get": "python3 scripts/icons/convert_icons.py get",
     "icons:sync": "python3 scripts/icons/convert_icons.py sync",
-    "icons:all": "python3 scripts/icons/convert_icons.py all"
+    "icons:all": "python3 scripts/icons/convert_icons.py all",
+    "start": "serve -s dist -l 2977"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -23,6 +24,7 @@
     "react-icons": "^5.7.0",
     "react-rnd": "^10.5.3",
     "react95": "^4.0.0",
+    "serve": "^14.2.6",
     "styled-components": "^6.4.3",
     "webamp": "^2.3.1",
     "zustand": "^5.0.14"
