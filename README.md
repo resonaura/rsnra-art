@@ -1,8 +1,17 @@
+<img src="icon.svg" width="64" height="64" alt="RSNRA.ART Icon" />
+
 # RSNRA.ART
 
-The official desktop of **RESONAURA** — an alternative rock band from
-Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable
-homage to Windows 95.
+[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](package.json)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg?logo=react&logoColor=black)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg?logo=typescript&logoColor=white)](package.json)
+[![Vite](https://img.shields.io/badge/Bundler-Vite-646CFF.svg?logo=vite&logoColor=white)](package.json)
+[![UI](https://img.shields.io/badge/UI-Windows%2095%20%7C%20React95-008080.svg)](https://react95.io)
+[![Website](https://img.shields.io/badge/Website-rsnra.art-8A2BE2.svg)](https://rsnra.art)
+
+The official desktop of **RESONAURA** — an alternative rock band from Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable homage to Windows 95.
+
+---
 
 Built with Vite, React, TypeScript, [react95](https://react95.io), and
 zustand. Window icons curated from
