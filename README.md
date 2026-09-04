@@ -11,6 +11,11 @@
 
 The official desktop of **RESONAURA** — an alternative rock band from Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable homage to Windows 95.
 
+
+<p align="center">
+  <img src="media/rsnra-art-desktop.png" width="800" alt="rsnra.art Windows 95 Desktop Experience" />
+</p>
+
 ---
 
 Built with Vite, React, TypeScript, [react95](https://react95.io), and
