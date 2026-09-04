@@ -8,6 +8,7 @@
 [![Vite](https://img.shields.io/badge/Bundler-Vite-646CFF.svg?logo=vite&logoColor=white)](package.json)
 [![UI](https://img.shields.io/badge/UI-Windows%2095%20%7C%20React95-008080.svg)](https://react95.io)
 [![Website](https://img.shields.io/badge/Website-rsnra.art-8A2BE2.svg)](https://rsnra.art)
+
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/resonaura)
 
 The official desktop of **RESONAURA** — an alternative rock band from Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable homage to Windows 95.
