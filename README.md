@@ -1,4 +1,4 @@
-<img src="icon.svg" width="64" height="64" alt="RSNRA.ART Icon" />
+<img src="https://raw.githubusercontent.com/resonaura/rsnra-art/main/icon.svg" width="64" height="64" alt="RSNRA.ART Icon" />
 
 # RSNRA.ART
 
@@ -9,13 +9,14 @@
 [![UI](https://img.shields.io/badge/UI-Windows%2095%20%7C%20React95-008080.svg)](https://react95.io)
 [![Website](https://img.shields.io/badge/Website-rsnra.art-8A2BE2.svg)](https://rsnra.art)
 
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/resonaura)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/resonaura)
 
 The official desktop of **RESONAURA** — an alternative rock band from Vancouver, BC — rebuilt as a fully-clickable, draggable, minimizable homage to Windows 95.
 
 
 <p align="center">
-  <img src="media/rsnra-art-desktop.png" width="800" alt="rsnra.art Windows 95 Desktop Experience" />
+  <img src="https://raw.githubusercontent.com/resonaura/rsnra-art/main/media/rsnra-art-desktop.png" width="800" alt="rsnra.art Windows 95 Desktop Experience" />
 </p>
 
 ---
