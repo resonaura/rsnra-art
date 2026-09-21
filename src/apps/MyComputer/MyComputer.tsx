@@ -25,9 +25,10 @@ import {
 } from "../../lib/systemDialogs";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
+import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useClipboardStore } from "../../store/clipboardStore";
-import { useFilePrefsStore } from "../../store/filePrefsStore";
 import type { FolderViewMode } from "../../store/filePrefsStore";
+import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
@@ -178,9 +179,10 @@ const AddressInput = styled.input`
 `;
 
 const GoButton = styled(Button)`
-  min-width: 42px;
-  height: 24px;
+  min-width: ${42 * R95_SCALE_COMPENSATION}px;
+  height: ${24 * R95_SCALE_COMPENSATION}px;
   padding: 0 8px;
+  zoom: ${R95_SCALE};
 `;
 
 const IconGrid = styled(ScrollArea)`
@@ -464,7 +466,11 @@ const APPLETS: AppletItem[] = [
     file: "shell32.dll",
   },
   { label: "Fonts", icon: "/icons/fontext.dll/000.ico", file: "fontext.dll" },
-  { label: "Gaming Options", icon: "/icons/games.exe/000.ico", file: "joy.cpl" },
+  {
+    label: "Gaming Options",
+    icon: "/icons/games.exe/000.ico",
+    file: "joy.cpl",
+  },
   {
     label: "Internet Options",
     icon: "/icons/inetcpl.cpl/000.ico",
@@ -589,9 +595,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
   } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
-  const initialFolderView = useFilePrefsStore.getState().folderViews[
-    initialPath.toLowerCase()
-  ];
+  const initialFolderView =
+    useFilePrefsStore.getState().folderViews[initialPath.toLowerCase()];
   const [view, setView] = useState<ViewMode>(initialFolderView ?? "large");
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<"name" | "size" | "type" | "date">(
@@ -1247,9 +1252,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Copy",
           action: () => selectedNode && copySelected(selectedNode),
           disabled:
-            !selectedNode ||
-            path === "Control Panel" ||
-            path === "Games",
+            !selectedNode || path === "Control Panel" || path === "Games",
         },
         {
           label: "Paste",
@@ -1703,9 +1706,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               >
                 Cut
               </CtxItem>
-              <CtxItem
-                onClick={() => runCtx(() => copySelected(ctx.node!))}
-              >
+              <CtxItem onClick={() => runCtx(() => copySelected(ctx.node!))}>
                 Copy
               </CtxItem>
               <CtxDivider />
