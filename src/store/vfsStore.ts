@@ -387,9 +387,22 @@ function buildInitialTree(): VfsNode {
         "System",
         [
           ...systemDlls,
-          ...fonts,
           // Screen savers — opening a .scr runs it (see data/fileOpen.ts).
           ...SCREENSAVERS.map((s) => file(s.file, { system: true })),
+        ],
+        true,
+      ),
+      // Fonts is a shell folder in Windows 95, not merely another group of
+      // files under SYSTEM. Keeping it in the VFS makes Control Panel and
+      // Explorer agree on where installed fonts live.
+      dir("Fonts", fonts, true),
+      dir(
+        "Inf",
+        [
+          file("layout.inf", { system: true, readonly: true }),
+          file("machine.inf", { system: true, readonly: true }),
+          file("net.inf", { system: true, readonly: true }),
+          file("shell.inf", { system: true, readonly: true }),
         ],
         true,
       ),
@@ -453,6 +466,13 @@ function buildInitialTree(): VfsNode {
         true,
       ),
       dir("Temp", [], true),
+      dir("Cookies", [], true),
+      dir("Favorites", [], true),
+      dir("History", [], true),
+      dir("Recent", [], true),
+      dir("SendTo", [], true),
+      dir("Spool", [dir("Printers", [], true)], true),
+      dir("Profiles", [dir("Default User", [], true)], true),
       dir(
         "Application Data",
         [
@@ -631,13 +651,15 @@ function buildInitialTree(): VfsNode {
                     content: JSON.stringify({
                       type: "app",
                       target: "pinball",
-                      icon: "/icons/pinball.png",
+                      icon: "/icons/pinball.exe/000.ico",
                     }),
                     system: true,
                   }),
                 ],
                 true,
               ),
+
+              dir("StartUp", [], true),
 
               file("Winamp.lnk", {
                 content: JSON.stringify({
@@ -819,9 +841,73 @@ v4.95.1996
 
   return dir(
     "C:\\",
-    [windows, myDocuments, myPictures, programFiles, recycled],
+    [
+      file("AUTOEXEC.BAT", {
+        content: "@ECHO OFF\nPROMPT $p$g\nPATH=C:\\WINDOWS;C:\\WINDOWS\\COMMAND\n",
+        system: true,
+      }),
+      file("CONFIG.SYS", {
+        content: "DEVICE=C:\\WINDOWS\\HIMEM.SYS\nDOS=HIGH,UMB\nFILES=40\n",
+        system: true,
+      }),
+      file("COMMAND.COM", { system: true, readonly: true }),
+      file("IO.SYS", {
+        system: true,
+        hidden: true,
+        readonly: true,
+      }),
+      file("MSDOS.SYS", {
+        content: "[Options]\nBootGUI=1\n",
+        system: true,
+        hidden: true,
+        readonly: true,
+      }),
+      file("BOOTLOG.TXT", { system: true, hidden: true }),
+      windows,
+      myDocuments,
+      myPictures,
+      programFiles,
+      recycled,
+    ],
     true,
   );
+}
+
+/**
+ * Upgrade the immutable operating-system portion of an existing virtual disk
+ * while preserving every user-created file and directory. This lets the VFS
+ * evolve like an installed OS rather than requiring a destructive reset.
+ */
+function mergeCanonicalTree(
+  canonical: VfsNode,
+  persisted: VfsNode | undefined,
+): VfsNode {
+  if (!persisted || canonical.type !== "dir" || persisted.type !== "dir") {
+    return persisted && !canonical.system ? persisted : canonical;
+  }
+
+  const oldChildren = persisted.children ?? [];
+  const canonicalNames = new Set(
+    (canonical.children ?? []).map((child) => child.name.toLowerCase()),
+  );
+  const children = (canonical.children ?? []).map((child) => {
+    const old = oldChildren.find(
+      (candidate) => candidate.name.toLowerCase() === child.name.toLowerCase(),
+    );
+    if (child.type === "dir" && old?.type === "dir") {
+      return mergeCanonicalTree(child, old);
+    }
+    return old && !child.system ? old : child;
+  });
+
+  // Never discard user additions (including additions made inside a system
+  // folder such as Desktop or My Documents).
+  children.push(
+    ...oldChildren.filter(
+      (child) => !canonicalNames.has(child.name.toLowerCase()),
+    ),
+  );
+  return { ...canonical, children };
 }
 
 // Directories searched when resolving a bare command name (PATH).
@@ -1176,12 +1262,15 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 9,
-      migrate: () => ({
-        root: buildInitialTree(),
-        cwd: "C:\\My Documents",
-        recycled: [],
-      }),
+      version: 10,
+      migrate: (persisted) => {
+        const old = persisted as Partial<VfsState> | undefined;
+        return {
+          root: mergeCanonicalTree(buildInitialTree(), old?.root),
+          cwd: old?.cwd ?? "C:\\My Documents",
+          recycled: old?.recycled ?? [],
+        };
+      },
     },
   ),
 );

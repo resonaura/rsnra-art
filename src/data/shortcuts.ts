@@ -30,6 +30,12 @@ export function parseLnk(node: VfsNode): LnkData | null {
 }
 
 export function lnkIcon(lnk: LnkData): string {
+  // Repair shortcuts persisted by an older build which referenced a PNG that
+  // never existed. Keeping this alias here also fixes existing localStorage
+  // installations without forcing users to reset their virtual disk.
+  if (lnk.icon === "/icons/pinball.png") {
+    return "/icons/pinball.exe/000.ico";
+  }
   if (lnk.icon) return lnk.icon;
   if (lnk.type === "app" && APPS[lnk.target as AppId]) {
     return APPS[lnk.target as AppId].icon;

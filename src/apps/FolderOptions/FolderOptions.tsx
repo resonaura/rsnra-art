@@ -123,14 +123,14 @@ const NewTypeForm = styled.div`
 // Mirrors the store's own defaults (see filePrefsStore.ts) — used by "Restore
 // Defaults", which only resets the dialog's staged values until Apply/OK.
 const DEFAULTS = {
-  showHidden: false,
+  showHidden: true,
   singleClickOpen: false,
   underlineMode: "browser" as UnderlineMode,
   browseFoldersMode: "same" as BrowseFoldersMode,
   webContentInFolders: true,
   activeDesktopWebContent: false,
   hideKnownExtensions: false,
-  hideProtectedSystemFiles: true,
+  hideProtectedSystemFiles: false,
   showMyDocumentsOnDesktop: true,
   showPopupDescriptions: true,
   fullPathInTitleBar: false,

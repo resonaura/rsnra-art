@@ -143,7 +143,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   "recycle-bin": {
     id: "recycle-bin",
     title: "Recycle Bin",
-    icon: "/icons/shell32.dll/079.ico",
+    icon: "/icons/shell32.dll/078.ico",
     component: asComponent(RecycleBin),
     width: 380,
     height: 300,
@@ -296,7 +296,7 @@ export const APPS: Record<AppId, AppDefinition> = {
   pinball: {
     id: "pinball",
     title: "3D Pinball for Windows - Space Cadet",
-    icon: "/icons/pinball.png",
+    icon: "/icons/pinball.exe/000.ico",
     component: asComponent(Pinball),
     width: 616,
     height: 500,

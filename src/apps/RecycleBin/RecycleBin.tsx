@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ContextMenu, CtxItem } from "../../components/ContextMenu";
@@ -6,6 +6,7 @@ import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
+import { useDisplayStore } from "../../store/displayStore";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -111,6 +112,8 @@ interface CtxState {
 
 export function RecycleBin({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const updateIcon = useWindowStore((s) => s.updateIcon);
+  const desktopIcons = useDisplayStore((s) => s.desktopIcons);
   const recycled = useVfsStore((s) => s.recycled);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
   const restoreFromRecycleBin = useVfsStore((s) => s.restoreFromRecycleBin);
@@ -120,6 +123,21 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const [ctx, setCtx] = useState<CtxState | null>(null);
 
   const isEmpty = recycled.length === 0;
+
+  // Keep the open window/taskbar icon synchronized too; previously only the
+  // desktop icon reacted to Recycle Bin state.
+  useEffect(() => {
+    updateIcon(
+      windowId,
+      isEmpty ? desktopIcons.recycleEmpty : desktopIcons.recycleFull,
+    );
+  }, [
+    desktopIcons.recycleEmpty,
+    desktopIcons.recycleFull,
+    isEmpty,
+    updateIcon,
+    windowId,
+  ]);
 
   const menus = [
     {
@@ -191,7 +209,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         {isEmpty ? (
           <EmptyState>
             <Icon
-              src="/icons/shell32.dll/079.ico"
+              src={desktopIcons.recycleEmpty}
               size={48}
               style={{ width: 48, height: 48 }}
             />

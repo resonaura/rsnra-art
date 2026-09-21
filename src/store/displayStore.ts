@@ -25,8 +25,9 @@ export type DesktopIconSlot =
 export const DEFAULT_DESKTOP_ICONS: Record<DesktopIconSlot, string> = {
   myComputer: "/icons/explorer.exe/000.ico",
   myDocuments: "/icons/shell32.dll/040.ico",
-  recycleFull: "/icons/shell32.dll/078.ico",
-  recycleEmpty: "/icons/shell32.dll/079.ico",
+  // In this shell32 extraction 078 is the empty can and 079 contains paper.
+  recycleFull: "/icons/shell32.dll/079.ico",
+  recycleEmpty: "/icons/shell32.dll/078.ico",
 };
 
 /**
@@ -95,6 +96,28 @@ export const useDisplayStore = create<DisplayStoreState>()(
       setDesktopIcon: (slot, icon) =>
         set((s) => ({ desktopIcons: { ...s.desktopIcons, [slot]: icon } })),
     }),
-    { name: "rsnra95-display" },
+    {
+      name: "rsnra95-display",
+      version: 2,
+      migrate: (persisted, version) => {
+        const old = persisted as Partial<DisplayStoreState>;
+        const icons = old.desktopIcons;
+        if (
+          version < 2 &&
+          icons?.recycleFull === "/icons/shell32.dll/078.ico" &&
+          icons?.recycleEmpty === "/icons/shell32.dll/079.ico"
+        ) {
+          return {
+            ...old,
+            desktopIcons: {
+              ...icons,
+              recycleFull: "/icons/shell32.dll/079.ico",
+              recycleEmpty: "/icons/shell32.dll/078.ico",
+            },
+          };
+        }
+        return old;
+      },
+    },
   ),
 );

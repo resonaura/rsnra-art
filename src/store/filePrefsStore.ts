@@ -72,7 +72,9 @@ interface FilePrefsState {
 export const useFilePrefsStore = create<FilePrefsState>()(
   persist(
     (set) => ({
-      showHidden: false,
+      // This installation is meant to be inspectable: expose the complete
+      // virtual machine by default instead of making most of it appear empty.
+      showHidden: true,
       setShowHidden: (showHidden) => set({ showHidden }),
       openWithDefaults: {},
       setOpenWithDefault: (extension, appId) =>
@@ -93,7 +95,7 @@ export const useFilePrefsStore = create<FilePrefsState>()(
 
       hideKnownExtensions: false,
       setHideKnownExtensions: (hideKnownExtensions) => set({ hideKnownExtensions }),
-      hideProtectedSystemFiles: true,
+      hideProtectedSystemFiles: false,
       setHideProtectedSystemFiles: (hideProtectedSystemFiles) => set({ hideProtectedSystemFiles }),
       showMyDocumentsOnDesktop: true,
       setShowMyDocumentsOnDesktop: (showMyDocumentsOnDesktop) => set({ showMyDocumentsOnDesktop }),
@@ -133,8 +135,16 @@ export const useFilePrefsStore = create<FilePrefsState>()(
     }),
     {
       name: "rsnra95-fileprefs",
-      version: 2,
-      migrate: (persisted) => persisted as FilePrefsState,
+      version: 3,
+      migrate: (persisted, version) => ({
+        ...(persisted as Partial<FilePrefsState>),
+        // v3 changes the out-of-box Explorer policy. Apply it once to older
+        // installations as well, otherwise localStorage would preserve the
+        // old empty-looking Games and Windows folders indefinitely.
+        ...(version < 3
+          ? { showHidden: true, hideProtectedSystemFiles: false }
+          : {}),
+      }) as FilePrefsState,
     },
   ),
 );

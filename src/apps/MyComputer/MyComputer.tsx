@@ -339,32 +339,6 @@ const ColDate = styled.span`
   white-space: nowrap;
 `;
 
-const LockBadge = styled.svg`
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  pointer-events: none;
-`;
-
-function LockGlyph() {
-  return (
-    <LockBadge
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      shapeRendering="crispEdges"
-      aria-hidden
-    >
-      <path
-        d="M2 4 L2 9 L8 9 L8 4 Z M3 4 L3 2 A2 2 0 0 1 7 2 L7 4"
-        fill="#ffe680"
-        stroke="#000"
-        strokeWidth="1"
-      />
-    </LockBadge>
-  );
-}
-
 interface Drive {
   label: string;
   icon: string;
@@ -572,9 +546,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
     })),
   );
   const winData = useWindowData(windowId);
-  const [path, setPath] = useState<string>(
-    (winData.path as string) ?? MY_COMPUTER,
-  );
+  const initialPath = (winData.path as string) ?? MY_COMPUTER;
+  const [path, setPath] = useState<string>(initialPath);
+  const [history, setHistory] = useState<string[]>([initialPath]);
+  const [historyIndex, setHistoryIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [openWithTarget, setOpenWithTarget] = useState<{
@@ -674,7 +649,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
   }
   const entries = allEntries.filter(
     (n) =>
-      (showHidden || !n.hidden) && (!hideProtectedSystemFiles || !n.system),
+      (showHidden || !n.hidden) &&
+      // Windows only treats hidden system objects as protected OS files.
+      // A normal system-owned folder/shortcut (including the Games folder)
+      // must not disappear when the recommended option is enabled.
+      (!hideProtectedSystemFiles || !(n.system && n.hidden)),
   );
 
   const sortValue = (n: VfsNode): string | number => {
@@ -744,13 +723,36 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const refresh = () => setPath((p) => p); // no-op; VFS mutations re-render via root swap
   void refresh;
 
+  const navigateTo = (nextPath: string) => {
+    if (nextPath === path) return;
+    setHistory((items) => [...items.slice(0, historyIndex + 1), nextPath]);
+    setHistoryIndex((index) => index + 1);
+    setPath(nextPath);
+    setSelected(null);
+  };
+
+  const goBack = () => {
+    if (historyIndex <= 0) return;
+    const nextIndex = historyIndex - 1;
+    setHistoryIndex(nextIndex);
+    setPath(history[nextIndex]);
+    setSelected(null);
+  };
+
+  const goForward = () => {
+    if (historyIndex >= history.length - 1) return;
+    const nextIndex = historyIndex + 1;
+    setHistoryIndex(nextIndex);
+    setPath(history[nextIndex]);
+    setSelected(null);
+  };
+
   const enter = (d: Drive) => {
     if (d.kind === "app") {
       if (d.appId) openApp(d.appId as never);
       return;
     }
-    setPath(d.target);
-    setSelected(null);
+    navigateTo(d.target);
   };
 
   const openNode = (node: VfsNode) => {
@@ -790,8 +792,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       if (browseFoldersMode === "own") {
         openApp("my-computer", { title: node.name, data: { path: abs } });
       } else {
-        setPath(abs);
-        setSelected(null);
+        navigateTo(abs);
       }
     } else if (node.appId && APPS[node.appId as keyof typeof APPS]) {
       const id = node.appId as keyof typeof APPS;
@@ -832,14 +833,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const goUp = () => {
     if (isRoot) return;
     if (isDriveRoot || path === "Control Panel" || path === "Games") {
-      setPath(MY_COMPUTER);
-      setSelected(null);
+      navigateTo(MY_COMPUTER);
       return;
     }
     const up = vfs.resolvePath("..", path);
     if (up) {
-      setPath(up);
-      setSelected(null);
+      navigateTo(up);
     }
   };
 
@@ -927,10 +926,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
     return !!abs && abs.toLowerCase() === clipboard.sourcePath.toLowerCase();
   };
 
-  // Opacity for an icon: system items slightly dimmed, hidden + cut items
-  // half-transparent (only seen when "Show Hidden Files" is on).
+  // Explorer ghosts hidden and cut items. The System attribute by itself has
+  // no visual treatment in classic Windows (and no lock overlay).
   const nodeOpacity = (node: VfsNode): number =>
-    node.system ? 0.85 : node.hidden || isCutSource(node) ? 0.5 : 1;
+    node.hidden || isCutSource(node) ? 0.5 : 1;
 
   // Open the Properties window for a node (right-click → Properties, or the
   // File menu). Works for both files and folders, including system items.
@@ -1231,11 +1230,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       onDragOver: isDropTarget ? handleDragOverDir(node.name) : undefined,
       onDragLeave: isDropTarget ? handleDragLeaveDir(node.name) : undefined,
       onDrop: isDropTarget ? handleDropOnDir(abs!) : undefined,
-      title: node.system
-        ? "System item — protected, cannot be moved, renamed, or deleted"
-        : showPopupDescriptions
-          ? describeTypeLocal(node)
-          : undefined,
+      title: showPopupDescriptions ? describeTypeLocal(node) : undefined,
       onClick: (e: React.MouseEvent) => {
         e.stopPropagation();
         setSelected(node.name);
@@ -1284,7 +1279,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
     >
       <div style={{ position: "relative" }}>
         <FileIcon node={node} />
-        {node.system && <LockGlyph />}
       </div>
       {renaming === node.name ? renameBox() : nodeLabel(node)}
     </IconItem>
@@ -1302,7 +1296,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
     >
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FileIcon node={node} size={16} />
-        {node.system && <LockGlyph />}
       </div>
       <span
         style={{
@@ -1328,7 +1321,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
       <ColName>
         <div style={{ position: "relative", flexShrink: 0 }}>
           <FileIcon node={node} size={16} />
-          {node.system && <LockGlyph />}
         </div>
         {renaming === node.name ? (
           renameBox(140)
@@ -1363,6 +1355,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
       <AppMenuBar menus={menus} />
       <Separator />
       <NavToolbar>
+        <NavBtn
+          onClick={goBack}
+          disabled={historyIndex <= 0}
+          title="Back"
+          aria-label="Back"
+        >
+          ←
+        </NavBtn>
+        <NavBtn
+          onClick={goForward}
+          disabled={historyIndex >= history.length - 1}
+          title="Forward"
+          aria-label="Forward"
+        >
+          →
+        </NavBtn>
         <NavBtn onClick={goUp} disabled={isRoot} title="Up one level">
           ↑
         </NavBtn>
