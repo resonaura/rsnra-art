@@ -18,7 +18,11 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
-import { confirmDialog, showMissingFileAlert } from "../../lib/systemDialogs";
+import {
+  alertError,
+  confirmDialog,
+  showMissingFileAlert,
+} from "../../lib/systemDialogs";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useClipboardStore } from "../../store/clipboardStore";
@@ -160,6 +164,23 @@ const AddressField = styled(Frame)`
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+`;
+
+const AddressInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: ${({ theme }) => theme.canvasText};
+  font: inherit;
+`;
+
+const GoButton = styled(Button)`
+  min-width: 42px;
+  height: 24px;
+  padding: 0 8px;
 `;
 
 const IconGrid = styled(ScrollArea)`
@@ -559,6 +580,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const [path, setPath] = useState<string>(initialPath);
   const [history, setHistory] = useState<string[]>([initialPath]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [addressValue, setAddressValue] = useState(initialPath);
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [openWithTarget, setOpenWithTarget] = useState<{
@@ -625,6 +647,20 @@ export function MyComputer({ windowId }: { windowId: string }) {
     setView(nextView);
     if (rememberFolderViewSettings) setFolderView(path, nextView);
   };
+
+  const addressText = (value: string) =>
+    value === MY_COMPUTER ||
+    value === "Control Panel" ||
+    value === "Games" ||
+    fullPathInAddressBar
+      ? value
+      : leafName(value);
+
+  useEffect(() => {
+    setAddressValue(addressText(path));
+    // `addressText` intentionally follows the current path/preferences.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullPathInAddressBar, path]);
   const controlPanelNodes: VfsNode[] = APPLETS.map(
     (applet) =>
       ({
@@ -775,6 +811,38 @@ export function MyComputer({ windowId }: { windowId: string }) {
     setHistoryIndex(nextIndex);
     setPath(history[nextIndex]);
     setSelected(null);
+  };
+
+  const goToAddress = async () => {
+    const requested = addressValue.trim();
+    if (!requested) return;
+    if (requested.toLowerCase() === "my computer") {
+      navigateTo(MY_COMPUTER);
+      return;
+    }
+    if (requested.toLowerCase() === "control panel") {
+      navigateTo("Control Panel");
+      return;
+    }
+    if (requested.toLowerCase() === "games") {
+      navigateTo("C:\\Windows\\Start Menu\\Programs\\Games");
+      return;
+    }
+    if (/^[ad]:\\?$/i.test(requested)) {
+      navigateTo(`${requested[0].toUpperCase()}:\\`);
+      return;
+    }
+    const resolved = vfs.resolvePath(requested, path);
+    const node = resolved ? vfs.resolve(resolved) : null;
+    if (resolved && node?.type === "dir") {
+      navigateTo(resolved);
+      return;
+    }
+    await alertError(
+      "Explorer",
+      `The folder '${requested}' does not exist.\n\nCheck the path and try again.`,
+    );
+    setAddressValue(addressText(path));
   };
 
   const enter = (d: Drive) => {
@@ -1420,13 +1488,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
       <AddressRow>
         <span style={{ fontSize: 12 }}>Address</span>
         <AddressField variant="field">
-          {isRoot ||
-          path === "Control Panel" ||
-          path === "Games" ||
-          fullPathInAddressBar
-            ? path
-            : leafName(path)}
+          <AddressInput
+            aria-label="Address"
+            value={addressValue}
+            onChange={(event) => setAddressValue(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void goToAddress();
+              if (event.key === "Escape") setAddressValue(addressText(path));
+            }}
+          />
         </AddressField>
+        <GoButton onClick={() => void goToAddress()}>Go</GoButton>
       </AddressRow>
 
       <IconGrid
