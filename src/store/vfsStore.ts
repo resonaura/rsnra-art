@@ -56,6 +56,10 @@ export interface VfsState {
   emptyRecycleBin: () => void;
   move: (src: string, destDir: string) => boolean;
   copy: (src: string, destDir: string) => boolean;
+  // Copy/move to an exact destination path (including a new name). These are
+  // atomic: a failed validation never leaves a half-written destination.
+  copyAs: (src: string, destPath: string) => boolean;
+  moveAs: (src: string, destPath: string) => boolean;
   // Copy/move `src` into directory `destDir`, auto-renaming on collision with
   // the Win95 "Copy of <name>" scheme. Returns the resulting node name, or
   // null on failure. Refuses to copy a folder into itself/a descendant.
@@ -176,10 +180,19 @@ function findParent(
 function cloneNode(node: VfsNode): VfsNode {
   const created = now();
   if (node.type === "file") {
-    return { ...node, created, modified: created, accessed: created };
+    return {
+      ...node,
+      // `protected` represents ownership by this installed Windows image,
+      // not a DOS attribute. A user copy of an OS file must remain editable.
+      protected: false,
+      created,
+      modified: created,
+      accessed: created,
+    };
   }
   return {
     ...node,
+    protected: false,
     created,
     modified: created,
     accessed: created,
@@ -1031,7 +1044,10 @@ export const useVfsStore = create<VfsState>()(
       },
 
       diskUsage: () => {
-        const used = nodeByteSize(get().root);
+        // Recycled files still occupy clusters on C: until the bin is emptied.
+        const used =
+          nodeByteSize(get().root) +
+          get().recycled.reduce((sum, item) => sum + nodeByteSize(item.node), 0);
         return {
           total: DISK_CAPACITY,
           used,
@@ -1066,6 +1082,9 @@ export const useVfsStore = create<VfsState>()(
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
           if (existing.protected || existing.readonly) return false;
+          const nextSize = contentByteSize(content);
+          const currentSize = nodeByteSize(existing);
+          if (nextSize - currentSize > get().diskUsage().free) return false;
           // Replace file node immutably
           const newRoot = updateNode(get().root, abs, (node) => ({
             ...node,
@@ -1082,6 +1101,7 @@ export const useVfsStore = create<VfsState>()(
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
         if (!isValidWindowsName(name)) return false;
+        if (contentByteSize(content) > get().diskUsage().free) return false;
         const parentPath =
           parts.length === 1
             ? "C:\\"
@@ -1202,6 +1222,7 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const node = findNode(get().root, srcAbs);
         if (!node) return false;
+        if (nodeByteSize(node) > get().diskUsage().free) return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         if (
@@ -1216,6 +1237,59 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
+      copyAs: (src, destPath) => {
+        const srcAbs = normalizePath(src, get().cwd);
+        const destAbs = normalizePath(destPath, get().cwd);
+        if (!srcAbs || !destAbs || findNode(get().root, destAbs)) return false;
+        const node = findNode(get().root, srcAbs);
+        if (!node || nodeByteSize(node) > get().diskUsage().free) return false;
+        if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return false;
+        const parts = splitAbs(destAbs);
+        const name = parts.at(-1);
+        if (!name || !isValidWindowsName(name)) return false;
+        const parentPath =
+          parts.length === 1
+            ? "C:\\"
+            : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        const parent = findNode(get().root, parentPath);
+        if (!parent || parent.type !== "dir") return false;
+        const clone = cloneNode(node);
+        clone.name = name;
+        const newRoot = insertNode(get().root, parentPath, clone);
+        if (!newRoot) return false;
+        set({ root: newRoot });
+        return true;
+      },
+
+      moveAs: (src, destPath) => {
+        const srcAbs = normalizePath(src, get().cwd);
+        const destAbs = normalizePath(destPath, get().cwd);
+        if (!srcAbs || !destAbs) return false;
+        if (srcAbs.toLowerCase() === destAbs.toLowerCase()) return true;
+        if (findNode(get().root, destAbs)) return false;
+        const ref = findParent(get().root, srcAbs);
+        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return false;
+        const parts = splitAbs(destAbs);
+        const name = parts.at(-1);
+        if (!name || !isValidWindowsName(name)) return false;
+        const parentPath =
+          parts.length === 1
+            ? "C:\\"
+            : "C:" + SEP + parts.slice(0, -1).join(SEP);
+        const parent = findNode(get().root, parentPath);
+        if (!parent || parent.type !== "dir") return false;
+        const movedNode = { ...ref.node, name, modified: now() };
+        let newRoot = removeNode(get().root, srcAbs);
+        if (!newRoot) return false;
+        newRoot = insertNode(newRoot, parentPath, movedNode);
+        if (!newRoot) return false;
+        set({ root: newRoot });
+        return true;
+      },
+
       copyTo: (src, destDir) => {
         const srcAbs = normalizePath(src, get().cwd);
         const destAbs = normalizePath(destDir, get().cwd);
@@ -1224,6 +1298,7 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const node = findNode(get().root, srcAbs);
         if (!node) return null;
+        if (nodeByteSize(node) > get().diskUsage().free) return null;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         const newName = uniqueCopyName(dest, node.name);

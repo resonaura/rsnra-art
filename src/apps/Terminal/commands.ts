@@ -350,10 +350,35 @@ function cmdMkdir(
     return;
   }
   // Support mkdir -p (create parent dirs)
-  let paths = args;
-  if (args[0] === "-p") paths = args.slice(1);
+  const recursive = args[0] === "-p";
+  const paths = recursive ? args.slice(1) : args;
+  if (!paths.length) {
+    ctx.print(["mkdir: missing operand"], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
   for (const p of paths) {
-    if (!ctx.vfs.mkdir(p)) {
+    let created = false;
+    if (recursive) {
+      const abs = ctx.vfs.resolvePath(p);
+      if (abs) {
+        const parts = abs.slice(3).split("\\").filter(Boolean);
+        let current = "C:\\";
+        created = true;
+        for (const part of parts) {
+          current = current.replace(/\\+$/, "") + "\\" + part;
+          const existing = ctx.vfs.resolve(current);
+          if (existing?.type === "dir") continue;
+          if (existing || !ctx.vfs.mkdir(current)) {
+            created = false;
+            break;
+          }
+        }
+      }
+    } else {
+      created = ctx.vfs.mkdir(p);
+    }
+    if (!created) {
       const exists = ctx.vfs.resolvePath(p);
       if (exists && ctx.vfs.resolve(exists)) {
         ctx.print(
@@ -535,12 +560,16 @@ function cmdCopy(
       ctx.setErrorLevel(1);
     }
   } else {
-    // Copy to a new file path
-    const content = ctx.vfs.read(src) ?? "";
-    if (ctx.vfs.writeFile(dst, content)) {
+    // Copy to an exact path while preserving the file's type and attributes.
+    if (ctx.vfs.copyAs(src, dst)) {
       ctx.print(["        1 file(s) copied."]);
     } else {
-      ctx.print(["The system cannot find the path."], "error");
+      ctx.print(
+        [
+          "The system cannot find the path, the disk is full, or the file already exists.",
+        ],
+        "error",
+      );
       ctx.setErrorLevel(1);
     }
   }
@@ -584,22 +613,18 @@ function cmdMove(
       ctx.setErrorLevel(1);
       return;
     }
-    // Read content, write to new path, delete old
-    const content = srcNode.content ?? "";
-    if (srcNode.type === "dir") {
-      if (ctx.vfs.move(src, dst)) {
-        ctx.print(["        1 dir(s) moved."]);
-      } else {
-        ctx.print(["Failed to move directory."], "error");
-        ctx.setErrorLevel(1);
-      }
+    if (ctx.vfs.moveAs(src, dst)) {
+      ctx.print([
+        srcNode.type === "dir"
+          ? "        1 dir(s) moved."
+          : "        1 file(s) moved.",
+      ]);
     } else {
-      if (ctx.vfs.writeFile(dst, content) && ctx.vfs.remove(src)) {
-        ctx.print(["        1 file(s) moved."]);
-      } else {
-        ctx.print(["The system cannot find the path."], "error");
-        ctx.setErrorLevel(1);
-      }
+      ctx.print(
+        ["The system cannot find the path, or the name is in use."],
+        "error",
+      );
+      ctx.setErrorLevel(1);
     }
   }
 }

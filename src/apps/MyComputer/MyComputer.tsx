@@ -571,6 +571,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
       moveTo: s.moveTo,
       move: s.move,
       diskUsage: s.diskUsage,
+      // Free-space display also has to react when only the Recycle Bin changes.
+      recycledCount: s.recycled.length,
     })),
   );
   const clipboard = useClipboardStore(
@@ -1007,7 +1009,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const cutSelected = (node: VfsNode) => {
-    if (node.protected) return;
+    if (node.protected || node.readonly) return;
     const abs = vfs.resolvePath(node.name, path);
     if (abs) clipboard.set("cut", abs);
   };
@@ -1017,10 +1019,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (!clipboard.mode || !clipboard.sourcePath) return;
     const src = clipboard.sourcePath;
     if (clipboard.mode === "copy") {
-      if (vfs.copyTo(src, path) === null) return;
+      if (vfs.copyTo(src, path) === null) {
+        void alertError(
+          "Error Copying File or Folder",
+          "Cannot copy the item. The source may no longer exist, the destination may be inside the source folder, or the disk may be full.",
+        );
+        return;
+      }
     } else {
       // cut → move; a successful move consumes the clipboard.
-      if (vfs.moveTo(src, path) === null) return;
+      if (vfs.moveTo(src, path) === null) {
+        void alertError(
+          "Error Moving File or Folder",
+          "Cannot move the item. Check that the source and destination are available and that the item is not read-only.",
+        );
+        return;
+      }
       clipboard.clear();
     }
     refresh();
@@ -1137,26 +1151,57 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
   const selectedNode = sorted.find((n) => n.name === selected) ?? null;
 
-  // Explorer keyboard shortcuts: Ctrl+C / Ctrl+X copy/cut the selected node,
-  // Ctrl+V pastes the clipboard into the open folder. Only active while this
-  // Explorer window is the focused one, so they never collide with Notepad,
-  // Terminal, etc. Ignored while renaming so the keys edit the filename.
+  // Explorer keyboard shortcuts. Only active while this window is focused,
+  // so they never collide with Notepad, Terminal, etc.
   useEffect(() => {
     if (!isFocused) return;
     const onKey = (e: KeyboardEvent) => {
       if (renaming || path === "Control Panel" || path === "Games") return;
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === "c" && selectedNode) {
+      if (mod && key === "c" && selectedNode) {
         e.preventDefault();
         copySelected(selectedNode);
-      } else if (key === "x" && selectedNode && !selectedNode.protected) {
+      } else if (
+        mod &&
+        key === "x" &&
+        selectedNode &&
+        !selectedNode.protected &&
+        !selectedNode.readonly
+      ) {
         e.preventDefault();
         cutSelected(selectedNode);
-      } else if (key === "v") {
+      } else if (mod && key === "v") {
         e.preventDefault();
         paste();
+      } else if (!mod && key === "enter" && selectedNode) {
+        e.preventDefault();
+        openNode(selectedNode);
+      } else if (
+        !mod &&
+        key === "delete" &&
+        selectedNode &&
+        !selectedNode.protected &&
+        !selectedNode.readonly
+      ) {
+        e.preventDefault();
+        void deleteNode(selectedNode);
+      } else if (
+        !mod &&
+        key === "f2" &&
+        selectedNode &&
+        !selectedNode.protected &&
+        !selectedNode.readonly
+      ) {
+        e.preventDefault();
+        setRenaming(selectedNode.name);
+        setRenameVal(selectedNode.name);
+      } else if (!mod && key === "backspace") {
+        e.preventDefault();
+        goUp();
+      } else if (!mod && key === "escape") {
+        setSelected(null);
+        setCtx(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1245,6 +1290,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           disabled:
             !selectedNode ||
             !!selectedNode?.protected ||
+            !!selectedNode?.readonly ||
             path === "Control Panel" ||
             path === "Games",
         },
