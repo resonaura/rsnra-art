@@ -66,6 +66,7 @@ const Val = styled.div`
 
 const AttrRow = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   padding-top: 4px;
 `;
@@ -119,6 +120,21 @@ function fileSize(node: VfsNode): number {
   return total;
 }
 
+function countContents(node: VfsNode): { files: number; folders: number } {
+  let files = 0;
+  let folders = 0;
+  const walk = (current: VfsNode) => {
+    if (current.type === "file") {
+      files++;
+      return;
+    }
+    folders++;
+    current.children?.forEach(walk);
+  };
+  node.children?.forEach(walk);
+  return { files, folders };
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} bytes`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -147,6 +163,7 @@ export function Properties({ windowId }: { windowId: string }) {
   const [hidden, setHidden] = useState(!!node?.hidden);
   const [readonly, setReadonly] = useState(!!node?.readonly);
   const [archive, setArchive] = useState(node?.archive ?? true);
+  const [system, setSystem] = useState(!!node?.system);
 
   const parent = path.includes(SEP)
     ? path.slice(0, path.lastIndexOf(SEP))
@@ -169,6 +186,11 @@ export function Properties({ windowId }: { windowId: string }) {
   const name = node.name;
   const type = describeType(node);
   const size = fileSize(node);
+  const sizeOnDisk = size === 0 ? 0 : Math.ceil(size / 4096) * 4096;
+  const contents = node.type === "dir" ? countContents(node) : null;
+  const hasVersionInfo =
+    node.type === "file" &&
+    (node.appId !== undefined || ["EXE", "DLL", "CPL"].includes(extOf(name)));
 
   return (
     <Layout>
@@ -178,7 +200,7 @@ export function Properties({ windowId }: { windowId: string }) {
         style={{ fontSize: 11, zoom: 0.8 }}
       >
         <Tab value="General">General</Tab>
-        <Tab value="Version">Version</Tab>
+        {hasVersionInfo && <Tab value="Version">Version</Tab>}
       </Tabs>
       <Body style={{ height: "fit-content" }}>
         {tab === "General" ? (
@@ -191,7 +213,7 @@ export function Properties({ windowId }: { windowId: string }) {
             </Header>
             <GroupBox
               style={{ zoom: 0.8 }}
-              label={`${type} (${type === "File Folder" ? "" : "General"})`}
+              label="General"
             >
               <Field>
                 <Key>Type:</Key>
@@ -224,6 +246,20 @@ export function Properties({ windowId }: { windowId: string }) {
                 </Val>
               </Field>
               <Field>
+                <Key>Size on disk:</Key>
+                <Val>
+                  {formatSize(sizeOnDisk)}  ({sizeOnDisk} bytes)
+                </Val>
+              </Field>
+              {contents && (
+                <Field>
+                  <Key>Contains:</Key>
+                  <Val>
+                    {contents.files} Files, {contents.folders} Folders
+                  </Val>
+                </Field>
+              )}
+              <Field>
                 <Key>MS-DOS name:</Key>
                 <Val>{shortName(name)}</Val>
               </Field>
@@ -235,11 +271,11 @@ export function Properties({ windowId }: { windowId: string }) {
               </Field>
               <Field>
                 <Key>Modified:</Key>
-                <Val>{formatDate(node.created)}</Val>
+                <Val>{formatDate(node.modified ?? node.created)}</Val>
               </Field>
               <Field>
                 <Key>Accessed:</Key>
-                <Val>{formatDate(node.created)}</Val>
+                <Val>{formatDate(node.accessed ?? node.created)}</Val>
               </Field>
             </GroupBox>
             <GroupBox style={{ zoom: 0.8 }} label="Attributes">
@@ -247,7 +283,7 @@ export function Properties({ windowId }: { windowId: string }) {
                 <Checkbox
                   label="Read-only"
                   checked={readonly}
-                  disabled={!!node.system}
+                  disabled={!!node.protected}
                   onChange={() => {
                     const v = !readonly;
                     setReadonly(v);
@@ -257,7 +293,7 @@ export function Properties({ windowId }: { windowId: string }) {
                 <Checkbox
                   label="Hidden"
                   checked={hidden}
-                  disabled={!!node.system}
+                  disabled={!!node.protected}
                   onChange={() => {
                     const v = !hidden;
                     setHidden(v);
@@ -267,11 +303,21 @@ export function Properties({ windowId }: { windowId: string }) {
                 <Checkbox
                   label="Archive"
                   checked={archive}
-                  disabled={!!node.system}
+                  disabled={!!node.protected}
                   onChange={() => {
                     const v = !archive;
                     setArchive(v);
                     vfs.setAttributes(path, { archive: v });
+                  }}
+                />
+                <Checkbox
+                  label="System"
+                  checked={system}
+                  disabled={!!node.protected}
+                  onChange={() => {
+                    const v = !system;
+                    setSystem(v);
+                    vfs.setAttributes(path, { system: v });
                   }}
                 />
               </AttrRow>

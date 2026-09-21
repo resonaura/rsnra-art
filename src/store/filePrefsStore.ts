@@ -16,6 +16,7 @@ import type { AppId } from "../types/window";
 
 export type UnderlineMode = "browser" | "point";
 export type BrowseFoldersMode = "same" | "own";
+export type FolderViewMode = "large" | "small" | "list" | "details";
 
 interface FilePrefsState {
   showHidden: boolean;
@@ -57,6 +58,8 @@ interface FilePrefsState {
   setLaunchFoldersInSeparateProcess: (v: boolean) => void;
   rememberFolderViewSettings: boolean;
   setRememberFolderViewSettings: (v: boolean) => void;
+  folderViews: Record<string, FolderViewMode>;
+  setFolderView: (path: string, view: FolderViewMode) => void;
 
   // File Types tab
   /** Per-extension icon override (lowercase extension, no dot → icon path). */
@@ -113,6 +116,11 @@ export const useFilePrefsStore = create<FilePrefsState>()(
       setLaunchFoldersInSeparateProcess: (launchFoldersInSeparateProcess) => set({ launchFoldersInSeparateProcess }),
       rememberFolderViewSettings: true,
       setRememberFolderViewSettings: (rememberFolderViewSettings) => set({ rememberFolderViewSettings }),
+      folderViews: {},
+      setFolderView: (path, view) =>
+        set((s) => ({
+          folderViews: { ...s.folderViews, [path.toLowerCase()]: view },
+        })),
 
       extensionIcons: {},
       setExtensionIcon: (extension, icon) =>

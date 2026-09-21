@@ -194,7 +194,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
   let dirCount = 0;
   let totalBytes = 0;
   for (const e of sorted) {
-    const stamp = dirStamp(new Date(e.created));
+    const stamp = dirStamp(new Date(e.modified ?? e.created));
     if (e.type === "dir") {
       dirCount++;
       lines.push(`${stamp}    <DIR>          ${e.name}`);
@@ -210,6 +210,9 @@ function cmdDir(args: string[], ctx: CmdContext) {
     `      ${fileCount} file(s)    ${totalBytes.toLocaleString()} bytes`,
   );
   lines.push(`      ${dirCount} dir(s)`);
+  lines.push(
+    `               ${ctx.vfs.diskUsage().free.toLocaleString()} bytes free`,
+  );
   ctx.print(lines);
 }
 
@@ -242,7 +245,7 @@ function cmdLs(args: string[], ctx: CmdContext) {
     for (const e of sorted) {
       const perm = e.type === "dir" ? "drwxr-xr-x" : "-rw-r--r--";
       const size = String(fileSize(e)).padStart(8);
-      const stamp = new Date(e.created).toLocaleString("en-US", {
+      const stamp = new Date(e.modified ?? e.created).toLocaleString("en-US", {
         month: "short",
         day: "2-digit",
         hour: "2-digit",
@@ -645,13 +648,103 @@ function cmdTouch(args: string[], ctx: CmdContext) {
     }
     const existing = abs ? ctx.vfs.resolve(abs) : null;
     if (existing) {
-      // File exists — "update timestamp" (no-op in VFS, just succeed)
+      if (
+        existing.type !== "file" ||
+        !ctx.vfs.writeFile(abs, existing.content ?? "")
+      ) {
+        ctx.print([`touch: cannot touch '${f}': Access denied`], "error");
+        ctx.setErrorLevel(1);
+      }
       continue;
     }
     if (!ctx.vfs.writeFile(f, "")) {
       ctx.print([`touch: cannot touch '${f}': No such directory`], "error");
       ctx.setErrorLevel(1);
     }
+  }
+}
+
+function cmdAttrib(args: string[], ctx: CmdContext) {
+  const switches = args.filter((arg) => /^[+-][RHSA]+$/i.test(arg));
+  const targetArg = args.find((arg) => !/^[+-][RHSA]+$/i.test(arg)) ?? "*";
+  const lastSep = Math.max(
+    targetArg.lastIndexOf("\\"),
+    targetArg.lastIndexOf("/"),
+  );
+  const hasWildcard = /[*?]/.test(targetArg);
+  const dirArg = hasWildcard
+    ? lastSep >= 0
+      ? targetArg.slice(0, lastSep)
+      : ctx.vfs.cwd
+    : null;
+  const pattern = hasWildcard
+    ? lastSep >= 0
+      ? targetArg.slice(lastSep + 1)
+      : targetArg
+    : null;
+
+  let matches: Array<{ node: VfsNode; path: string }> = [];
+  if (hasWildcard) {
+    const dirPath = ctx.vfs.resolvePath(dirArg!);
+    const dirNode = dirPath ? ctx.vfs.resolve(dirPath) : null;
+    if (dirPath && dirNode?.type === "dir") {
+      matches = expandWildcards(pattern!, dirNode.children ?? []).map(
+        (node) => ({
+          node,
+          path: `${dirPath.replace(/\\+$/, "")}\\${node.name}`,
+        }),
+      );
+    }
+  } else {
+    const path = ctx.vfs.resolvePath(targetArg);
+    const node = path ? ctx.vfs.resolve(path) : null;
+    if (path && node) matches = [{ node, path }];
+  }
+
+  if (!matches.length) {
+    ctx.print(["File not found - " + targetArg], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  if (!switches.length) {
+    ctx.print(
+      matches.map(({ node, path }) => {
+        const attrs = [
+          node.archive ? "A" : " ",
+          node.system ? "S" : " ",
+          node.hidden ? "H" : " ",
+          node.readonly ? "R" : " ",
+        ].join("  ");
+        return `${attrs}     ${path}`;
+      }),
+    );
+    return;
+  }
+
+  const changes: {
+    archive?: boolean;
+    system?: boolean;
+    hidden?: boolean;
+    readonly?: boolean;
+  } = {};
+  for (const item of switches) {
+    const value = item[0] === "+";
+    for (const flag of item.slice(1).toUpperCase()) {
+      if (flag === "A") changes.archive = value;
+      if (flag === "S") changes.system = value;
+      if (flag === "H") changes.hidden = value;
+      if (flag === "R") changes.readonly = value;
+    }
+  }
+
+  let failures = 0;
+  for (const { path } of matches) {
+    if (!ctx.vfs.setAttributes(path, changes)) failures++;
+  }
+  if (failures) {
+    ctx.print(["Access denied - protected system object."], "error");
+    ctx.setErrorLevel(1);
   }
 }
 
@@ -1554,6 +1647,7 @@ const REGISTRY: Record<string, CmdHandler> = {
   mkdir: cmdMkdir,
   md: cmdMkdir,
   touch: cmdTouch,
+  attrib: cmdAttrib,
   // File deletion
   rmdir: cmdRmdir,
   rd: cmdRmdir,
@@ -1649,6 +1743,10 @@ const HELP_TOPICS: Record<string, string[]> = {
   copy: ["COPY <src> <dst>   (CP)", "  Copies a file."],
   move: ["MOVE <src> <dst>   (MV)", "  Moves a file or directory."],
   ren: ["REN <file> <newname>   (RENAME, MV)", "  Renames a file."],
+  attrib: [
+    "ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [file]",
+    "  Displays or changes DOS file attributes.",
+  ],
   tree: ["TREE [path]", "  Displays the directory tree."],
   echo: [
     "ECHO <text>",
@@ -1717,6 +1815,7 @@ export function buildHelpText(): string[] {
     "  copy <src> <dst>     cp <src> <dst>",
     "  move <src> <dst>     mv <src> <dst>",
     "  ren <old> <new>      rename <old> <new>",
+    "  attrib [+r|-r] [+a|-a] [+s|-s] [+h|-h] [file]",
     "",
     "Text Processing:",
     "  grep [-inv] <pat> <file>    head [-n N] <file>",

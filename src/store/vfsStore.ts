@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { BIO_TEXT, LINKS } from "../data/content";
 import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
 import { DEFAULT_WALLPAPER_FILES } from "../data/wallpapers";
+import { contentByteSize } from "../lib/vfsSize";
 import { SCREENSAVERS } from "../screensavers";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -14,14 +15,18 @@ export interface VfsNode {
   children?: VfsNode[]; // dir
   content?: string; // text file
   appId?: string; // executable: launching this file opens the app
-  system?: boolean; // system file — cannot be deleted/renamed
+  system?: boolean; // DOS System attribute (controls protected-file visibility)
+  protected?: boolean; // immutable OS-owned object (separate from attributes)
   hidden?: boolean;
   readonly?: boolean; // read-only — cannot be modified/deleted
   archive?: boolean; // archive bit (Win95)
   created: number;
+  modified?: number;
+  accessed?: number;
 }
 
 export interface RecycledItem {
+  id: string;
   node: VfsNode;
   originalPath: string;
   deletedAt: number;
@@ -39,14 +44,15 @@ export interface VfsState {
   read: (path: string) => string | null;
   exists: (path: string) => boolean;
   findExecutable: (name: string) => string | null; // search PATH dirs for an .exe
+  diskUsage: () => { total: number; used: number; free: number };
 
   // mutations
   mkdir: (path: string) => boolean;
   writeFile: (path: string, content: string) => boolean;
   remove: (path: string) => boolean;
   moveToRecycleBin: (path: string) => boolean;
-  restoreFromRecycleBin: (originalPath: string) => boolean;
-  deleteFromRecycleBin: (originalPath: string) => void;
+  restoreFromRecycleBin: (itemId: string) => boolean;
+  deleteFromRecycleBin: (itemId: string) => void;
   emptyRecycleBin: () => void;
   move: (src: string, destDir: string) => boolean;
   copy: (src: string, destDir: string) => boolean;
@@ -61,7 +67,12 @@ export interface VfsState {
   // system items. Partial — only the provided fields are changed.
   setAttributes: (
     path: string,
-    attrs: { hidden?: boolean; readonly?: boolean; archive?: boolean },
+    attrs: {
+      hidden?: boolean;
+      readonly?: boolean;
+      archive?: boolean;
+      system?: boolean;
+    },
   ) => boolean;
   reorderChildren: (
     dirPath: string,
@@ -72,6 +83,7 @@ export interface VfsState {
 
 // ─── Path helpers ──────────────────────────────────────────────────────────
 const SEP = "\\";
+const DISK_CAPACITY = 2 * 1024 * 1024 * 1024; // period-correct 2 GB FAT volume
 
 // Normalize + resolve a (possibly relative) path against a base dir to an
 // absolute "C:\..." string. Returns null if it escapes the filesystem.
@@ -102,6 +114,19 @@ function normalizePath(path: string, base = "C:\\"): string | null {
     stack.push(part);
   }
   return drive + SEP + stack.join(SEP);
+}
+
+// FAT/VFAT long names still reject the DOS device names and these characters.
+// Explorer also strips trailing spaces/dots, so accepting them here would make
+// nodes that cannot subsequently be addressed by their displayed name.
+function isValidWindowsName(name: string): boolean {
+  if (!name || name === "." || name === ".." || name.length > 255)
+    return false;
+  if (/[<>:"/\\|?*]/.test(name)) return false;
+  if ([...name].some((character) => character.charCodeAt(0) < 32)) return false;
+  if (/[ .]$/.test(name)) return false;
+  const stem = name.split(".")[0].toUpperCase();
+  return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(stem);
 }
 
 function splitAbs(absPath: string): string[] {
@@ -151,11 +176,13 @@ function findParent(
 function cloneNode(node: VfsNode): VfsNode {
   const created = now();
   if (node.type === "file") {
-    return { ...node, created };
+    return { ...node, created, modified: created, accessed: created };
   }
   return {
     ...node,
     created,
+    modified: created,
+    accessed: created,
     children: (node.children ?? []).map(cloneNode),
   };
 }
@@ -167,6 +194,17 @@ function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
   const b = path.toLowerCase().replace(/[\\/]+$/, "");
   if (a === b) return true;
   return b.startsWith(a + SEP);
+}
+
+function nodeByteSize(node: VfsNode): number {
+  if (node.type === "file") {
+    if (node.content) return contentByteSize(node.content);
+    return node.appId ? 32768 : 0;
+  }
+  return (node.children ?? []).reduce(
+    (sum, child) => sum + nodeByteSize(child),
+    0,
+  );
 }
 
 // Generate a non-colliding name inside `parent` based on `name`, using the
@@ -242,11 +280,19 @@ function insertNode(
 ): VfsNode | null {
   // parentAbsPath === "C:\\" means insert directly into root's children
   if (parentAbsPath.replace(/\\+$/, "").toUpperCase() === "C:") {
-    return { ...root, children: [...(root.children ?? []), newNode] };
+    return {
+      ...root,
+      modified: now(),
+      children: [...(root.children ?? []), newNode],
+    };
   }
   return updateNode(root, parentAbsPath, (parent) => {
     if (parent.type !== "dir") return null;
-    return { ...parent, children: [...(parent.children ?? []), newNode] };
+    return {
+      ...parent,
+      modified: now(),
+      children: [...(parent.children ?? []), newNode],
+    };
   });
 }
 
@@ -264,6 +310,7 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
   if (parentParts.length === 0) {
     return {
       ...root,
+      modified: now(),
       children: (root.children ?? []).filter(
         (c) => c.name.toLowerCase() !== name.toLowerCase(),
       ),
@@ -273,6 +320,7 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
     if (parent.type !== "dir") return null;
     return {
       ...parent,
+      modified: now(),
       children: (parent.children ?? []).filter(
         (c) => c.name.toLowerCase() !== name.toLowerCase(),
       ),
@@ -282,6 +330,10 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
 
 let _id = 0;
 const now = () => Date.now() + _id++;
+const timestamps = () => {
+  const created = now();
+  return { created, modified: created, accessed: created };
+};
 const dir = (
   name: string,
   children: VfsNode[] = [],
@@ -291,30 +343,37 @@ const dir = (
   type: "dir",
   children,
   system,
-  created: now(),
+  protected: system,
+  ...timestamps(),
 });
-const file = (name: string, opts: Partial<VfsNode> = {}): VfsNode => ({
-  name,
-  type: "file",
-  content: "",
-  system: false,
-  archive: true, // Win95 sets the archive bit on new/changed files
-  created: now(),
-  ...opts,
-});
+const file = (name: string, opts: Partial<VfsNode> = {}): VfsNode => {
+  const node: VfsNode = {
+    name,
+    type: "file",
+    content: "",
+    system: false,
+    archive: true, // Win95 sets the archive bit on new/changed files
+    ...timestamps(),
+    ...opts,
+  };
+  node.protected = opts.protected ?? !!opts.system;
+  return node;
+};
 const exe = (name: string, appId: string): VfsNode => ({
   name,
   type: "file",
   appId,
   system: true,
-  created: now(),
+  protected: true,
+  ...timestamps(),
 });
 const txt = (name: string, content: string, system = false): VfsNode => ({
   name,
   type: "file",
   content,
   system,
-  created: now(),
+  protected: system,
+  ...timestamps(),
 });
 
 // ─── Canonical Windows 95 filesystem ───────────────────────────────────────
@@ -943,8 +1002,15 @@ export const useVfsStore = create<VfsState>()(
       },
 
       read: (path) => {
-        const node = get().resolve(path);
+        const abs = normalizePath(path, get().cwd);
+        if (!abs) return null;
+        const node = findNode(get().root, abs);
         if (!node || node.type !== "file") return null;
+        const newRoot = updateNode(get().root, abs, (current) => ({
+          ...current,
+          accessed: now(),
+        }));
+        if (newRoot) set({ root: newRoot });
         return node.content ?? "";
       },
 
@@ -964,12 +1030,22 @@ export const useVfsStore = create<VfsState>()(
         return null;
       },
 
+      diskUsage: () => {
+        const used = nodeByteSize(get().root);
+        return {
+          total: DISK_CAPACITY,
+          used,
+          free: Math.max(0, DISK_CAPACITY - used),
+        };
+      },
+
       mkdir: (path) => {
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         if (findNode(get().root, abs)) return false;
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
+        if (!isValidWindowsName(name)) return false;
         const parentPath =
           parts.length === 1
             ? "C:\\"
@@ -989,12 +1065,14 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
-          if (existing.system || existing.readonly) return false;
+          if (existing.protected || existing.readonly) return false;
           // Replace file node immutably
           const newRoot = updateNode(get().root, abs, (node) => ({
             ...node,
             content,
             archive: true,
+            modified: now(),
+            accessed: now(),
           }));
           if (!newRoot) return false;
           set({ root: newRoot });
@@ -1003,6 +1081,7 @@ export const useVfsStore = create<VfsState>()(
         if (existing) return false; // a dir already there
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
+        if (!isValidWindowsName(name)) return false;
         const parentPath =
           parts.length === 1
             ? "C:\\"
@@ -1021,7 +1100,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || ref.node.readonly) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         set({ root: newRoot });
@@ -1032,10 +1111,11 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || ref.node.readonly) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         const item: RecycledItem = {
+          id: `recycled-${Date.now()}-${_id++}`,
           node: ref.node,
           originalPath: abs,
           deletedAt: Date.now(),
@@ -1044,9 +1124,9 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
-      restoreFromRecycleBin: (originalPath) => {
+      restoreFromRecycleBin: (itemId) => {
         const item = get().recycled.find(
-          (r) => r.originalPath === originalPath,
+          (r) => r.id === itemId,
         );
         if (!item) return false;
         const parts = splitAbs(item.originalPath);
@@ -1081,11 +1161,9 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
-      deleteFromRecycleBin: (originalPath) => {
+      deleteFromRecycleBin: (itemId) => {
         set({
-          recycled: get().recycled.filter(
-            (r) => r.originalPath !== originalPath,
-          ),
+          recycled: get().recycled.filter((r) => r.id !== itemId),
         });
       },
 
@@ -1100,7 +1178,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.system || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || ref.node.readonly) return false;
         if (
           dest.children.some(
             (c) => c.name.toLowerCase() === ref.node.name.toLowerCase(),
@@ -1164,7 +1242,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.system || ref.node.readonly) return null;
+        if (!ref || ref.node.protected || ref.node.readonly) return null;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         // No-op if dropped back into its own parent.
@@ -1189,8 +1267,9 @@ export const useVfsStore = create<VfsState>()(
       rename: (path, newName) => {
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
+        if (!isValidWindowsName(newName)) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.system || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || ref.node.readonly) return false;
         if (
           ref.parent.children!.some(
             (c) =>
@@ -1201,6 +1280,7 @@ export const useVfsStore = create<VfsState>()(
         const newRoot = updateNode(get().root, abs, (node) => ({
           ...node,
           name: newName,
+          modified: now(),
         }));
         if (!newRoot) return false;
         set({ root: newRoot });
@@ -1220,12 +1300,13 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const node = findNode(get().root, abs);
-        if (!node || node.system) return false;
+        if (!node || node.protected) return false;
         const newRoot = updateNode(get().root, abs, (n) => ({
           ...n,
           ...("hidden" in attrs && { hidden: attrs.hidden }),
           ...("readonly" in attrs && { readonly: attrs.readonly }),
           ...("archive" in attrs && { archive: attrs.archive }),
+          ...("system" in attrs && { system: attrs.system }),
         }));
         if (!newRoot) return false;
         set({ root: newRoot });
@@ -1251,7 +1332,7 @@ export const useVfsStore = create<VfsState>()(
             ...rest.slice(target),
           ];
           success = true;
-          return { ...parent, children: newChildren };
+          return { ...parent, modified: now(), children: newChildren };
         });
         if (newRoot && success) {
           set({ root: newRoot });
@@ -1262,13 +1343,18 @@ export const useVfsStore = create<VfsState>()(
     }),
     {
       name: "rsnra95-vfs",
-      version: 10,
+      version: 11,
       migrate: (persisted) => {
         const old = persisted as Partial<VfsState> | undefined;
         return {
           root: mergeCanonicalTree(buildInitialTree(), old?.root),
           cwd: old?.cwd ?? "C:\\My Documents",
-          recycled: old?.recycled ?? [],
+          recycled: (old?.recycled ?? []).map((item, index) => ({
+            ...item,
+            id:
+              item.id ??
+              `recycled-migrated-${item.deletedAt ?? Date.now()}-${index}`,
+          })),
         };
       },
     },

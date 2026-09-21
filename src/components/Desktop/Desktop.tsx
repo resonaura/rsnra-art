@@ -6,6 +6,7 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
 import { patternDataUri } from "../../lib/patterns";
+import { confirmDialog } from "../../lib/systemDialogs";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { screenSaverByFile } from "../../screensavers";
 import { useDesktopStore } from "../../store/desktopStore";
@@ -638,8 +639,13 @@ export function Desktop() {
           <CtxDivider />
           <CtxItem
             $disabled={recycledCount === 0}
-            onClick={() => {
+            onClick={async () => {
               if (recycledCount === 0) return;
+              const result = await confirmDialog(
+                "Confirm Multiple File Delete",
+                "Are you sure you want to permanently delete all items in the Recycle Bin?",
+              );
+              if (result !== "yes") return;
               emptyRecycleBin();
               playSound("recycle");
               setIconCtx(null);
@@ -717,7 +723,7 @@ export function Desktop() {
                   Open With...
                 </CtxItem>
               )}
-              {!node.system && (
+              {!node.protected && !node.readonly && (
                 <>
                   <CtxDivider />
                   <CtxItem
@@ -730,7 +736,12 @@ export function Desktop() {
                     Rename
                   </CtxItem>
                   <CtxItem
-                    onClick={() => {
+                    onClick={async () => {
+                      const result = await confirmDialog(
+                        "Confirm File Delete",
+                        `Are you sure you want to send '${label}' to the Recycle Bin?`,
+                      );
+                      if (result !== "yes") return;
                       useVfsStore.getState().moveToRecycleBin(abs);
                       if (selected === node.name) setSelected(null);
                       setIconCtx(null);

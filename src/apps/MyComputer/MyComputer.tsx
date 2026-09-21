@@ -18,11 +18,12 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
-import { showMissingFileAlert } from "../../lib/systemDialogs";
+import { confirmDialog, showMissingFileAlert } from "../../lib/systemDialogs";
 import { contentByteSize } from "../../lib/vfsSize";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { useClipboardStore } from "../../store/clipboardStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
+import type { FolderViewMode } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
@@ -77,8 +78,15 @@ function formatSize(node: VfsNode): string {
   return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
 }
 
+function diskUsageLabel(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function formatDate(node: VfsNode): string {
-  const d = new Date(node.created);
+  const d = new Date(node.modified ?? node.created);
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
@@ -220,7 +228,7 @@ const StatusBarEl = styled(Frame)`
 
 // ── view-mode rendering ──────────────────────────────────────────────────
 
-type ViewMode = "large" | "small" | "list" | "details";
+type ViewMode = FolderViewMode;
 
 const rowBase = css`
   display: flex;
@@ -535,6 +543,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       copyTo: s.copyTo,
       moveTo: s.moveTo,
       move: s.move,
+      diskUsage: s.diskUsage,
     })),
   );
   const clipboard = useClipboardStore(
@@ -558,7 +567,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
   } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
-  const [view, setView] = useState<ViewMode>("large");
+  const initialFolderView = useFilePrefsStore.getState().folderViews[
+    initialPath.toLowerCase()
+  ];
+  const [view, setView] = useState<ViewMode>(initialFolderView ?? "large");
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<"name" | "size" | "type" | "date">(
     "name",
@@ -590,11 +602,29 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const fullPathInTitleBar = useFilePrefsStore((s) => s.fullPathInTitleBar);
   const fullPathInAddressBar = useFilePrefsStore((s) => s.fullPathInAddressBar);
   const browseFoldersMode = useFilePrefsStore((s) => s.browseFoldersMode);
+  const launchFoldersInSeparateProcess = useFilePrefsStore(
+    (s) => s.launchFoldersInSeparateProcess,
+  );
+  const rememberFolderViewSettings = useFilePrefsStore(
+    (s) => s.rememberFolderViewSettings,
+  );
+  const folderViews = useFilePrefsStore((s) => s.folderViews);
+  const setFolderView = useFilePrefsStore((s) => s.setFolderView);
   const underline: "always" | "hover" | "none" = singleClickOpen
     ? underlineMode === "browser"
       ? "always"
       : "hover"
     : "none";
+
+  useEffect(() => {
+    if (!rememberFolderViewSettings) return;
+    setView(folderViews[path.toLowerCase()] ?? "large");
+  }, [folderViews, path, rememberFolderViewSettings]);
+
+  const changeView = (nextView: ViewMode) => {
+    setView(nextView);
+    if (rememberFolderViewSettings) setFolderView(path, nextView);
+  };
   const controlPanelNodes: VfsNode[] = APPLETS.map(
     (applet) =>
       ({
@@ -669,7 +699,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       case "type":
         return describeTypeLocal(n);
       case "date":
-        return n.created;
+        return n.modified ?? n.created;
       default:
         return n.name.toLowerCase();
     }
@@ -789,7 +819,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (preferred) {
       preferred.open(abs, node.name);
     } else if (node.type === "dir") {
-      if (browseFoldersMode === "own") {
+      if (browseFoldersMode === "own" || launchFoldersInSeparateProcess) {
         openApp("my-computer", { title: node.name, data: { path: abs } });
       } else {
         navigateTo(abs);
@@ -870,9 +900,15 @@ export function MyComputer({ windowId }: { windowId: string }) {
     setRenameVal(name);
   };
 
-  const deleteNode = (node: VfsNode) => {
+  const deleteNode = async (node: VfsNode) => {
     const abs = vfs.resolvePath(node.name, path);
-    if (abs && vfs.moveToRecycleBin(abs)) {
+    if (!abs) return;
+    const result = await confirmDialog(
+      "Confirm File Delete",
+      `Are you sure you want to send '${node.name}' to the Recycle Bin?`,
+    );
+    if (result !== "yes") return;
+    if (vfs.moveToRecycleBin(abs)) {
       refresh();
       setSelected(null);
     } else {
@@ -893,13 +929,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
   // The clipboard stores an absolute source path + mode; paste re-resolves it
   // against the live VFS so it stays valid across navigation and windows.
   const copySelected = (node: VfsNode) => {
-    if (node.system) return;
     const abs = vfs.resolvePath(node.name, path);
     if (abs) clipboard.set("copy", abs);
   };
 
   const cutSelected = (node: VfsNode) => {
-    if (node.system) return;
+    if (node.protected) return;
     const abs = vfs.resolvePath(node.name, path);
     if (abs) clipboard.set("cut", abs);
   };
@@ -947,7 +982,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   // not draggable, and vfs.move()/rename()/remove() already refuse to touch
   // them, so a drop targeting one is a guaranteed no-op we short-circuit here.
   const handleDragStart = (node: VfsNode) => (e: React.DragEvent) => {
-    if (node.system) {
+    if (node.protected) {
       e.preventDefault();
       return;
     }
@@ -1040,10 +1075,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === "c" && selectedNode && !selectedNode.system) {
+      if (key === "c" && selectedNode) {
         e.preventDefault();
         copySelected(selectedNode);
-      } else if (key === "x" && selectedNode && !selectedNode.system) {
+      } else if (key === "x" && selectedNode && !selectedNode.protected) {
         e.preventDefault();
         cutSelected(selectedNode);
       } else if (key === "v") {
@@ -1095,7 +1130,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Delete",
           action: () => selectedNode && deleteNode(selectedNode),
           disabled:
-            !selectedNode || path === "Control Panel" || path === "Games",
+            !selectedNode ||
+            !!selectedNode.protected ||
+            !!selectedNode.readonly ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         {
           label: "Rename",
@@ -1106,7 +1145,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
             }
           },
           disabled:
-            !selectedNode || path === "Control Panel" || path === "Games",
+            !selectedNode ||
+            !!selectedNode.protected ||
+            !!selectedNode.readonly ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         {
           label: "Properties",
@@ -1128,7 +1171,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           action: () => selectedNode && cutSelected(selectedNode),
           disabled:
             !selectedNode ||
-            !!selectedNode?.system ||
+            !!selectedNode?.protected ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1137,7 +1180,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
           action: () => selectedNode && copySelected(selectedNode),
           disabled:
             !selectedNode ||
-            !!selectedNode?.system ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1176,25 +1218,25 @@ export function MyComputer({ windowId }: { windowId: string }) {
       items: [
         {
           label: "Large Icons",
-          action: () => setView("large"),
+          action: () => changeView("large"),
           checked: view === "large",
           radio: true,
         },
         {
           label: "Small Icons",
-          action: () => setView("small"),
+          action: () => changeView("small"),
           checked: view === "small",
           radio: true,
         },
         {
           label: "List",
-          action: () => setView("list"),
+          action: () => changeView("list"),
           checked: view === "list",
           radio: true,
         },
         {
           label: "Details",
-          action: () => setView("details"),
+          action: () => changeView("details"),
           checked: view === "details",
           radio: true,
         },
@@ -1225,7 +1267,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const abs = vfs.resolvePath(node.name, path);
     const isDropTarget = node.type === "dir" && !!abs;
     return {
-      draggable: !node.system,
+      draggable: !node.protected,
       onDragStart: handleDragStart(node),
       onDragOver: isDropTarget ? handleDragOverDir(node.name) : undefined,
       onDragLeave: isDropTarget ? handleDragLeaveDir(node.name) : undefined,
@@ -1501,6 +1543,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {selected ? `\u00a0\u00a0\u00a0\u00a0${selected}` : ""}
         {"\u00a0\u00a0\u00a0\u00a0"}
         {path}
+        {!isRoot && !driveNotReady && path.startsWith("C:")
+          ? `\u00a0\u00a0\u00a0\u00a0${diskUsageLabel(vfs.diskUsage().free)} free`
+          : ""}
       </StatusBarEl>
 
       {ctx && (
@@ -1576,33 +1621,40 @@ export function MyComputer({ windowId }: { windowId: string }) {
               </CtxItem>
               <CtxDivider />
               <CtxItem
-                $disabled={!!ctx.node!.system}
+                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
                 onClick={() =>
-                  !ctx.node!.system && runCtx(() => cutSelected(ctx.node!))
+                  !ctx.node!.protected &&
+                  !ctx.node!.readonly &&
+                  runCtx(() => cutSelected(ctx.node!))
                 }
               >
                 Cut
               </CtxItem>
               <CtxItem
-                $disabled={!!ctx.node!.system}
-                onClick={() =>
-                  !ctx.node!.system && runCtx(() => copySelected(ctx.node!))
-                }
+                onClick={() => runCtx(() => copySelected(ctx.node!))}
               >
                 Copy
               </CtxItem>
               <CtxDivider />
               <CtxItem
-                onClick={() =>
+                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
+                onClick={() => {
+                  if (ctx.node!.protected || ctx.node!.readonly) return;
                   runCtx(() => {
                     setRenaming(ctx.node!.name);
                     setRenameVal(ctx.node!.name);
-                  })
-                }
+                  });
+                }}
               >
                 Rename
               </CtxItem>
-              <CtxItem onClick={() => runCtx(() => deleteNode(ctx.node!))}>
+              <CtxItem
+                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
+                onClick={() => {
+                  if (ctx.node!.protected || ctx.node!.readonly) return;
+                  runCtx(() => deleteNode(ctx.node!));
+                }}
+              >
                 Delete
               </CtxItem>
               <CtxDivider />

@@ -6,6 +6,7 @@ import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
+import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { useDisplayStore } from "../../store/displayStore";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
@@ -124,6 +125,14 @@ export function RecycleBin({ windowId }: { windowId: string }) {
 
   const isEmpty = recycled.length === 0;
 
+  const restoreItem = async (item: RecycledItem) => {
+    if (restoreFromRecycleBin(item.id)) return;
+    await alertError(
+      "Error Restoring File",
+      `Cannot restore '${item.node.name}'. A file with the same name already exists, or the original location is unavailable.`,
+    );
+  };
+
   // Keep the open window/taskbar icon synchronized too; previously only the
   // desktop icon reacted to Recycle Bin state.
   useEffect(() => {
@@ -146,7 +155,12 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         {
           label: "Empty Recycle Bin",
           disabled: isEmpty,
-          action: () => {
+          action: async () => {
+            const result = await confirmDialog(
+              "Confirm Multiple File Delete",
+              "Are you sure you want to permanently delete all items in the Recycle Bin?",
+            );
+            if (result !== "yes") return;
             emptyRecycleBin();
             playSound("recycle");
             setSelected(null);
@@ -163,7 +177,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           label: "Restore All",
           disabled: isEmpty,
           action: () => {
-            recycled.forEach((r) => restoreFromRecycleBin(r.originalPath));
+            recycled.forEach((item) => void restoreItem(item));
             setSelected(null);
           },
         },
@@ -174,7 +188,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           action: () =>
             setSelected(
               recycled.length
-                ? recycled[recycled.length - 1].originalPath
+                ? recycled[recycled.length - 1].id
                 : null,
             ),
         },
@@ -196,7 +210,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const openCtx = (e: React.MouseEvent, item: RecycledItem) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelected(item.originalPath);
+    setSelected(item.id);
     setCtx({ x: e.clientX, y: e.clientY, item });
   };
 
@@ -228,13 +242,13 @@ export function RecycleBin({ windowId }: { windowId: string }) {
             <tbody>
               {recycled.map((item) => (
                 <Tr
-                  key={item.originalPath}
-                  $selected={selected === item.originalPath}
+                  key={item.id}
+                  $selected={selected === item.id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelected(item.originalPath);
+                    setSelected(item.id);
                   }}
-                  onDoubleClick={() => restoreFromRecycleBin(item.originalPath)}
+                  onDoubleClick={() => void restoreItem(item)}
                   onContextMenu={(e) => openCtx(e, item)}
                 >
                   <Td>
@@ -269,7 +283,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
           <CtxItem
             onClick={() => {
-              restoreFromRecycleBin(ctx.item.originalPath);
+              void restoreItem(ctx.item);
               closeCtx();
               setSelected(null);
             }}
@@ -277,8 +291,13 @@ export function RecycleBin({ windowId }: { windowId: string }) {
             Restore
           </CtxItem>
           <CtxItem
-            onClick={() => {
-              deleteFromRecycleBin(ctx.item.originalPath);
+            onClick={async () => {
+              const result = await confirmDialog(
+                "Confirm File Delete",
+                `Are you sure you want to permanently delete '${ctx.item.node.name}'?`,
+              );
+              if (result !== "yes") return;
+              deleteFromRecycleBin(ctx.item.id);
               closeCtx();
               setSelected(null);
             }}
