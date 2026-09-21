@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, Frame, Separator, Toolbar } from "react95";
 import styled, { css } from "styled-components";
 import { useShallow } from "zustand/react/shallow";
@@ -578,7 +578,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const clipboard = useClipboardStore(
     useShallow((s) => ({
       mode: s.mode,
-      sourcePath: s.sourcePath,
+      sourcePaths: s.sourcePaths,
       set: s.set,
       clear: s.clear,
     })),
@@ -589,7 +589,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const [history, setHistory] = useState<string[]>([initialPath]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [addressValue, setAddressValue] = useState(initialPath);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
   const [openWithTarget, setOpenWithTarget] = useState<{
     node: VfsNode;
@@ -801,7 +802,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     setHistory((items) => [...items.slice(0, historyIndex + 1), nextPath]);
     setHistoryIndex((index) => index + 1);
     setPath(nextPath);
-    setSelected(null);
+    setSelected([]);
   };
 
   const goBack = () => {
@@ -809,7 +810,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const nextIndex = historyIndex - 1;
     setHistoryIndex(nextIndex);
     setPath(history[nextIndex]);
-    setSelected(null);
+    setSelected([]);
   };
 
   const goForward = () => {
@@ -817,7 +818,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const nextIndex = historyIndex + 1;
     setHistoryIndex(nextIndex);
     setPath(history[nextIndex]);
-    setSelected(null);
+    setSelected([]);
   };
 
   const goToAddress = async () => {
@@ -956,7 +957,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
       name = `New Folder (${++i})`;
     vfs.mkdir(vfs.resolvePath(name, path)!);
     refresh();
-    setSelected(name);
+    setSelected([name]);
+    setSelectionAnchor(name);
     setRenaming(name);
     setRenameVal(name);
   };
@@ -970,22 +972,34 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const abs = vfs.resolvePath(name, path)!;
     vfs.writeFile(abs, "");
     refresh();
-    setSelected(name);
+    setSelected([name]);
+    setSelectionAnchor(name);
     setRenaming(name);
     setRenameVal(name);
   };
 
-  const deleteNode = async (node: VfsNode) => {
-    const abs = vfs.resolvePath(node.name, path);
-    if (!abs) return;
+  const deleteNodes = async (nodes: VfsNode[]) => {
+    const deletable = nodes.filter((node) => !node.protected && !node.readonly);
+    if (!deletable.length) return;
+    const label =
+      deletable.length === 1
+        ? `'${deletable[0].name}'`
+        : `these ${deletable.length} items`;
     const result = await confirmDialog(
-      "Confirm File Delete",
-      `Are you sure you want to send '${node.name}' to the Recycle Bin?`,
+      deletable.length === 1
+        ? "Confirm File Delete"
+        : "Confirm Multiple File Delete",
+      `Are you sure you want to send ${label} to the Recycle Bin?`,
     );
     if (result !== "yes") return;
-    if (vfs.moveToRecycleBin(abs)) {
+    let removed = 0;
+    for (const node of deletable) {
+      const abs = vfs.resolvePath(node.name, path);
+      if (abs && vfs.moveToRecycleBin(abs)) removed++;
+    }
+    if (removed === deletable.length) {
       refresh();
-      setSelected(null);
+      setSelected([]);
     } else {
       playSound("error");
     }
@@ -994,48 +1008,68 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const commitRename = () => {
     if (renaming && renameVal.trim()) {
       const abs = vfs.resolvePath(renaming, path);
-      if (abs && !vfs.rename(abs, renameVal.trim())) playSound("error");
+      const nextName = renameVal.trim();
+      if (abs && vfs.rename(abs, nextName)) {
+        setSelected((current) =>
+          current.map((name) => (name === renaming ? nextName : name)),
+        );
+        setSelectionAnchor(nextName);
+      } else {
+        playSound("error");
+      }
     }
     setRenaming(null);
     refresh();
   };
 
   // ── clipboard: copy / cut / paste ───────────────────────────────────────
-  // The clipboard stores an absolute source path + mode; paste re-resolves it
+  // The clipboard stores absolute source paths + mode; paste re-resolves them
   // against the live VFS so it stays valid across navigation and windows.
-  const copySelected = (node: VfsNode) => {
-    const abs = vfs.resolvePath(node.name, path);
-    if (abs) clipboard.set("copy", abs);
+  const pathsFor = (nodes: VfsNode[]) =>
+    nodes
+      .map((node) => vfs.resolvePath(node.name, path))
+      .filter((value): value is string => !!value);
+
+  const copySelected = (nodes: VfsNode[]) => {
+    const paths = pathsFor(nodes);
+    if (paths.length) clipboard.set("copy", paths);
   };
 
-  const cutSelected = (node: VfsNode) => {
-    if (node.protected || node.readonly) return;
-    const abs = vfs.resolvePath(node.name, path);
-    if (abs) clipboard.set("cut", abs);
+  const cutSelected = (nodes: VfsNode[]) => {
+    const paths = pathsFor(
+      nodes.filter((node) => !node.protected && !node.readonly),
+    );
+    if (paths.length) clipboard.set("cut", paths);
   };
 
   const paste = () => {
     if (isRoot || driveNotReady) return;
-    if (!clipboard.mode || !clipboard.sourcePath) return;
-    const src = clipboard.sourcePath;
+    if (!clipboard.mode || !clipboard.sourcePaths.length) return;
+    let failures = 0;
     if (clipboard.mode === "copy") {
-      if (vfs.copyTo(src, path) === null) {
+      for (const src of clipboard.sourcePaths) {
+        if (vfs.copyTo(src, path) === null) failures++;
+      }
+      if (failures) {
         void alertError(
           "Error Copying File or Folder",
-          "Cannot copy the item. The source may no longer exist, the destination may be inside the source folder, or the disk may be full.",
+          `Could not copy ${failures} item(s). The source may no longer exist, the destination may be inside the source folder, or the disk may be full.`,
         );
-        return;
       }
     } else {
-      // cut → move; a successful move consumes the clipboard.
-      if (vfs.moveTo(src, path) === null) {
+      const failedPaths = clipboard.sourcePaths.filter(
+        (src) => vfs.moveTo(src, path) === null,
+      );
+      failures = failedPaths.length;
+      if (failures) {
+        clipboard.set("cut", failedPaths);
         void alertError(
           "Error Moving File or Folder",
-          "Cannot move the item. Check that the source and destination are available and that the item is not read-only.",
+          `Could not move ${failures} item(s). Check that the source and destination are available and that the items are not read-only.`,
         );
-        return;
+      } else {
+        clipboard.clear();
       }
-      clipboard.clear();
     }
     refresh();
   };
@@ -1043,9 +1077,15 @@ export function MyComputer({ windowId }: { windowId: string }) {
   // A cut source is dimmed until it is pasted elsewhere or the clipboard is
   // cleared (e.g. by copying something new).
   const isCutSource = (node: VfsNode): boolean => {
-    if (clipboard.mode !== "cut" || !clipboard.sourcePath) return false;
+    if (clipboard.mode !== "cut" || !clipboard.sourcePaths.length)
+      return false;
     const abs = vfs.resolvePath(node.name, path);
-    return !!abs && abs.toLowerCase() === clipboard.sourcePath.toLowerCase();
+    return (
+      !!abs &&
+      clipboard.sourcePaths.some(
+        (source) => source.toLowerCase() === abs.toLowerCase(),
+      )
+    );
   };
 
   // Explorer ghosts hidden and cut items. The System attribute by itself has
@@ -1095,7 +1135,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (!srcAbs || isSameOrDescendant(destAbs, srcAbs)) return;
     if (vfs.move(srcAbs, destAbs)) {
       refresh();
-      setSelected(null);
+      setSelected([]);
     }
   };
 
@@ -1121,7 +1161,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (parent.toLowerCase() === path.toLowerCase()) return;
     if (vfs.move(srcAbs, path)) {
       refresh();
-      setSelected(null);
+      setSelected([]);
     }
   };
 
@@ -1138,7 +1178,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (path === "Control Panel" || path === "Games") return;
     e.preventDefault();
     e.stopPropagation();
-    if (node) setSelected(node.name);
+    if (node && !selected.includes(node.name)) {
+      setSelected([node.name]);
+      setSelectionAnchor(node.name);
+    }
     setCtx({ x: e.clientX, y: e.clientY, node });
   };
 
@@ -1149,7 +1192,21 @@ export function MyComputer({ windowId }: { windowId: string }) {
     action();
   };
 
-  const selectedNode = sorted.find((n) => n.name === selected) ?? null;
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const selectedNodes = sorted.filter((node) => selectedSet.has(node.name));
+  const selectedNode = selectedNodes.at(-1) ?? null;
+  const selectedDrive =
+    isRoot && selected.length === 1
+      ? DRIVES.find((drive) => drive.label === selected[0]) ?? null
+      : null;
+  const navigableNames = isRoot
+    ? DRIVES.map((drive) => drive.label)
+    : sorted.map((node) => node.name);
+  const contextNodes = ctx?.node
+    ? selectedSet.has(ctx.node.name)
+      ? selectedNodes
+      : [ctx.node]
+    : [];
 
   // Explorer keyboard shortcuts. Only active while this window is focused,
   // so they never collide with Notepad, Terminal, etc.
@@ -1159,36 +1216,40 @@ export function MyComputer({ windowId }: { windowId: string }) {
       if (renaming || path === "Control Panel" || path === "Games") return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (mod && key === "c" && selectedNode) {
+      if (mod && key === "a") {
         e.preventDefault();
-        copySelected(selectedNode);
+        setSelected(navigableNames);
+        setSelectionAnchor(navigableNames.at(-1) ?? null);
+      } else if (mod && key === "c" && selectedNodes.length) {
+        e.preventDefault();
+        copySelected(selectedNodes);
       } else if (
         mod &&
         key === "x" &&
-        selectedNode &&
-        !selectedNode.protected &&
-        !selectedNode.readonly
+        selectedNodes.some((node) => !node.protected && !node.readonly)
       ) {
         e.preventDefault();
-        cutSelected(selectedNode);
+        cutSelected(selectedNodes);
       } else if (mod && key === "v") {
         e.preventDefault();
         paste();
-      } else if (!mod && key === "enter" && selectedNode) {
+      } else if (!mod && key === "enter" && selectedDrive) {
         e.preventDefault();
-        openNode(selectedNode);
+        enter(selectedDrive);
+      } else if (!mod && key === "enter" && selectedNodes.length) {
+        e.preventDefault();
+        selectedNodes.forEach(openNode);
       } else if (
         !mod &&
         key === "delete" &&
-        selectedNode &&
-        !selectedNode.protected &&
-        !selectedNode.readonly
+        selectedNodes.some((node) => !node.protected && !node.readonly)
       ) {
         e.preventDefault();
-        void deleteNode(selectedNode);
+        void deleteNodes(selectedNodes);
       } else if (
         !mod &&
         key === "f2" &&
+        selectedNodes.length === 1 &&
         selectedNode &&
         !selectedNode.protected &&
         !selectedNode.readonly
@@ -1200,14 +1261,30 @@ export function MyComputer({ windowId }: { windowId: string }) {
         e.preventDefault();
         goUp();
       } else if (!mod && key === "escape") {
-        setSelected(null);
+        setSelected([]);
         setCtx(null);
+      } else if (
+        !mod &&
+        ["arrowleft", "arrowup", "arrowright", "arrowdown"].includes(key) &&
+        navigableNames.length
+      ) {
+        e.preventDefault();
+        const current = selected.length
+          ? navigableNames.indexOf(selected.at(-1)!)
+          : -1;
+        const delta = key === "arrowleft" || key === "arrowup" ? -1 : 1;
+        const index = Math.max(
+          0,
+          Math.min(navigableNames.length - 1, current + delta),
+        );
+        setSelected([navigableNames[index]]);
+        setSelectionAnchor(navigableNames[index]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, renaming, selectedNode, path, isRoot, driveNotReady]);
+  }, [isFocused, renaming, selected, path, isRoot, driveNotReady, sorted]);
 
   const menus: MenuDef[] = [
     {
@@ -1235,37 +1312,38 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Open",
           action: () => {
-            if (path === "Control Panel" || path === "Games") {
-              const vNode = sorted.find((n) => n.name === selected);
-              if (vNode) openNode(vNode);
-            } else if (selectedNode) {
-              openNode(selectedNode);
+            if (selectedDrive) {
+              enter(selectedDrive);
+            } else if (path === "Control Panel" || path === "Games") {
+              selectedNodes.forEach(openNode);
+            } else if (selectedNodes.length) {
+              selectedNodes.forEach(openNode);
             }
           },
-          disabled: !selected && !selectedNode,
+          disabled: !selectedDrive && selectedNodes.length === 0,
         },
         {
           label: "Delete",
-          action: () => selectedNode && deleteNode(selectedNode),
+          action: () => void deleteNodes(selectedNodes),
           disabled:
-            !selectedNode ||
-            !!selectedNode.protected ||
-            !!selectedNode.readonly ||
+            !selectedNodes.some(
+              (node) => !node.protected && !node.readonly,
+            ) ||
             path === "Control Panel" ||
             path === "Games",
         },
         {
           label: "Rename",
           action: () => {
-            if (selectedNode) {
+            if (selectedNodes.length === 1 && selectedNode) {
               setRenaming(selectedNode.name);
               setRenameVal(selectedNode.name);
             }
           },
           disabled:
-            !selectedNode ||
-            !!selectedNode.protected ||
-            !!selectedNode.readonly ||
+            selectedNodes.length !== 1 ||
+            !!selectedNode?.protected ||
+            !!selectedNode?.readonly ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1273,7 +1351,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Properties",
           action: () => selectedNode && propertiesOf(selectedNode),
           disabled:
-            !selectedNode || path === "Control Panel" || path === "Games",
+            selectedNodes.length !== 1 ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         { label: "", divider: true },
         { label: "Close", action: () => closeWindow(windowId) },
@@ -1286,19 +1366,21 @@ export function MyComputer({ windowId }: { windowId: string }) {
         { label: "", divider: true },
         {
           label: "Cut",
-          action: () => selectedNode && cutSelected(selectedNode),
+          action: () => cutSelected(selectedNodes),
           disabled:
-            !selectedNode ||
-            !!selectedNode?.protected ||
-            !!selectedNode?.readonly ||
+            !selectedNodes.some(
+              (node) => !node.protected && !node.readonly,
+            ) ||
             path === "Control Panel" ||
             path === "Games",
         },
         {
           label: "Copy",
-          action: () => selectedNode && copySelected(selectedNode),
+          action: () => copySelected(selectedNodes),
           disabled:
-            !selectedNode || path === "Control Panel" || path === "Games",
+            !selectedNodes.length ||
+            path === "Control Panel" ||
+            path === "Games",
         },
         {
           label: "Paste",
@@ -1309,23 +1391,14 @@ export function MyComputer({ windowId }: { windowId: string }) {
             path === "Games" ||
             driveNotReady ||
             !clipboard.mode ||
-            !clipboard.sourcePath,
+            !clipboard.sourcePaths.length,
         },
         { label: "", divider: true },
         {
           label: "Select All",
           action: () => {
-            if (path === "Control Panel") {
-              setSelected(
-                APPLETS.length ? APPLETS[APPLETS.length - 1].label : null,
-              );
-            } else if (path === "Games") {
-              setSelected(GAMES.length ? GAMES[GAMES.length - 1].label : null);
-            } else {
-              setSelected(
-                sorted.length ? sorted[sorted.length - 1].name : null,
-              );
-            }
+            setSelected(navigableNames);
+            setSelectionAnchor(navigableNames.at(-1) ?? null);
           },
         },
       ],
@@ -1392,8 +1465,35 @@ export function MyComputer({ windowId }: { windowId: string }) {
       title: showPopupDescriptions ? describeTypeLocal(node) : undefined,
       onClick: (e: React.MouseEvent) => {
         e.stopPropagation();
-        setSelected(node.name);
-        if (singleClickOpen && renaming !== node.name) openNode(node);
+        if (e.shiftKey && selectionAnchor) {
+          const anchorIndex = sorted.findIndex(
+            (entry) => entry.name === selectionAnchor,
+          );
+          const nodeIndex = sorted.findIndex((entry) => entry.name === node.name);
+          if (anchorIndex >= 0 && nodeIndex >= 0) {
+            const start = Math.min(anchorIndex, nodeIndex);
+            const end = Math.max(anchorIndex, nodeIndex);
+            setSelected(sorted.slice(start, end + 1).map((entry) => entry.name));
+          }
+        } else if (e.ctrlKey || e.metaKey) {
+          setSelected((current) =>
+            current.includes(node.name)
+              ? current.filter((name) => name !== node.name)
+              : [...current, node.name],
+          );
+          setSelectionAnchor(node.name);
+        } else {
+          setSelected([node.name]);
+          setSelectionAnchor(node.name);
+        }
+        if (
+          singleClickOpen &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          renaming !== node.name
+        )
+          openNode(node);
       },
       onDoubleClick: () => {
         if (renaming === node.name || singleClickOpen) return;
@@ -1427,7 +1527,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const renderIcon = (node: VfsNode): ReactNode => (
     <IconItem
       key={node.name}
-      $selected={selected === node.name}
+      $selected={selectedSet.has(node.name)}
       $underline={underline}
       tabIndex={0}
       {...nodeHandlers(node)}
@@ -1446,7 +1546,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const renderSmallRow = (node: VfsNode): ReactNode => (
     <SmallRow
       key={node.name}
-      $selected={selected === node.name}
+      $selected={selectedSet.has(node.name)}
       $dragOver={dragOverKey === node.name}
       $underline={underline}
       tabIndex={0}
@@ -1471,7 +1571,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const renderDetailsRow = (node: VfsNode): ReactNode => (
     <DetailsRow
       key={node.name}
-      $selected={selected === node.name}
+      $selected={selectedSet.has(node.name)}
       $dragOver={dragOverKey === node.name}
       tabIndex={0}
       {...nodeHandlers(node)}
@@ -1553,7 +1653,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
       <IconGrid
         onContextMenu={(e) => openCtx(e, null)}
-        onClick={() => setSelected(null)}
+        onClick={() => {
+          setSelected([]);
+          setSelectionAnchor(null);
+        }}
         onDragOver={(e) => {
           if (isRoot || driveNotReady || !acceptsDrop(e)) return;
           e.preventDefault();
@@ -1576,13 +1679,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
           DRIVES.map((d) => (
             <IconItem
               key={d.label}
-              $selected={selected === d.label}
+              $selected={selectedSet.has(d.label)}
               $underline={underline}
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
-                setSelected(d.label);
-                if (singleClickOpen) enter(d);
+                if (e.ctrlKey || e.metaKey) {
+                  setSelected((current) =>
+                    current.includes(d.label)
+                      ? current.filter((name) => name !== d.label)
+                      : [...current, d.label],
+                  );
+                } else {
+                  setSelected([d.label]);
+                }
+                setSelectionAnchor(d.label);
+                if (singleClickOpen && !e.ctrlKey && !e.metaKey) enter(d);
               }}
               onDoubleClick={() => {
                 if (!singleClickOpen) enter(d);
@@ -1662,7 +1774,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
       <StatusBarEl variant="status">
         {objectCount} object(s)
-        {selected ? `\u00a0\u00a0\u00a0\u00a0${selected}` : ""}
+        {selected.length
+          ? `\u00a0\u00a0\u00a0\u00a0${selected.length === 1 ? selected[0] : `${selected.length} selected`}`
+          : ""}
         {"\u00a0\u00a0\u00a0\u00a0"}
         {path}
         {!isRoot && !driveNotReady && path.startsWith("C:")
@@ -1674,7 +1788,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
           {ctx.node ? (
             <>
-              <CtxItem onClick={() => runCtx(() => openNode(ctx.node!))}>
+              <CtxItem
+                onClick={() => runCtx(() => contextNodes.forEach(openNode))}
+              >
                 Open
               </CtxItem>
               {ctx.node.type === "file" && (
@@ -1743,21 +1859,27 @@ export function MyComputer({ windowId }: { windowId: string }) {
               </CtxItem>
               <CtxDivider />
               <CtxItem
-                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
+                $disabled={
+                  !contextNodes.some(
+                    (node) => !node.protected && !node.readonly,
+                  )
+                }
                 onClick={() =>
-                  !ctx.node!.protected &&
-                  !ctx.node!.readonly &&
-                  runCtx(() => cutSelected(ctx.node!))
+                  runCtx(() => cutSelected(contextNodes))
                 }
               >
                 Cut
               </CtxItem>
-              <CtxItem onClick={() => runCtx(() => copySelected(ctx.node!))}>
+              <CtxItem onClick={() => runCtx(() => copySelected(contextNodes))}>
                 Copy
               </CtxItem>
               <CtxDivider />
               <CtxItem
-                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
+                $disabled={
+                  contextNodes.length !== 1 ||
+                  !!ctx.node!.protected ||
+                  !!ctx.node!.readonly
+                }
                 onClick={() => {
                   if (ctx.node!.protected || ctx.node!.readonly) return;
                   runCtx(() => {
@@ -1769,16 +1891,25 @@ export function MyComputer({ windowId }: { windowId: string }) {
                 Rename
               </CtxItem>
               <CtxItem
-                $disabled={!!ctx.node!.protected || !!ctx.node!.readonly}
+                $disabled={
+                  !contextNodes.some(
+                    (node) => !node.protected && !node.readonly,
+                  )
+                }
                 onClick={() => {
-                  if (ctx.node!.protected || ctx.node!.readonly) return;
-                  runCtx(() => deleteNode(ctx.node!));
+                  runCtx(() => void deleteNodes(contextNodes));
                 }}
               >
                 Delete
               </CtxItem>
               <CtxDivider />
-              <CtxItem onClick={() => runCtx(() => propertiesOf(ctx.node!))}>
+              <CtxItem
+                $disabled={contextNodes.length !== 1}
+                onClick={() =>
+                  contextNodes.length === 1 &&
+                  runCtx(() => propertiesOf(ctx.node!))
+                }
+              >
                 Properties
               </CtxItem>
             </>
@@ -1809,7 +1940,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
                   path === "Games" ||
                   driveNotReady ||
                   !clipboard.mode ||
-                  !clipboard.sourcePath
+                  !clipboard.sourcePaths.length
                 }
                 onClick={() => runCtx(paste)}
               >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
 import { ContextMenu, CtxItem } from "../../components/ContextMenu";
@@ -114,23 +114,56 @@ interface CtxState {
 export function RecycleBin({ windowId }: { windowId: string }) {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const updateIcon = useWindowStore((s) => s.updateIcon);
+  const isFocused = useWindowStore(
+    (s) =>
+      s.windows.find((window) => window.id === windowId)?.isFocused ?? false,
+  );
   const desktopIcons = useDisplayStore((s) => s.desktopIcons);
   const recycled = useVfsStore((s) => s.recycled);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
   const restoreFromRecycleBin = useVfsStore((s) => s.restoreFromRecycleBin);
   const deleteFromRecycleBin = useVfsStore((s) => s.deleteFromRecycleBin);
 
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
 
   const isEmpty = recycled.length === 0;
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const selectedItems = recycled.filter((item) => selectedSet.has(item.id));
 
   const restoreItem = async (item: RecycledItem) => {
-    if (restoreFromRecycleBin(item.id)) return;
+    if (restoreFromRecycleBin(item.id)) return true;
     await alertError(
       "Error Restoring File",
       `Cannot restore '${item.node.name}'. A file with the same name already exists, or the original location is unavailable.`,
     );
+    return false;
+  };
+
+  const restoreItems = async (items: RecycledItem[]) => {
+    const failed: string[] = [];
+    for (const item of items) {
+      if (!(await restoreItem(item))) failed.push(item.id);
+    }
+    setSelected(failed);
+  };
+
+  const deleteItems = async (items: RecycledItem[]) => {
+    if (!items.length) return;
+    const label =
+      items.length === 1
+        ? `'${items[0].node.name}'`
+        : `these ${items.length} items`;
+    const result = await confirmDialog(
+      items.length === 1
+        ? "Confirm File Delete"
+        : "Confirm Multiple File Delete",
+      `Are you sure you want to permanently delete ${label}?`,
+    );
+    if (result !== "yes") return;
+    items.forEach((item) => deleteFromRecycleBin(item.id));
+    setSelected([]);
   };
 
   // Keep the open window/taskbar icon synchronized too; previously only the
@@ -163,7 +196,8 @@ export function RecycleBin({ windowId }: { windowId: string }) {
             if (result !== "yes") return;
             emptyRecycleBin();
             playSound("recycle");
-            setSelected(null);
+            setSelected([]);
+            setSelectionAnchor(null);
           },
         },
         { label: "", divider: true },
@@ -177,20 +211,17 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           label: "Restore All",
           disabled: isEmpty,
           action: () => {
-            recycled.forEach((item) => void restoreItem(item));
-            setSelected(null);
+            void restoreItems(recycled);
           },
         },
         { label: "", divider: true },
         {
           label: "Select All",
           disabled: isEmpty,
-          action: () =>
-            setSelected(
-              recycled.length
-                ? recycled[recycled.length - 1].id
-                : null,
-            ),
+          action: () => {
+            setSelected(recycled.map((item) => item.id));
+            setSelectionAnchor(recycled.at(-1)?.id ?? null);
+          },
         },
       ],
     },
@@ -210,16 +241,48 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const openCtx = (e: React.MouseEvent, item: RecycledItem) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelected(item.id);
+    if (!selectedSet.has(item.id)) {
+      setSelected([item.id]);
+      setSelectionAnchor(item.id);
+    }
     setCtx({ x: e.clientX, y: e.clientY, item });
   };
 
   const closeCtx = () => setCtx(null);
 
+  useEffect(() => {
+    if (!isFocused) return;
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (mod && key === "a") {
+        event.preventDefault();
+        setSelected(recycled.map((item) => item.id));
+        setSelectionAnchor(recycled.at(-1)?.id ?? null);
+      } else if (!mod && key === "delete" && selectedItems.length) {
+        event.preventDefault();
+        void deleteItems(selectedItems);
+      } else if (!mod && key === "enter" && selectedItems.length) {
+        event.preventDefault();
+        void restoreItems(selectedItems);
+      } else if (!mod && key === "escape") {
+        setSelected([]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, selected, recycled]);
+
   return (
     <Layout onClick={closeCtx}>
       <AppMenuBar menus={menus} />
-      <Body>
+      <Body
+        onClick={() => {
+          setSelected([]);
+          setSelectionAnchor(null);
+        }}
+      >
         {isEmpty ? (
           <EmptyState>
             <Icon
@@ -243,12 +306,40 @@ export function RecycleBin({ windowId }: { windowId: string }) {
               {recycled.map((item) => (
                 <Tr
                   key={item.id}
-                  $selected={selected === item.id}
+                  $selected={selectedSet.has(item.id)}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelected(item.id);
+                    if (
+                      e.shiftKey &&
+                      selectionAnchor &&
+                      recycled.some((entry) => entry.id === selectionAnchor)
+                    ) {
+                      const anchor = recycled.findIndex(
+                        (entry) => entry.id === selectionAnchor,
+                      );
+                      const index = recycled.findIndex(
+                        (entry) => entry.id === item.id,
+                      );
+                      const start = Math.min(anchor, index);
+                      const end = Math.max(anchor, index);
+                      setSelected(
+                        recycled
+                          .slice(start, end + 1)
+                          .map((entry) => entry.id),
+                      );
+                    } else if (e.ctrlKey || e.metaKey) {
+                      setSelected((current) =>
+                        current.includes(item.id)
+                          ? current.filter((id) => id !== item.id)
+                          : [...current, item.id],
+                      );
+                      setSelectionAnchor(item.id);
+                    } else {
+                      setSelected([item.id]);
+                      setSelectionAnchor(item.id);
+                    }
                   }}
-                  onDoubleClick={() => void restoreItem(item)}
+                  onDoubleClick={() => void restoreItems([item])}
                   onContextMenu={(e) => openCtx(e, item)}
                 >
                   <Td>
@@ -277,29 +368,27 @@ export function RecycleBin({ windowId }: { windowId: string }) {
       </Body>
       <StatusBar>
         {isEmpty ? "0 object(s)" : `${recycled.length} object(s)`}
+        {selected.length ? `    ${selected.length} selected` : ""}
       </StatusBar>
 
       {ctx && (
         <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx}>
           <CtxItem
             onClick={() => {
-              void restoreItem(ctx.item);
+              void restoreItems(
+                selectedSet.has(ctx.item.id) ? selectedItems : [ctx.item],
+              );
               closeCtx();
-              setSelected(null);
             }}
           >
             Restore
           </CtxItem>
           <CtxItem
-            onClick={async () => {
-              const result = await confirmDialog(
-                "Confirm File Delete",
-                `Are you sure you want to permanently delete '${ctx.item.node.name}'?`,
+            onClick={() => {
+              void deleteItems(
+                selectedSet.has(ctx.item.id) ? selectedItems : [ctx.item],
               );
-              if (result !== "yes") return;
-              deleteFromRecycleBin(ctx.item.id);
               closeCtx();
-              setSelected(null);
             }}
           >
             Delete Permanently
