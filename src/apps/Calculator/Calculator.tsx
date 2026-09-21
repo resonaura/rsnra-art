@@ -69,7 +69,7 @@ export function Calculator() {
       <AppMenuBar menus={menus} />
       <LegacyIframeApp
         ref={iframeRef}
-        src="/legacy/programs/calculator/index.html"
+        src="/legacy/programs/calculator/"
         title="Calculator"
         onLoad={() => setReady(true)}
       />

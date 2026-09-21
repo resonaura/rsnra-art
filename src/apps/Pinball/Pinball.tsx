@@ -3,7 +3,7 @@ import { LegacyIframeApp } from "../../components/LegacyIframeApp";
 export function Pinball() {
   return (
     <LegacyIframeApp
-      src="/legacy/programs/pinball/space-cadet.html"
+      src="/legacy/programs/pinball/"
       title="3D Pinball for Windows - Space Cadet"
     />
   );

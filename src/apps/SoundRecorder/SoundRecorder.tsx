@@ -298,7 +298,7 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
       <AppMenuBar menus={menus} />
       <LegacyIframeApp
         ref={iframeRef}
-        src="/legacy/programs/sound-recorder/index.html"
+        src="/legacy/programs/sound-recorder/"
         title="Sound Recorder"
         allow="microphone"
         onLoad={() => setReady(true)}
