@@ -573,6 +573,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
       diskUsage: s.diskUsage,
       // Free-space display also has to react when only the Recycle Bin changes.
       recycledCount: s.recycled.length,
+      canUndo: s.canUndo,
+      canRedo: s.canRedo,
+      undoDescription: s.undoDescription,
+      redoDescription: s.redoDescription,
+      undo: s.undo,
+      redo: s.redo,
+      transaction: s.transaction,
     })),
   );
   const clipboard = useClipboardStore(
@@ -993,10 +1000,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
     );
     if (result !== "yes") return;
     let removed = 0;
-    for (const node of deletable) {
-      const abs = vfs.resolvePath(node.name, path);
-      if (abs && vfs.moveToRecycleBin(abs)) removed++;
-    }
+    vfs.transaction("Delete to Recycle Bin", () => {
+      for (const node of deletable) {
+        const abs = vfs.resolvePath(node.name, path);
+        if (abs && vfs.moveToRecycleBin(abs)) removed++;
+      }
+    });
     if (removed === deletable.length) {
       refresh();
       setSelected([]);
@@ -1047,9 +1056,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
     if (!clipboard.mode || !clipboard.sourcePaths.length) return;
     let failures = 0;
     if (clipboard.mode === "copy") {
-      for (const src of clipboard.sourcePaths) {
-        if (vfs.copyTo(src, path) === null) failures++;
-      }
+      vfs.transaction("Copy", () => {
+        for (const src of clipboard.sourcePaths) {
+          if (vfs.copyTo(src, path) === null) failures++;
+        }
+      });
       if (failures) {
         void alertError(
           "Error Copying File or Folder",
@@ -1057,9 +1068,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
         );
       }
     } else {
-      const failedPaths = clipboard.sourcePaths.filter(
-        (src) => vfs.moveTo(src, path) === null,
-      );
+      let failedPaths: string[] = [];
+      vfs.transaction("Move", () => {
+        failedPaths = clipboard.sourcePaths.filter(
+          (src) => vfs.moveTo(src, path) === null,
+        );
+      });
       failures = failedPaths.length;
       if (failures) {
         clipboard.set("cut", failedPaths);
@@ -1216,7 +1230,23 @@ export function MyComputer({ windowId }: { windowId: string }) {
       if (renaming || path === "Control Panel" || path === "Games") return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (mod && key === "a") {
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      )
+        return;
+      if (mod && key === "z" && e.shiftKey) {
+        e.preventDefault();
+        vfs.redo();
+      } else if (mod && key === "y") {
+        e.preventDefault();
+        vfs.redo();
+      } else if (mod && key === "z") {
+        e.preventDefault();
+        vfs.undo();
+      } else if (mod && key === "a") {
         e.preventDefault();
         setSelected(navigableNames);
         setSelectionAnchor(navigableNames.at(-1) ?? null);
@@ -1362,7 +1392,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
     {
       label: "Edit",
       items: [
-        { label: "Undo", disabled: true },
+        {
+          label: `Undo${vfs.undoDescription ? ` ${vfs.undoDescription}` : ""}\tCtrl+Z`,
+          action: () => vfs.undo(),
+          disabled: !vfs.canUndo,
+        },
+        {
+          label: `Redo${vfs.redoDescription ? ` ${vfs.redoDescription}` : ""}\tCtrl+Y`,
+          action: () => vfs.redo(),
+          disabled: !vfs.canRedo,
+        },
         { label: "", divider: true },
         {
           label: "Cut",

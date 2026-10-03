@@ -36,6 +36,14 @@ export interface VfsState {
   root: VfsNode; // C:\
   cwd: string; // current working directory (absolute, e.g. "C:\\Windows")
   recycled: RecycledItem[];
+  canUndo: boolean;
+  canRedo: boolean;
+  undoDescription: string | null;
+  redoDescription: string | null;
+  undo: () => boolean;
+  redo: () => boolean;
+  /** Group several synchronous filesystem operations into one undo step. */
+  transaction: (label: string, action: () => void) => void;
 
   // lookups
   resolve: (path: string, base?: string) => VfsNode | null;
@@ -993,10 +1001,133 @@ const PATH_DIRS = [
 // ─── Store ─────────────────────────────────────────────────────────────────
 export const useVfsStore = create<VfsState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      type FsSnapshot = {
+        root: VfsNode;
+        recycled: RecycledItem[];
+        label: string;
+      };
+      const undoStack: FsSnapshot[] = [];
+      const redoStack: FsSnapshot[] = [];
+      const maxHistory = 50;
+      let transactionDepth = 0;
+      let transactionStart: FsSnapshot | null = null;
+      let transactionLabel = "File operation";
+
+      const pushHistory = (stack: FsSnapshot[], snapshot: FsSnapshot) => {
+        stack.push(snapshot);
+        if (stack.length > maxHistory) stack.shift();
+      };
+      const updateHistoryFlags = () =>
+        set({
+          canUndo: undoStack.length > 0,
+          canRedo: redoStack.length > 0,
+          undoDescription: undoStack.at(-1)?.label ?? null,
+          redoDescription: redoStack.at(-1)?.label ?? null,
+        });
+      const commitFilesystemChange = (
+        next: Partial<VfsState>,
+        label: string,
+      ) => {
+        const current = get();
+        if (transactionDepth > 0) {
+          transactionStart ??= {
+            root: current.root,
+            recycled: current.recycled,
+            label: transactionLabel,
+          };
+          set(next);
+          return;
+        }
+        pushHistory(undoStack, {
+          root: current.root,
+          recycled: current.recycled,
+          label,
+        });
+        redoStack.length = 0;
+        set({
+          ...next,
+          canUndo: true,
+          canRedo: false,
+          undoDescription: label,
+          redoDescription: null,
+        });
+      };
+
+      return ({
       root: buildInitialTree(),
       cwd: "C:\\My Documents",
       recycled: [],
+      canUndo: false,
+      canRedo: false,
+      undoDescription: null,
+      redoDescription: null,
+
+      undo: () => {
+        const previous = undoStack.pop();
+        if (!previous) return false;
+        const current = get();
+        pushHistory(redoStack, {
+          root: current.root,
+          recycled: current.recycled,
+          label: previous.label,
+        });
+        set({
+          root: previous.root,
+          recycled: previous.recycled,
+          canUndo: undoStack.length > 0,
+          canRedo: true,
+          undoDescription: undoStack.at(-1)?.label ?? null,
+          redoDescription: previous.label,
+        });
+        return true;
+      },
+
+      redo: () => {
+        const next = redoStack.pop();
+        if (!next) return false;
+        const current = get();
+        pushHistory(undoStack, {
+          root: current.root,
+          recycled: current.recycled,
+          label: next.label,
+        });
+        set({
+          root: next.root,
+          recycled: next.recycled,
+          canUndo: true,
+          canRedo: redoStack.length > 0,
+          undoDescription: next.label,
+          redoDescription: redoStack.at(-1)?.label ?? null,
+        });
+        return true;
+      },
+
+      transaction: (label, action) => {
+        const isOuterTransaction = transactionDepth === 0;
+        if (isOuterTransaction) {
+          transactionStart = null;
+          transactionLabel = label;
+        }
+        transactionDepth++;
+        try {
+          action();
+        } finally {
+          transactionDepth--;
+          if (isOuterTransaction) {
+            const before = transactionStart;
+            transactionStart = null;
+            if (
+              before &&
+              (get().root !== before.root || get().recycled !== before.recycled)
+            ) {
+              pushHistory(undoStack, before);
+              redoStack.length = 0;
+              updateHistoryFlags();
+            }
+          }
+        }
+      },
 
       resolvePath: (path, base) => normalizePath(path, base ?? get().cwd),
 
@@ -1072,7 +1203,7 @@ export const useVfsStore = create<VfsState>()(
           dir(name, [], false),
         );
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Create folder");
         return true;
       },
 
@@ -1094,7 +1225,7 @@ export const useVfsStore = create<VfsState>()(
             accessed: now(),
           }));
           if (!newRoot) return false;
-          set({ root: newRoot });
+          commitFilesystemChange({ root: newRoot }, "Edit file");
           return true;
         }
         if (existing) return false; // a dir already there
@@ -1112,7 +1243,7 @@ export const useVfsStore = create<VfsState>()(
           file(name, { content, system: false }),
         );
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Create file");
         return true;
       },
 
@@ -1123,7 +1254,7 @@ export const useVfsStore = create<VfsState>()(
         if (!ref || ref.node.protected || ref.node.readonly) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Permanently delete");
         return true;
       },
 
@@ -1140,7 +1271,10 @@ export const useVfsStore = create<VfsState>()(
           originalPath: abs,
           deletedAt: Date.now(),
         };
-        set({ root: newRoot, recycled: [...get().recycled, item] });
+        commitFilesystemChange(
+          { root: newRoot, recycled: [...get().recycled, item] },
+          "Delete to Recycle Bin",
+        );
         return true;
       },
 
@@ -1174,21 +1308,28 @@ export const useVfsStore = create<VfsState>()(
             : "C:\\My Documents";
         const newRoot = insertNode(get().root, targetParent, item.node);
         if (!newRoot) return false;
-        set({
-          root: newRoot,
-          recycled: get().recycled.filter((r) => r !== item),
-        });
+        commitFilesystemChange(
+          {
+            root: newRoot,
+            recycled: get().recycled.filter((r) => r !== item),
+          },
+          "Restore from Recycle Bin",
+        );
         return true;
       },
 
       deleteFromRecycleBin: (itemId) => {
-        set({
-          recycled: get().recycled.filter((r) => r.id !== itemId),
-        });
+        const recycled = get().recycled;
+        if (!recycled.some((item) => item.id === itemId)) return;
+        commitFilesystemChange(
+          { recycled: recycled.filter((r) => r.id !== itemId) },
+          "Delete permanently",
+        );
       },
 
       emptyRecycleBin: () => {
-        set({ recycled: [] });
+        if (!get().recycled.length) return;
+        commitFilesystemChange({ recycled: [] }, "Empty Recycle Bin");
       },
 
       move: (src, destDir) => {
@@ -1210,7 +1351,7 @@ export const useVfsStore = create<VfsState>()(
         if (!newRoot) return false;
         newRoot = insertNode(newRoot, destAbs, ref.node);
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Move");
         return true;
       },
 
@@ -1233,7 +1374,7 @@ export const useVfsStore = create<VfsState>()(
           return false;
         const newRoot = insertNode(get().root, destAbs, cloneNode(node));
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
 
@@ -1258,7 +1399,7 @@ export const useVfsStore = create<VfsState>()(
         clone.name = name;
         const newRoot = insertNode(get().root, parentPath, clone);
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
 
@@ -1286,7 +1427,7 @@ export const useVfsStore = create<VfsState>()(
         if (!newRoot) return false;
         newRoot = insertNode(newRoot, parentPath, movedNode);
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Move");
         return true;
       },
 
@@ -1306,7 +1447,7 @@ export const useVfsStore = create<VfsState>()(
         clone.name = newName;
         const newRoot = insertNode(get().root, destAbs, clone);
         if (!newRoot) return null;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Copy");
         return newName;
       },
 
@@ -1335,7 +1476,7 @@ export const useVfsStore = create<VfsState>()(
         if (!newRoot) return null;
         newRoot = insertNode(newRoot, destAbs, movedNode);
         if (!newRoot) return null;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Move");
         return newName;
       },
 
@@ -1358,7 +1499,7 @@ export const useVfsStore = create<VfsState>()(
           modified: now(),
         }));
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Rename");
         return true;
       },
 
@@ -1384,7 +1525,7 @@ export const useVfsStore = create<VfsState>()(
           ...("system" in attrs && { system: attrs.system }),
         }));
         if (!newRoot) return false;
-        set({ root: newRoot });
+        commitFilesystemChange({ root: newRoot }, "Change attributes");
         return true;
       },
 
@@ -1410,15 +1551,21 @@ export const useVfsStore = create<VfsState>()(
           return { ...parent, modified: now(), children: newChildren };
         });
         if (newRoot && success) {
-          set({ root: newRoot });
+          commitFilesystemChange({ root: newRoot }, "Arrange icons");
           return true;
         }
         return false;
       },
-    }),
+      });
+    },
     {
       name: "rsnra95-vfs",
       version: 11,
+      partialize: (state) => ({
+        root: state.root,
+        cwd: state.cwd,
+        recycled: state.recycled,
+      }),
       migrate: (persisted) => {
         const old = persisted as Partial<VfsState> | undefined;
         return {

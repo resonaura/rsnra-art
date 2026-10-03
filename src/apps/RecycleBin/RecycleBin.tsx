@@ -123,6 +123,13 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
   const restoreFromRecycleBin = useVfsStore((s) => s.restoreFromRecycleBin);
   const deleteFromRecycleBin = useVfsStore((s) => s.deleteFromRecycleBin);
+  const transaction = useVfsStore((s) => s.transaction);
+  const canUndo = useVfsStore((s) => s.canUndo);
+  const canRedo = useVfsStore((s) => s.canRedo);
+  const undoDescription = useVfsStore((s) => s.undoDescription);
+  const redoDescription = useVfsStore((s) => s.redoDescription);
+  const undo = useVfsStore((s) => s.undo);
+  const redo = useVfsStore((s) => s.redo);
 
   const [selected, setSelected] = useState<string[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
@@ -143,8 +150,14 @@ export function RecycleBin({ windowId }: { windowId: string }) {
 
   const restoreItems = async (items: RecycledItem[]) => {
     const failed: string[] = [];
-    for (const item of items) {
-      if (!(await restoreItem(item))) failed.push(item.id);
+    transaction("Restore from Recycle Bin", () => {
+      for (const item of items) {
+        if (!restoreFromRecycleBin(item.id)) failed.push(item.id);
+      }
+    });
+    for (const id of failed) {
+      const item = items.find((candidate) => candidate.id === id);
+      if (item) await restoreItem(item);
     }
     setSelected(failed);
   };
@@ -162,7 +175,9 @@ export function RecycleBin({ windowId }: { windowId: string }) {
       `Are you sure you want to permanently delete ${label}?`,
     );
     if (result !== "yes") return;
-    items.forEach((item) => deleteFromRecycleBin(item.id));
+    transaction("Delete permanently", () => {
+      items.forEach((item) => deleteFromRecycleBin(item.id));
+    });
     setSelected([]);
   };
 
@@ -207,6 +222,17 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     {
       label: "Edit",
       items: [
+        {
+          label: `Undo${undoDescription ? ` ${undoDescription}` : ""}\tCtrl+Z`,
+          action: undo,
+          disabled: !canUndo,
+        },
+        {
+          label: `Redo${redoDescription ? ` ${redoDescription}` : ""}\tCtrl+Y`,
+          action: redo,
+          disabled: !canRedo,
+        },
+        { label: "", divider: true },
         {
           label: "Restore All",
           disabled: isEmpty,
@@ -255,7 +281,23 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
-      if (mod && key === "a") {
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      )
+        return;
+      if (mod && key === "z" && event.shiftKey) {
+        event.preventDefault();
+        redo();
+      } else if (mod && key === "y") {
+        event.preventDefault();
+        redo();
+      } else if (mod && key === "z") {
+        event.preventDefault();
+        undo();
+      } else if (mod && key === "a") {
         event.preventDefault();
         setSelected(recycled.map((item) => item.id));
         setSelectionAnchor(recycled.at(-1)?.id ?? null);
@@ -272,7 +314,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, selected, recycled]);
+  }, [isFocused, selected, recycled, undo, redo]);
 
   return (
     <Layout onClick={closeCtx}>
