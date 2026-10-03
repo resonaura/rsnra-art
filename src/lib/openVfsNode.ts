@@ -4,12 +4,12 @@ import { openVfsAudio, openWebamp } from "./webamp";
 import { showMissingFileAlert } from "./systemDialogs";
 import { screenSaverByFile } from "../screensavers";
 import { useSaverRunStore } from "../store/saverRunStore";
-import type { VfsNode } from "../store/vfsStore";
+import { useVfsStore, type VfsNode } from "../store/vfsStore";
 import type { AppId } from "../types/window";
 import { useWindowStore } from "../store/windowStore";
 
 export interface VfsShortcut {
-  type: "app" | "url" | "missing";
+  type: "app" | "url" | "file" | "missing";
   target: string;
   icon?: string;
   shortcut?: boolean;
@@ -41,6 +41,7 @@ export function parseVfsShortcut(node: Pick<VfsNode, "content">): VfsShortcut | 
       typeof parsed.target !== "string" ||
       (parsed.type !== "app" &&
         parsed.type !== "url" &&
+        parsed.type !== "file" &&
         parsed.type !== "missing")
     ) {
       return null;
@@ -51,7 +52,11 @@ export function parseVfsShortcut(node: Pick<VfsNode, "content">): VfsShortcut | 
   }
 }
 
-function openShortcut(node: VfsNode, shortcut: VfsShortcut): void {
+function openShortcut(
+  node: VfsNode,
+  shortcut: VfsShortcut,
+  options: OpenVfsNodeOptions,
+): void {
   const title = shortcut.title ?? node.name.replace(/\.lnk$/i, "");
   if (shortcut.type === "url") {
     if (shortcut.target === "show-desktop") {
@@ -72,6 +77,17 @@ function openShortcut(node: VfsNode, shortcut: VfsShortcut): void {
       // A malformed URL is treated like a broken shortcut below.
     }
     void showMissingFileAlert(title, shortcut.target);
+    return;
+  }
+  if (shortcut.type === "file") {
+    const vfs = useVfsStore.getState();
+    const targetPath = vfs.resolvePath(shortcut.target);
+    const target = targetPath ? vfs.resolve(targetPath) : null;
+    if (target && targetPath) {
+      openVfsNode(target, targetPath, options);
+    } else {
+      void showMissingFileAlert(title, shortcut.target);
+    }
     return;
   }
   if (shortcut.type === "missing") {
@@ -115,9 +131,14 @@ export function openVfsNode(
 
   if (extension === "lnk") {
     const shortcut = parseVfsShortcut(node);
-    if (shortcut) openShortcut(node, shortcut);
+    if (shortcut) openShortcut(node, shortcut, options);
     return;
   }
+
+  // The Shell maintains a per-user Recent shortcut for ordinary documents
+  // opened from Explorer, Desktop, or Find. The VFS filters executables and
+  // shortcut files so these bookkeeping links never create self-references.
+  useVfsStore.getState().recordRecentDocument(absolutePath);
 
   // Installed executables always run; an Open With preference must not
   // convert a registered program such as WINMINE.EXE into a text document.

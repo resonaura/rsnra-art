@@ -164,6 +164,7 @@ export function Find({ windowId }: { windowId: string }) {
       resolve: s.resolve,
       resolvePath: s.resolvePath,
       writeFile: s.writeFile,
+      recordRecentDocument: s.recordRecentDocument,
     })),
   );
   const closeWindow = useWindowStore((s) => s.closeWindow);
@@ -240,6 +241,8 @@ export function Find({ windowId }: { windowId: string }) {
         "Save Search Results",
         "The results could not be saved to that location.",
       );
+    } else {
+      vfs.recordRecentDocument(path);
     }
   };
 

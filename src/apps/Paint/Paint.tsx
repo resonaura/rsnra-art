@@ -494,7 +494,11 @@ export function Paint({ windowId }: { windowId: string }) {
   );
   const windowData = useWindowData(windowId);
   const vfs = useVfsStore(
-    useShallow((s) => ({ read: s.read, writeFile: s.writeFile })),
+    useShallow((s) => ({
+      read: s.read,
+      writeFile: s.writeFile,
+      recordRecentDocument: s.recordRecentDocument,
+    })),
   );
   const { showFileDialog, dialog: fileDialog } = useFileDialog();
   const [filePath, setFilePath] = useState<string | null>(
@@ -1744,7 +1748,8 @@ export function Paint({ windowId }: { windowId: string }) {
   const saveToVfs = (absPath: string): boolean => {
     const canvas = baseCanvasRef.current;
     if (!canvas) return false;
-    vfs.writeFile(absPath, canvas.toDataURL("image/png"));
+    if (!vfs.writeFile(absPath, canvas.toDataURL("image/png"))) return false;
+    vfs.recordRecentDocument(absPath);
     setFilePath(absPath);
     const fname = absPath.split("\\").pop() ?? "untitled.png";
     updateTitle(windowId, `${fname} - Paint`);

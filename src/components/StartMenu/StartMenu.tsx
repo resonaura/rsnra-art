@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import styled from "styled-components";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { useStartMenuTree } from "../../data/startMenu";
+import { useTaskbarPrefsStore } from "../../store/taskbarPrefsStore";
 import { useWindowStore } from "../../store/windowStore";
 import { MenuTree } from "./MenuTree";
 
@@ -59,6 +60,10 @@ const BannerLabel = styled.div`
 function StartMenuPanel({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const tree = useStartMenuTree();
+  const smallIcons = useTaskbarPrefsStore((s) => s.showSmallStartIcons);
+  const personalizedMenus = useTaskbarPrefsStore((s) => s.usePersonalizedMenus);
+  const menuUse = useTaskbarPrefsStore((s) => s.menuUse);
+  const recordMenuUse = useTaskbarPrefsStore((s) => s.recordMenuUse);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -75,10 +80,18 @@ function StartMenuPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <Positioned ref={ref} id="start-menu-root">
-      <Banner>
-        <BannerLabel>RSNRA</BannerLabel>
-      </Banner>
-      <MenuTree nodes={tree} />
+      {!smallIcons && (
+        <Banner>
+          <BannerLabel>RSNRA</BannerLabel>
+        </Banner>
+      )}
+      <MenuTree
+        nodes={tree}
+        smallIcons={smallIcons}
+        personalizedMenus={personalizedMenus}
+        menuUse={menuUse}
+        onItemUsed={recordMenuUse}
+      />
     </Positioned>
   );
 }

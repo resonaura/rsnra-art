@@ -113,6 +113,7 @@ export function Notepad({ windowId }: { windowId: string }) {
       read: s.read,
       writeFile: s.writeFile,
       exists: s.exists,
+      recordRecentDocument: s.recordRecentDocument,
     })),
   );
   const updateTitle = useWindowStore((s) => s.updateTitle);
@@ -177,7 +178,8 @@ export function Notepad({ windowId }: { windowId: string }) {
   };
 
   const save = (): boolean => {
-    vfs.writeFile(filePath, text);
+    if (!vfs.writeFile(filePath, text)) return false;
+    vfs.recordRecentDocument(filePath);
     setDirty(false);
     return true;
   };
@@ -222,7 +224,8 @@ export function Notepad({ windowId }: { windowId: string }) {
       filters: TEXT_FILTERS,
     });
     if (!result) return false;
-    vfs.writeFile(result, text);
+    if (!vfs.writeFile(result, text)) return false;
+    vfs.recordRecentDocument(result);
     setFilePath(result);
     setDirty(false);
     const name = result.split("\\").pop() ?? "untitled.txt";

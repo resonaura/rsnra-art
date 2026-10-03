@@ -16,6 +16,7 @@ import {
 import {
   DEFAULT_SYSTEM_PATH,
   USER_DOCUMENTS_PATH,
+  USER_RECENT_PATH,
   USER_PICTURES_PATH,
   canonicalizeLegacyPath,
 } from "../lib/windowsPaths";
@@ -80,6 +81,10 @@ export interface VfsState {
   getShortName: (path: string) => string | null;
   list: (path: string) => VfsNode[] | null;
   read: (path: string) => string | null;
+  /** Add a file shortcut to this profile's Start-menu Documents list. */
+  recordRecentDocument: (path: string) => boolean;
+  /** Clear only the Shell-managed document shortcuts in the profile's Recent folder. */
+  clearRecentDocuments: () => void;
   exists: (path: string) => boolean;
   findExecutable: (name: string, searchPath?: string) => string | null;
   // Searches the active command-shell PATH for an executable.
@@ -871,6 +876,28 @@ const txt = (name: string, content: string, system = false): VfsNode => ({
   protected: system,
   ...timestamps(),
 });
+
+function recentDocumentTarget(node: VfsNode): string | null {
+  if (node.type !== "file" || !node.name.toLowerCase().endsWith(".lnk")) {
+    return null;
+  }
+  try {
+    const shortcut: unknown = JSON.parse(node.content ?? "");
+    if (
+      shortcut &&
+      typeof shortcut === "object" &&
+      "type" in shortcut &&
+      shortcut.type === "file" &&
+      "target" in shortcut &&
+      typeof shortcut.target === "string"
+    ) {
+      return shortcut.target;
+    }
+  } catch {
+    // A hand-created or malformed .lnk is not a Shell-managed Recent entry.
+  }
+  return null;
+}
 
 // ─── Canonical Windows 2000 filesystem ────────────────────────────────────
 function buildInitialTree(): VfsNode {
@@ -2000,6 +2027,135 @@ export const useVfsStore = create<VfsState>()(
           if (newRoot) set({ root: newRoot });
         }
         return node.content ?? "";
+      },
+
+      recordRecentDocument: (path) => {
+        const root = get().root;
+        const abs = resolveInputPath(path);
+        if (!abs) return false;
+        const target = findNode(root, abs);
+        if (!target || target.type !== "file" || target.appId) {
+          return false;
+        }
+        const extension = target.name.split(".").pop()?.toLowerCase() ?? "";
+        if (["lnk", "exe", "com", "bat", "cmd", "scr"].includes(extension)) {
+          return false;
+        }
+
+        const recentPath = resolveInputPath(USER_RECENT_PATH, "C:\\");
+        const recent = recentPath ? findNode(root, recentPath) : null;
+        if (!recentPath || !recent || recent.type !== "dir") return false;
+
+        const existingChildren = recent.children ?? [];
+        const managed = existingChildren.filter(
+          (child) => !child.protected && recentDocumentTarget(child) !== null,
+        );
+        const unrelated = existingChildren.filter((child) => !managed.includes(child));
+        const targetKey = abs.toLowerCase();
+        const sameTarget = managed.filter((child) =>
+          (resolveInputPath(recentDocumentTarget(child)!, "C:\\") ??
+            recentDocumentTarget(child)!)
+            .toLowerCase() === targetKey,
+        );
+        const reusableName = sameTarget[0]?.name;
+        const remainingRecent = managed
+          .filter((child) => !sameTarget.includes(child))
+          .sort((left, right) =>
+            (right.modified ?? right.created) - (left.modified ?? left.created),
+          );
+
+        const takenNames = new Set(
+          [...unrelated, ...remainingRecent].map((child) =>
+            child.name.toLowerCase(),
+          ),
+        );
+        const maxBaseLength = 251; // Leave room for the .lnk suffix.
+        const fileName = target.name.slice(0, maxBaseLength);
+        const dot = target.name.lastIndexOf(".");
+        const stem = dot > 0 ? target.name.slice(0, dot) : target.name;
+        const extensionWithDot = dot > 0 ? target.name.slice(dot) : "";
+        let shortcutName =
+          reusableName && !takenNames.has(reusableName.toLowerCase())
+            ? reusableName
+            : `${fileName}.lnk`;
+        let ordinal = 2;
+        while (
+          takenNames.has(shortcutName.toLowerCase()) ||
+          !isValidWindowsName(shortcutName)
+        ) {
+          const suffix = ` (${ordinal++})`;
+          const availableStemLength = Math.max(
+            1,
+            250 - suffix.length - extensionWithDot.length,
+          );
+          shortcutName = `${stem.slice(0, availableStemLength)}${suffix}${extensionWithDot}.lnk`;
+        }
+
+        const shortcut = file(shortcutName, {
+          content: JSON.stringify({
+            type: "file",
+            target: abs,
+            title: target.name,
+            shortcut: true,
+          }),
+        });
+
+        let rootWithoutDuplicate = root;
+        for (const child of sameTarget) {
+          rootWithoutDuplicate =
+            removeNode(rootWithoutDuplicate, `${recentPath}\\${child.name}`) ??
+            rootWithoutDuplicate;
+        }
+        const nextRoot = insertNode(rootWithoutDuplicate, recentPath, shortcut);
+        if (!nextRoot || !fitsOnDisk(nextRoot)) return false;
+
+        const recentAfterInsert = findNode(nextRoot, recentPath);
+        if (!recentAfterInsert || recentAfterInsert.type !== "dir") return false;
+        const recentByName = new Map(
+          (recentAfterInsert.children ?? []).map((child) => [
+            child.name.toLowerCase(),
+            child,
+          ]),
+        );
+        const orderedRecent = [shortcutName, ...remainingRecent.map((child) => child.name)]
+          .map((name) => recentByName.get(name.toLowerCase()))
+          .filter((child): child is VfsNode => !!child);
+        const orderedNames = new Set(orderedRecent.map((child) => child.name.toLowerCase()));
+        const orderedChildren = [
+          ...orderedRecent,
+          ...(recentAfterInsert.children ?? []).filter(
+            (child) => !orderedNames.has(child.name.toLowerCase()),
+          ),
+        ];
+        const updatedRoot = updateNode(nextRoot, recentPath, (directory) => ({
+          ...directory,
+          modified: fatWriteTime(now()),
+          children: orderedChildren,
+        }));
+        if (!updatedRoot || !fitsOnDisk(updatedRoot)) return false;
+        set({ root: updatedRoot });
+        return true;
+      },
+
+      clearRecentDocuments: () => {
+        const root = get().root;
+        const recentPath = resolveInputPath(USER_RECENT_PATH, "C:\\");
+        if (!recentPath) return;
+        const recent = findNode(root, recentPath);
+        if (!recent || recent.type !== "dir") return;
+        const children = recent.children ?? [];
+        // Windows 2000's Clear command emptied the Recent folder itself, not
+        // just entries that the Documents menu happened to recognize. These
+        // are profile-local Recent entries (normally shortcuts); their target
+        // documents live elsewhere and are never touched by this operation.
+        const remaining = children.filter((child) => child.protected);
+        if (remaining.length === children.length) return;
+        const updatedRoot = updateNode(root, recentPath, (directory) => ({
+          ...directory,
+          modified: fatWriteTime(now()),
+          children: remaining,
+        }));
+        if (updatedRoot) set({ root: updatedRoot });
       },
 
       findExecutable: (name, searchPath = DEFAULT_SYSTEM_PATH) => {

@@ -29,6 +29,7 @@ import { Solitaire } from "../apps/Solitaire/Solitaire";
 import { SoundRecorder } from "../apps/SoundRecorder/SoundRecorder";
 import { SystemProperties } from "../apps/SystemProperties/SystemProperties";
 import { TaskManager } from "../apps/TaskManager/TaskManager";
+import { TaskbarProperties } from "../apps/TaskbarProperties/TaskbarProperties";
 import { TerminalApp } from "../apps/Terminal/Terminal";
 import { Welcome } from "../apps/Welcome/Welcome";
 
@@ -327,6 +328,16 @@ export const APPS: Record<AppId, AppDefinition> = {
     minWidth: 360,
     minHeight: 320,
     noPadding: true,
+    singleInstance: true,
+  },
+  "taskbar-properties": {
+    id: "taskbar-properties",
+    title: "Taskbar and Start Menu Properties",
+    icon: "/icons/explorer.exe/000.ico",
+    component: asComponent(TaskbarProperties),
+    width: 460,
+    height: 340,
+    resizable: false,
     singleInstance: true,
   },
   charmap: {

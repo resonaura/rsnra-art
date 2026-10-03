@@ -568,6 +568,9 @@ export function useFileDialog() {
 
   const handleConfirm = useCallback(
     (path: string) => {
+      if (dialogState.mode === "open") {
+        useVfsStore.getState().recordRecentDocument(path);
+      }
       dialogState.resolve?.(path);
       setDialogState((s) => ({ ...s, open: false, resolve: null }));
     },

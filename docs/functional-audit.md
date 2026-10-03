@@ -37,6 +37,8 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
 | P2 | Find | Results had no working Select All or Save Results command. | Implemented; selection and saving wired to the virtual filesystem |
 | P2 | Start Menu / user profiles | Programs read only `All Users\Start Menu\Programs`, so per-user shortcuts and groups were missing; identical groups had no merge behavior. | Implemented and live checked: `Administrator\Start Menu\Programs` now merges with `All Users\Start Menu\Programs`; matching groups merge recursively and a same-name per-user shortcut takes precedence. A unique per-user test group appeared immediately; a same-named `Games` group retained the four shared game entries. Both test folders were removed through Explorer Undo. |
+| P1 | Start Menu / Recent documents | Documents listed every item under My Documents instead of the Shell's profile-local Recent shortcuts; opening, saving, and clearing did not maintain Windows-style MRU history. | Implemented and live checked: opening a document from Explorer or Notepad creates/refreshes a per-profile `.lnk` in `C:\Documents and Settings\Administrator\Recent`; Start → Documents reopens the target through normal file associations and shows the newest 15. Advanced → Clear empties unprotected entries in Recent but leaves their target documents untouched. Recent is empty after the live test. |
+| P2 | Taskbar properties | Taskbar context-menu Properties was disabled, so the documented General/Advanced property sheet and its shell options were unavailable. | Implemented and live checked: General/Advanced tabs, staged Apply/OK/Cancel, taskbar topmost/auto-hide, small Start-menu icons, clock, and personalized menus persist and affect the shell. Show Clock, auto-hide, small icons, and restoration to the user's prior settings were verified live. |
 | P3 | App menus | Several Help/About entries and secondary modes remain disabled; these are lower impact than core file and window operations. | Pending |
 
 ## Work sequence
@@ -68,6 +70,10 @@ not a claim that every Windows 2000 feature is implemented.
 10. Avoid persistent FAT access-date writes for same-day re-reads. **Complete:**
     `read()` updates only if the FAT local-calendar access date changes; Notepad
     initializes file content lazily rather than on every render.
+11. Restore the Windows 2000 Taskbar and Start Menu property sheet, including
+    the profile's Recent/Documents behavior. **Complete:** the Advanced tab's
+    Clear command empties Recent entries without deleting their target files;
+    General settings are persisted and wired to taskbar/menu behavior.
 
 ## Historical checks used
 
@@ -92,3 +98,6 @@ not a claim that every Windows 2000 feature is implemented.
 - [Microsoft Windows 2000 Server Operations Guide: FAT File System](https://bitsavers.trailing-edge.com/pdf/microsoft/windows_2000/097-0002722_Windows_2000_Server_Operations_Guide_2000.pdf): documents 32 KB clusters for a 2 GB FAT16 volume and explains that allocation is cluster-granular.
 - [Microsoft Windows 2000 profile guidance](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/314/045.HTM): default profile placement under `Documents and Settings`.
 - [Windows 2000 color reference](https://desktopcolors.com/os/windows-2000): desktop blue `#3a6ea5`.
+- [Running Microsoft Windows 2000 Professional: Removing Items from the Documents Menu](https://flylib.com/books/en/3.229.1.22/1/): the Documents menu reflects the profile's Recent folder, displays its newest 15 shortcuts, and the Advanced-tab Clear command empties Recent (including unrecognized entries).
+- [Windows 2000 Exercises (PDF)](https://knowware.dk/down/windows_2000_exercises.pdf): period screenshots and walkthroughs for the General/Advanced Taskbar properties tabs, Auto hide, Always on top, Show clock, and Recent-folder clearing.
+- [Sams Teach Yourself Microsoft Windows 2000 Professional: Customizing the Taskbar](https://www.informit.com/articles/article.aspx?p=411736&seqNum=161): documents the taskbar property-sheet controls and their visible effects, including personalized menus and small Start-menu icons.

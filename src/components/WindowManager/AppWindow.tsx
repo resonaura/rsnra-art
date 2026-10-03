@@ -8,6 +8,7 @@ import { APPS } from "../../data/apps";
 import { CURSOR_ROLE_MAP, cursorCss } from "../../data/cursors";
 import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useCursorStore } from "../../store/cursorStore";
+import { useTaskbarPrefsStore } from "../../store/taskbarPrefsStore";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { WindowInstance } from "../../types/window";
@@ -101,6 +102,8 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
   const toggleMaximize = useWindowStore((s) => s.toggleMaximize);
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const requestClose = useUnsavedStore((s) => s.requestClose);
+  const autoHideTaskbar = useTaskbarPrefsStore((s) => s.autoHide);
+  const alwaysOnTop = useTaskbarPrefsStore((s) => s.alwaysOnTop);
   const cursorScheme = useCursorStore((s) => s.schemeId);
   const cursorFiles = useCursorStore((s) => s.files);
   void closeWindow;
@@ -118,7 +121,8 @@ export const AppWindow = memo(function AppWindow({ win }: AppWindowProps) {
 
   const maxWidth = typeof window !== "undefined" ? window.innerWidth : 1280;
   const maxHeight =
-    (typeof window !== "undefined" ? window.innerHeight : 800) - TASKBAR_HEIGHT;
+    (typeof window !== "undefined" ? window.innerHeight : 800) -
+    (autoHideTaskbar || !alwaysOnTop ? 0 : TASKBAR_HEIGHT);
 
   const bounds = win.isMaximized
     ? { x: 0, y: 0, width: maxWidth, height: maxHeight }

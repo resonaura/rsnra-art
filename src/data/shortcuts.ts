@@ -1,17 +1,13 @@
-import { showMissingFileAlert } from "../lib/systemDialogs";
-import { openWebamp } from "../lib/webamp";
 import type { VfsNode } from "../store/vfsStore";
 import type { AppId } from "../types/window";
-import { APPS, openApp } from "./apps";
+import { APPS } from "./apps";
 
 const GENERIC_SHORTCUT_ICON = "/icons/shell32.dll/076.ico";
 
-// The single shared representation of a .lnk shortcut — its JSON `content`,
-// how to resolve its icon, and how to activate it. Desktop, the Start Menu
-// Programs tree, and My Computer all read/execute shortcuts through this
-// module so a shortcut behaves identically no matter where it's clicked.
+// Shared representation of a .lnk shortcut and its icon. All activation goes
+// through openVfsNode so Desktop, Explorer, Find, and Start use one dispatcher.
 export interface LnkData {
-  type: "app" | "url" | "missing";
+  type: "app" | "url" | "file" | "missing";
   target: string; // AppId for "app", URL for "url", "" for "missing"
   icon?: string; // explicit override; else derived from APPS[target]
   shortcut?: boolean;
@@ -41,20 +37,4 @@ export function lnkIcon(lnk: LnkData): string {
     return APPS[lnk.target as AppId].icon;
   }
   return GENERIC_SHORTCUT_ICON;
-}
-
-export function openLnk(lnk: LnkData, label: string) {
-  if (lnk.type === "missing") {
-    showMissingFileAlert(label, lnk.file ?? `${label}.exe`);
-    return;
-  }
-  if (lnk.type === "url") {
-    window.open(lnk.target, "_blank", "noopener,noreferrer");
-    return;
-  }
-  if (lnk.target === "winamp") {
-    void openWebamp();
-    return;
-  }
-  openApp(lnk.target as AppId, { title: lnk.title, data: lnk.data });
 }

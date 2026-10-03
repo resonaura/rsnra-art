@@ -105,7 +105,11 @@ const Footer = styled.div`
 export function SoundRecorder({ windowId }: { windowId: string }) {
   const data          = useWindowData(windowId);
   const vfs           = useVfsStore(
-    useShallow((s) => ({ read: s.read, writeFile: s.writeFile })),
+    useShallow((s) => ({
+      read: s.read,
+      writeFile: s.writeFile,
+      recordRecentDocument: s.recordRecentDocument,
+    })),
   );
   const updateTitle   = useWindowStore((s) => s.updateTitle);
   const requestClose  = useUnsavedStore((s) => s.requestClose);
@@ -173,7 +177,8 @@ export function SoundRecorder({ windowId }: { windowId: string }) {
       win.get_wav_file(win.file, resolve),
     );
     const dataUrl = await blobToDataUrl(blob);
-    vfs.writeFile(path, dataUrl);
+    if (!vfs.writeFile(path, dataUrl)) return false;
+    vfs.recordRecentDocument(path);
     win.saved = true;
     setFilePath(path);
     setDirty(false);

@@ -2,19 +2,18 @@ import { useMemo } from "react";
 import { playSound } from "../lib/audio";
 import {
   ALL_USERS_START_MENU_PATH,
-  USER_DOCUMENTS_PATH,
+  USER_RECENT_PATH,
   USER_PROGRAMS_PATH,
 } from "../lib/windowsPaths";
 
 import { showMissingFileAlert } from "../lib/systemDialogs";
-import { openVfsAudio, openWebamp } from "../lib/webamp";
+import { openVfsNode, parseVfsShortcut } from "../lib/openVfsNode";
 import type { VfsNode } from "../store/vfsStore";
 import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 import { openApp } from "./apps";
 import { dirIcon, iconForNode } from "./fileIcons";
-import { getPreferredApp } from "./fileOpen";
-import { lnkIcon, openLnk, parseLnk } from "./shortcuts";
+import { lnkIcon, parseLnk } from "./shortcuts";
 
 export interface MenuNode {
   id: string;
@@ -54,7 +53,7 @@ function lnkLabel(name: string): string {
 /**
  * Build a MenuNode subtree from a VFS directory.
  * - Subdirectories become submenus (recursive).
- * - .lnk files become action items via parseLnk / openLnk / lnkIcon.
+ * - .lnk files become action items through the common virtual Shell dispatcher.
  * - Other files are ignored (they shouldn't be here, but robustness matters).
  * - Hidden nodes are skipped.
  */
@@ -91,16 +90,7 @@ function vfsDirToMenuNodes(
         icon: lnkIcon(lnk),
         disabled,
         action: run(() => {
-          if (lnk.type === "missing") {
-            showMissingFileAlert(
-              lnkLabel(node.name),
-              lnk.file ?? `${lnkLabel(node.name)}.exe`,
-            );
-          } else if (lnk.target === "winamp") {
-            void openWebamp();
-          } else {
-            openLnk(lnk, lnkLabel(node.name));
-          }
+          openVfsNode(node, nodeAbs);
         }),
       });
     }
@@ -139,75 +129,45 @@ function mergeProgramMenuNodes(
   return merged;
 }
 
-// ── Documents: built from the live C:\My Documents VFS ───────────────────────
+// ── Documents: the Shell's per-user Recent shortcut list ─────────────────────
 
-function docChildren(
+function recentDocumentChildren(
   path: string,
-  vfs: { list: (path: string) => VfsNode[] | null },
+  vfs: {
+    list: (path: string) => VfsNode[] | null;
+    resolve: (path: string) => VfsNode | null;
+    resolvePath: (path: string) => string | null;
+  },
 ): MenuNode[] {
-  const list = vfs.list(path) ?? [];
-  const nodes: MenuNode[] = [];
-  for (const node of list) {
-    if (node.hidden) continue;
-    const abs = path === "C:\\" ? `C:\\${node.name}` : `${path}\\${node.name}`;
-    if (node.type === "dir") {
-      nodes.push({
+  return (vfs.list(path) ?? [])
+    .filter((node) => !node.hidden && node.type === "file")
+    .flatMap((node) => {
+      const shortcut = parseVfsShortcut(node);
+      if (!shortcut || shortcut.type !== "file") return [];
+      const targetPath = vfs.resolvePath(shortcut.target);
+      const target = targetPath ? vfs.resolve(targetPath) : null;
+      const abs = `${path.replace(/\\+$/, "")}\\${node.name}`;
+      const label = shortcut.title ?? lnkLabel(node.name);
+      return [{
         id: abs,
-        label: node.name,
-        icon: dirIcon(node),
-        children: docChildren(abs, vfs),
-      });
-    } else {
-      nodes.push({
-        id: abs,
-        label: node.name,
-        icon: iconForNode(node),
-        action: run(() => openFile(abs, node)),
-      });
-    }
-  }
-  return nodes;
-}
-
-function openFile(abs: string, node: VfsNode) {
-  if (node.appId) {
-    openApp(node.appId as never);
-    return;
-  }
-  const preferred = getPreferredApp(node.name);
-  if (preferred) {
-    preferred.open(abs, node.name);
-    return;
-  }
-  const lower = node.name.toLowerCase();
-  if (
-    lower.endsWith(".wav") ||
-    lower.endsWith(".mp3") ||
-    lower.endsWith(".mid") ||
-    lower.endsWith(".midi") ||
-    lower.endsWith(".rmi") ||
-    lower.endsWith(".ogg")
-  ) {
-    void openVfsAudio(abs).then((played) => {
-      if (!played && lower.endsWith(".wav")) {
-        openApp("sound-recorder", {
-          title: `${node.name} - Sound Recorder`,
-          data: { path: abs },
-        });
-      }
-    });
-  } else if (
-    lower.endsWith(".txt") ||
-    lower.endsWith(".log") ||
-    lower.endsWith(".ini")
-  ) {
-    openApp("notepad", {
-      title: `${node.name} - Notepad`,
-      data: { path: abs },
-    });
-  } else if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
-    openApp("paint", { title: `${node.name} - Paint`, data: { path: abs } });
-  }
+        label,
+        icon: target ? iconForNode(target) : lnkIcon(shortcut),
+        action: run(() => {
+          if (!target || !targetPath) {
+            void showMissingFileAlert(label, shortcut.target);
+            return;
+          }
+          openVfsNode(target, targetPath);
+        }),
+      }];
+    })
+    .sort((left, right) => {
+      const leftNode = vfs.resolve(left.id);
+      const rightNode = vfs.resolve(right.id);
+      return (rightNode?.modified ?? rightNode?.created ?? 0) -
+        (leftNode?.modified ?? leftNode?.created ?? 0);
+    })
+    .slice(0, 15);
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -218,6 +178,8 @@ function openFile(abs: string, node: VfsNode) {
  * Programs → merge the current user's program groups with All Users groups.
  *   Same-named folders merge recursively; a same-named per-user shortcut wins.
  *   Changes to either physical profile folder are reflected immediately.
+ * Documents → the current user's recent-document shortcuts, newest first.
+ *   Opening a missing target reports the stored path like a normal broken link.
  *
  * Subscriptions are scoped to only the VFS nodes we actually render, so an
  * unrelated file write (e.g. saving a Paint canvas) does NOT trigger a
@@ -232,13 +194,13 @@ export function useStartMenuTree(): MenuNode[] {
   );
   const userProgramsNode = useVfsStore((s) => s.resolve(USER_PROGRAMS_PATH));
 
-  const docsNode = useVfsStore(
-    (s) => s.resolve(USER_DOCUMENTS_PATH),
-  );
+  const recentNode = useVfsStore((s) => s.resolve(USER_RECENT_PATH));
 
   // list() reads the store on demand; wrap in getState() so it doesn't create
   // an extra subscription.
   const listFn = useVfsStore.getState().list;
+  const resolveFn = useVfsStore.getState().resolve;
+  const resolvePathFn = useVfsStore.getState().resolvePath;
 
   const programsChildren = useMemo(
     () => {
@@ -254,9 +216,14 @@ export function useStartMenuTree(): MenuNode[] {
   );
 
   const docs = useMemo(
-    () => docChildren(USER_DOCUMENTS_PATH, { list: listFn }),
+    () =>
+      recentDocumentChildren(USER_RECENT_PATH, {
+        list: listFn,
+        resolve: resolveFn,
+        resolvePath: resolvePathFn,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [docsNode], // recompute only when My Documents changes
+    [recentNode], // recompute only when the profile's Recent folder changes
   );
 
   // The static top-level items never change — stable reference via useMemo.
@@ -273,7 +240,8 @@ export function useStartMenuTree(): MenuNode[] {
         label: "Documents",
         icon: "/icons/shell32.dll/065.ico",
         iconScale: 32 / 24,
-        children: docs,
+        children: docs.length ? docs : undefined,
+        disabled: docs.length === 0,
       },
       {
         id: "settings",
@@ -281,6 +249,12 @@ export function useStartMenuTree(): MenuNode[] {
         icon: "/icons/shell32.dll/067.ico",
         iconScale: 32 / 24,
         children: [
+          {
+            id: "taskbar-properties",
+            label: "Taskbar & Start Menu...",
+            icon: "/icons/shell32.dll/067.ico",
+            action: run(() => openApp("taskbar-properties")),
+          },
           {
             id: "control-panel",
             label: "Control Panel",

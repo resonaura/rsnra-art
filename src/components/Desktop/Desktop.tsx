@@ -614,6 +614,13 @@ export function Desktop() {
                         type: "lnk",
                         lnkPath: lnk.target,
                       });
+                    } else if (lnk.type === "file") {
+                      useWindowStore.getState().addToQuickLaunch({
+                        title: label,
+                        icon: targetIcon,
+                        type: "file",
+                        lnkPath: lnk.target,
+                      });
                     } else {
                       useWindowStore.getState().addToQuickLaunch({
                         title: label,

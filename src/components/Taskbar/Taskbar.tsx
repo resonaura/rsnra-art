@@ -8,7 +8,9 @@ import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
 import { QUICK_LAUNCH_PATH } from "../../lib/windowsPaths";
 import { getPreferredApp } from "../../data/fileOpen";
+import { openVfsNode } from "../../lib/openVfsNode";
 import { focusWebamp, openWebamp } from "../../lib/webamp";
+import { useTaskbarPrefsStore } from "../../store/taskbarPrefsStore";
 import { useWindowStore } from "../../store/windowStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { Icon } from "../Icon/Icon";
@@ -16,13 +18,28 @@ import { NetworkTray } from "./NetworkTray";
 import { TaskbarClock } from "./TaskbarClock";
 import { VolumeControl } from "./VolumeControl";
 
-const Bar = styled(AppBar)`
+const Bar = styled(AppBar)<{
+  $alwaysOnTop: boolean;
+  $autoHide: boolean;
+  $keepVisible: boolean;
+}>`
   top: auto !important;
   bottom: 0;
   left: 0;
   right: 0;
   height: ${TASKBAR_HEIGHT}px;
-  z-index: 200000;
+  z-index: ${({ $alwaysOnTop }) => ($alwaysOnTop ? 200000 : 1)};
+  transform: ${({ $autoHide, $keepVisible }) =>
+    $autoHide && !$keepVisible ? "translateY(calc(100% - 2px))" : "none"};
+  transition: transform 120ms ease-out;
+
+  ${({ $autoHide }) =>
+    $autoHide &&
+    `
+      &:hover {
+        transform: none;
+      }
+    `}
 `;
 
 const EMPTY_QUICK_LAUNCH: VfsNode[] = [];
@@ -240,6 +257,9 @@ export function Taskbar() {
   );
   const toggleShowDesktop = useWindowStore((s) => s.toggleShowDesktop);
   const removeFromQuickLaunch = useWindowStore((s) => s.removeFromQuickLaunch);
+  const alwaysOnTop = useTaskbarPrefsStore((s) => s.alwaysOnTop);
+  const autoHide = useTaskbarPrefsStore((s) => s.autoHide);
+  const showClock = useTaskbarPrefsStore((s) => s.showClock);
 
   // Subscribe to the per-user Quick Launch folder, not the obsolete 9x path.
   // Keep the missing-folder fallback referentially stable for Zustand/React.
@@ -287,6 +307,11 @@ export function Taskbar() {
       }
     } else if (item.type === "lnk" && item.lnkPath) {
       window.open(item.lnkPath, "_blank", "noopener,noreferrer");
+    } else if (item.type === "file" && item.lnkPath) {
+      const vfs = useVfsStore.getState();
+      const path = vfs.resolvePath(item.lnkPath);
+      const node = path ? vfs.resolve(path) : null;
+      if (node && path) openVfsNode(node, path);
     }
   };
 
@@ -378,8 +403,13 @@ export function Taskbar() {
         store.addToQuickLaunch({
           title: label,
           icon: targetIcon || "/icons/shell32.dll/109.ico",
-          type: lnk.type === "url" ? "lnk" : "app",
-          appId: lnk.target,
+          type:
+            lnk.type === "url"
+              ? "lnk"
+              : lnk.type === "file"
+                ? "file"
+                : "app",
+          appId: lnk.type === "app" ? lnk.target : undefined,
           lnkPath: lnk.target,
           data: lnk.data,
         });
@@ -404,6 +434,9 @@ export function Taskbar() {
 
   return (
     <Bar
+      $alwaysOnTop={alwaysOnTop}
+      $autoHide={autoHide}
+      $keepVisible={!!(startMenuOpen || ctxPos || qlCtx || overflowOpen)}
       onContextMenu={(e: React.MouseEvent) => {
         e.preventDefault();
         setCtxPos({ x: e.clientX, y: e.clientY });
@@ -503,7 +536,7 @@ export function Taskbar() {
         <Tray>
           <NetworkTray />
           <VolumeControl />
-          <TaskbarClock />
+          {showClock && <TaskbarClock />}
         </Tray>
       </StyledToolbar>
 
@@ -529,7 +562,14 @@ export function Taskbar() {
             Task Manager
           </CtxItem>
           <CtxDivider />
-          <CtxItem $disabled>Properties</CtxItem>
+          <CtxItem
+            onClick={() => {
+              openApp("taskbar-properties");
+              setCtxPos(null);
+            }}
+          >
+            Properties
+          </CtxItem>
         </ContextMenu>
       )}
 

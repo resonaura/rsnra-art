@@ -26,7 +26,7 @@ export interface QuickLaunchItem {
   id: string;
   title: string;
   icon: string;
-  type: "show-desktop" | "app" | "lnk";
+  type: "show-desktop" | "app" | "lnk" | "file";
   appId?: AppId;
   lnkPath?: string;
   data?: Record<string, unknown>;

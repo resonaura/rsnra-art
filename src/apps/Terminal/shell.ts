@@ -375,7 +375,10 @@ export class Shell {
       path,
       content,
       (savePath: string, content: string) => {
-        useVfsStore.getState().writeFile(savePath, content);
+        const vfs = useVfsStore.getState();
+        if (vfs.writeFile(savePath, content)) {
+          vfs.recordRecentDocument(savePath);
+        }
       },
       () => {
         this.nano = null;

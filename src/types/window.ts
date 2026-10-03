@@ -27,6 +27,7 @@ export type AppId =
   | "solitaire"
   | "pinball"
   | "task-manager"
+  | "taskbar-properties"
   | "folder-options"
   | "charmap";
 
