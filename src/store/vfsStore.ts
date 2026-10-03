@@ -109,22 +109,49 @@ const DISK_CAPACITY = 2 * 1024 * 1024 * 1024; // period-correct 2 GB FAT volume
 // Normalize + resolve a (possibly relative) path against a base dir to an
 // absolute "C:\..." string. Returns null if it escapes the filesystem.
 function normalizePath(path: string, base = "C:\\"): string | null {
-  let p = path.trim();
+  const p = path.trim();
   if (!p) return null;
-  // make absolute relative to base
-  if (!/^[A-Za-z]:/.test(p)) {
-    if (p.startsWith(SEP) || p.startsWith("/"))
-      p = "C:" + (p.startsWith("/") ? SEP + p.slice(1) : p);
-    else p = base.replace(/[\\/]+$/, "") + SEP + p;
-  } else if (p.slice(0, 2).toUpperCase() !== "C:") {
-    // The virtual filesystem only has a C: drive; A:/D: etc. are "not ready".
-    return null;
+
+  const drivePath = p.match(/^([A-Za-z]:)(.*)$/);
+  let drive = "C:";
+  let parts: string[];
+  if (drivePath) {
+    if (drivePath[1].toUpperCase() !== "C:") {
+      // The virtual filesystem only has a C: drive; A:/D: etc. are "not ready".
+      return null;
+    }
+    drive = "C:";
+    const remainder = drivePath[2].replace(/\//g, SEP);
+    if (remainder.startsWith(SEP)) {
+      // C:\foo is rooted; C:foo is relative to the current directory on C:.
+      parts = remainder.split(/[\\/]+/).filter(Boolean);
+    } else {
+      const baseParts = base
+        .replace(/\//g, SEP)
+        .replace(/^C:/i, "")
+        .split(/[\\/]+/)
+        .filter(Boolean);
+      parts = [
+        ...baseParts,
+        ...remainder.split(/[\\/]+/).filter(Boolean),
+      ];
+    }
+  } else if (p.startsWith(SEP) || p.startsWith("/")) {
+    // A root-relative path such as \WINNT starts at C:\, not at the cwd.
+    parts = p
+      .replace(/\//g, SEP)
+      .replace(/^\\+/, "")
+      .split(/[\\/]+/)
+      .filter(Boolean);
+  } else {
+    const baseParts = base
+      .replace(/\//g, SEP)
+      .replace(/^C:/i, "")
+      .split(/[\\/]+/)
+      .filter(Boolean);
+    parts = [...baseParts, ...p.replace(/\//g, SEP).split(/[\\/]+/).filter(Boolean)];
   }
-  const drive = p.slice(0, 2); // "C:"
-  const parts = p
-    .slice(2)
-    .split(/[\\/]+/)
-    .filter(Boolean);
+
   const stack: string[] = [];
   for (const part of parts) {
     if (part === ".") continue;
