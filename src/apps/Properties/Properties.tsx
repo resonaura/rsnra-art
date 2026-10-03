@@ -6,7 +6,10 @@ import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { getDefaultOpener } from "../../data/fileOpen";
 import { iconForNode } from "../../data/fileIcons";
 import { Icon } from "../../components/Icon/Icon";
-import { vfsNodeByteSize } from "../../lib/vfsSize";
+import {
+  vfsNodeAllocatedByteSize,
+  vfsNodeByteSize,
+} from "../../lib/vfsSize";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import {
   isReadOnlyFile,
@@ -219,7 +222,9 @@ export function Properties({ windowId }: { windowId: string }) {
   const name = node.name;
   const type = describeType(node);
   const size = fileSize(node);
-  const sizeOnDisk = size === 0 ? 0 : Math.ceil(size / 4096) * 4096;
+  const isVolumeRoot =
+    node.type === "dir" && path.replace(/[\\/]+$/, "").toUpperCase() === "C:";
+  const sizeOnDisk = vfsNodeAllocatedByteSize(node, isVolumeRoot);
   const contents = node.type === "dir" ? countContents(node) : null;
   const hasVersionInfo =
     node.type === "file" &&

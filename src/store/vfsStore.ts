@@ -3,7 +3,11 @@ import { persist } from "zustand/middleware";
 import { BIO_TEXT, LINKS } from "../data/content";
 import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
 import { DEFAULT_WALLPAPER_FILES } from "../data/wallpapers";
-import { contentByteSize, vfsNodeByteSize } from "../lib/vfsSize";
+import {
+  contentByteSize,
+  vfsAllocatedByteSize,
+  vfsNodeAllocatedByteSize,
+} from "../lib/vfsSize";
 import {
   DEFAULT_SYSTEM_PATH,
   USER_DOCUMENTS_PATH,
@@ -251,10 +255,6 @@ function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
   const b = path.toLowerCase().replace(/[\\/]+$/, "");
   if (a === b) return true;
   return b.startsWith(a + SEP);
-}
-
-function nodeByteSize(node: VfsNode): number {
-  return vfsNodeByteSize(node);
 }
 
 /** The DOS Read-only attribute is enforced for files, not directories. */
@@ -1383,6 +1383,16 @@ export const useVfsStore = create<VfsState>()(
           undoDescription: undoStack.at(-1)?.label ?? null,
           redoDescription: redoStack.at(-1)?.label ?? null,
         });
+      const allocatedUsage = (root: VfsNode, recycled: RecycledItem[]) =>
+        vfsNodeAllocatedByteSize(root, true) +
+        recycled.reduce(
+          (sum, item) => sum + vfsNodeAllocatedByteSize(item.node),
+          0,
+        );
+      const fitsOnDisk = (
+        root: VfsNode,
+        recycled = get().recycled,
+      ) => allocatedUsage(root, recycled) <= DISK_CAPACITY;
       const commitFilesystemChange = (
         next: Partial<VfsState>,
         label: string,
@@ -1540,9 +1550,7 @@ export const useVfsStore = create<VfsState>()(
 
       diskUsage: () => {
         // Recycled files still occupy clusters on C: until the bin is emptied.
-        const used =
-          nodeByteSize(get().root) +
-          get().recycled.reduce((sum, item) => sum + nodeByteSize(item.node), 0);
+        const used = allocatedUsage(get().root, get().recycled);
         return {
           total: DISK_CAPACITY,
           used,
@@ -1566,7 +1574,7 @@ export const useVfsStore = create<VfsState>()(
           parentPath,
           dir(name, [], false),
         );
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Create folder");
         return true;
       },
@@ -1577,9 +1585,13 @@ export const useVfsStore = create<VfsState>()(
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
           if (existing.protected || isReadOnlyFile(existing)) return false;
-          const nextSize = contentByteSize(content);
-          const currentSize = nodeByteSize(existing);
-          if (nextSize - currentSize > get().diskUsage().free) return false;
+          const nextAllocated = vfsAllocatedByteSize(contentByteSize(content));
+          const currentAllocated = vfsNodeAllocatedByteSize(existing);
+          if (
+            nextAllocated > currentAllocated &&
+            nextAllocated - currentAllocated > get().diskUsage().free
+          )
+            return false;
           // Replace file node immutably
           const newRoot = updateNode(get().root, abs, (node) => ({
             ...node,
@@ -1588,7 +1600,7 @@ export const useVfsStore = create<VfsState>()(
             modified: now(),
             accessed: now(),
           }));
-          if (!newRoot) return false;
+          if (!newRoot || !fitsOnDisk(newRoot)) return false;
           commitFilesystemChange({ root: newRoot }, "Edit file");
           return true;
         }
@@ -1596,7 +1608,11 @@ export const useVfsStore = create<VfsState>()(
         const parts = splitAbs(abs);
         const name = parts[parts.length - 1];
         if (!isValidWindowsName(name)) return false;
-        if (contentByteSize(content) > get().diskUsage().free) return false;
+        if (
+          vfsAllocatedByteSize(contentByteSize(content)) >
+          get().diskUsage().free
+        )
+          return false;
         const parentPath =
           parts.length === 1
             ? "C:\\"
@@ -1606,7 +1622,7 @@ export const useVfsStore = create<VfsState>()(
           parentPath,
           file(name, { content, system: false }),
         );
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Create file");
         return true;
       },
@@ -1635,8 +1651,10 @@ export const useVfsStore = create<VfsState>()(
           originalPath: abs,
           deletedAt: Date.now(),
         };
+        const recycled = [...get().recycled, item];
+        if (!fitsOnDisk(newRoot, recycled)) return false;
         commitFilesystemChange(
-          { root: newRoot, recycled: [...get().recycled, item] },
+          { root: newRoot, recycled },
           "Delete to Recycle Bin",
         );
         return true;
@@ -1671,11 +1689,12 @@ export const useVfsStore = create<VfsState>()(
             ? parentPath
             : USER_DOCUMENTS_PATH;
         const newRoot = insertNode(get().root, targetParent, item.node);
-        if (!newRoot) return false;
+        const recycled = get().recycled.filter((r) => r !== item);
+        if (!newRoot || !fitsOnDisk(newRoot, recycled)) return false;
         commitFilesystemChange(
           {
             root: newRoot,
-            recycled: get().recycled.filter((r) => r !== item),
+            recycled,
           },
           "Restore from Recycle Bin",
         );
@@ -1714,7 +1733,7 @@ export const useVfsStore = create<VfsState>()(
         let newRoot = removeNode(get().root, srcAbs);
         if (!newRoot) return false;
         newRoot = insertNode(newRoot, destAbs, ref.node);
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Move");
         return true;
       },
@@ -1727,7 +1746,8 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const node = findNode(get().root, srcAbs);
         if (!node) return false;
-        if (nodeByteSize(node) > get().diskUsage().free) return false;
+        if (vfsNodeAllocatedByteSize(node) > get().diskUsage().free)
+          return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         if (
@@ -1737,7 +1757,7 @@ export const useVfsStore = create<VfsState>()(
         )
           return false;
         const newRoot = insertNode(get().root, destAbs, cloneNode(node));
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
@@ -1747,7 +1767,11 @@ export const useVfsStore = create<VfsState>()(
         const destAbs = normalizePath(destPath, get().cwd);
         if (!srcAbs || !destAbs || findNode(get().root, destAbs)) return false;
         const node = findNode(get().root, srcAbs);
-        if (!node || nodeByteSize(node) > get().diskUsage().free) return false;
+        if (
+          !node ||
+          vfsNodeAllocatedByteSize(node) > get().diskUsage().free
+        )
+          return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         const parts = splitAbs(destAbs);
@@ -1762,7 +1786,7 @@ export const useVfsStore = create<VfsState>()(
         const clone = cloneNode(node);
         clone.name = name;
         const newRoot = insertNode(get().root, parentPath, clone);
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
@@ -1788,9 +1812,9 @@ export const useVfsStore = create<VfsState>()(
         if (!parent || parent.type !== "dir") return false;
         const movedNode = { ...ref.node, name, modified: now() };
         let newRoot = removeNode(get().root, srcAbs);
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         newRoot = insertNode(newRoot, parentPath, movedNode);
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Move");
         return true;
       },
@@ -1803,14 +1827,15 @@ export const useVfsStore = create<VfsState>()(
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const node = findNode(get().root, srcAbs);
         if (!node) return null;
-        if (nodeByteSize(node) > get().diskUsage().free) return null;
+        if (vfsNodeAllocatedByteSize(node) > get().diskUsage().free)
+          return null;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         const newName = uniqueCopyName(dest, node.name);
         const clone = cloneNode(node);
         clone.name = newName;
         const newRoot = insertNode(get().root, destAbs, clone);
-        if (!newRoot) return null;
+        if (!newRoot || !fitsOnDisk(newRoot)) return null;
         commitFilesystemChange({ root: newRoot }, "Copy");
         return newName;
       },
@@ -1837,9 +1862,9 @@ export const useVfsStore = create<VfsState>()(
         const newName = uniqueCopyName(dest, ref.node.name);
         const movedNode = { ...ref.node, name: newName };
         let newRoot = removeNode(get().root, srcAbs);
-        if (!newRoot) return null;
+        if (!newRoot || !fitsOnDisk(newRoot)) return null;
         newRoot = insertNode(newRoot, destAbs, movedNode);
-        if (!newRoot) return null;
+        if (!newRoot || !fitsOnDisk(newRoot)) return null;
         commitFilesystemChange({ root: newRoot }, "Move");
         return newName;
       },
@@ -1862,7 +1887,7 @@ export const useVfsStore = create<VfsState>()(
           name: newName,
           modified: now(),
         }));
-        if (!newRoot) return false;
+        if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Rename");
         return true;
       },
