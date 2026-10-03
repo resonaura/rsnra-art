@@ -14,6 +14,7 @@ export const USER_HISTORY_PATH = `${USER_PROFILE_PATH}\\Local Settings\\History`
 export const USER_RECENT_PATH = `${USER_PROFILE_PATH}\\Recent`;
 export const USER_SEND_TO_PATH = `${USER_PROFILE_PATH}\\SendTo`;
 export const USER_START_MENU_PATH = `${USER_PROFILE_PATH}\\Start Menu`;
+export const USER_PROGRAMS_PATH = `${USER_START_MENU_PATH}\\Programs`;
 export const ALL_USERS_START_MENU_PATH = `${ALL_USERS_PROFILE_PATH}\\Start Menu`;
 export const QUICK_LAUNCH_PATH = `${USER_APPLICATION_DATA_PATH}\\Microsoft\\Internet Explorer\\Quick Launch`;
 

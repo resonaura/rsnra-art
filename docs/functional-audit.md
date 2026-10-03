@@ -36,6 +36,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | File Dialog | Open/Save dialogs always hid Hidden files, regardless of Explorer's shared visibility preferences. | Implemented |
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
 | P2 | Find | Results had no working Select All or Save Results command. | Implemented; selection and saving wired to the virtual filesystem |
+| P2 | Start Menu / user profiles | Programs read only `All Users\Start Menu\Programs`, so per-user shortcuts and groups were missing; identical groups had no merge behavior. | Implemented and live checked: `Administrator\Start Menu\Programs` now merges with `All Users\Start Menu\Programs`; matching groups merge recursively and a same-name per-user shortcut takes precedence. A unique per-user test group appeared immediately; a same-named `Games` group retained the four shared game entries. Both test folders were removed through Explorer Undo. |
 | P3 | App menus | Several Help/About entries and secondary modes remain disabled; these are lower impact than core file and window operations. | Pending |
 
 ## Work sequence
@@ -50,7 +51,9 @@ not a claim that every Windows 2000 feature is implemented.
 5. Revisit the remaining disabled secondary menu items in a follow-up audit pass.
 6. Continue the NTFS-era filesystem audit: attributes/security semantics, shared
    versus per-user shell folders, file associations, and built-in system files;
-   assess the volume type and user model before adding a Security page.
+   assess the volume type and user model before adding a Security page. **Partial:**
+   Start Menu Programs now merges the shared and per-user profile folders; the
+   broader shell-folder and security audit remains open.
 7. Unify file-open dispatch across Explorer, Desktop, Find, and the Start menu
    while preserving installed-app and per-user association behavior. **Complete:**
    `openVfsNode` is shared by Explorer, Desktop, and Find; the desktop shortcut
@@ -74,7 +77,7 @@ not a claim that every Windows 2000 feature is implemented.
 - [Microsoft Learn: Local User Profiles](https://learn.microsoft.com/en-us/windows/win32/shell/local-user-profiles): Windows 2000/XP profile management and profile placement.
 - [NT-era 3D Text setup reference](https://www.bitsavers.org/pdf/microsoft/windows_NT_4.0/Osborne_-_Windows_NT_Registry_Settings_Reference_1998.pdf): documents the period setup controls for size, speed, resolution, spin style, and solid/textured surfaces. Using it as a Windows 2000 UI reference is an era-continuity inference; the Windows 2000-specific exercise above confirms Text/Time and custom text.
 - [DVD-Video logo color reference](https://m.svgmix.com/item/zlrZW4/dvd-video): lists the mark's blue as `#51688E`; used to steer the default away from unrelated neon cycling.
-- [Microsoft Learn: CSIDL shell folders](https://learn.microsoft.com/en-us/windows/win32/shell/csidl): shell-folder conventions, including per-user Cookies/Favorites/Start Menu and `Local Settings\Temporary Internet Files`.
+- [Microsoft Learn: CSIDL shell folders](https://learn.microsoft.com/en-us/windows/win32/shell/csidl): identifies `CSIDL_PROGRAMS` as the current user's Programs folder and `CSIDL_COMMON_PROGRAMS` as the shared All Users Programs folder; both contribute program groups to the Start Menu. Also documents per-user Cookies/Favorites/Start Menu and `Local Settings\Temporary Internet Files`.
 - [Microsoft KB 326549 (Windows 2000 predecessor KB 256614)](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/326/549.HTM): folder Properties' Read-only control applies to files directly in the folder; the directory's own Read-only bit is normally ignored.
 - [Microsoft Learn: File Attribute Constants](https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants): definitions for Read-only, Hidden, System, and Archive attributes.
 - [Microsoft Learn: File Types](https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types): extension-to-application association model and Open With conventions.

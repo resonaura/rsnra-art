@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { playSound } from "../lib/audio";
-import { ALL_USERS_START_MENU_PATH, USER_DOCUMENTS_PATH } from "../lib/windowsPaths";
+import {
+  ALL_USERS_START_MENU_PATH,
+  USER_DOCUMENTS_PATH,
+  USER_PROGRAMS_PATH,
+} from "../lib/windowsPaths";
 
 import { showMissingFileAlert } from "../lib/systemDialogs";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
@@ -106,6 +110,35 @@ function vfsDirToMenuNodes(
   return nodes;
 }
 
+/** Merge per-user Programs over the common menu, merging same-named groups. */
+function mergeProgramMenuNodes(
+  common: MenuNode[],
+  user: MenuNode[],
+): MenuNode[] {
+  const merged = [...common];
+  for (const userNode of user) {
+    const commonIndex = merged.findIndex(
+      (node) => node.label.toLowerCase() === userNode.label.toLowerCase(),
+    );
+    if (commonIndex === -1) {
+      merged.push(userNode);
+      continue;
+    }
+
+    const commonNode = merged[commonIndex];
+    if (commonNode.children && userNode.children) {
+      merged[commonIndex] = {
+        ...userNode,
+        children: mergeProgramMenuNodes(commonNode.children, userNode.children),
+      };
+    } else {
+      // A same-named per-user entry takes precedence over the shared entry.
+      merged[commonIndex] = userNode;
+    }
+  }
+  return merged;
+}
+
 // ── Documents: built from the live C:\My Documents VFS ───────────────────────
 
 function docChildren(
@@ -182,9 +215,9 @@ function openFile(abs: string, node: VfsNode) {
 /**
  * The full Start menu tree.
  *
- * Programs → read dynamically from the All Users profile in the VFS.
- *   Any .lnk files or subdirectories the user adds/removes there are reflected
- *   immediately — no code changes needed.
+ * Programs → merge the current user's program groups with All Users groups.
+ *   Same-named folders merge recursively; a same-named per-user shortcut wins.
+ *   Changes to either physical profile folder are reflected immediately.
  *
  * Subscriptions are scoped to only the VFS nodes we actually render, so an
  * unrelated file write (e.g. saving a Paint canvas) does NOT trigger a
@@ -197,6 +230,7 @@ export function useStartMenuTree(): MenuNode[] {
   const programsNode = useVfsStore((s) =>
     s.resolve(`${ALL_USERS_START_MENU_PATH}\\Programs`),
   );
+  const userProgramsNode = useVfsStore((s) => s.resolve(USER_PROGRAMS_PATH));
 
   const docsNode = useVfsStore(
     (s) => s.resolve(USER_DOCUMENTS_PATH),
@@ -207,10 +241,16 @@ export function useStartMenuTree(): MenuNode[] {
   const listFn = useVfsStore.getState().list;
 
   const programsChildren = useMemo(
-    () =>
-      vfsDirToMenuNodes(`${ALL_USERS_START_MENU_PATH}\\Programs`, { list: listFn }),
+    () => {
+      const common = vfsDirToMenuNodes(
+        `${ALL_USERS_START_MENU_PATH}\\Programs`,
+        { list: listFn },
+      );
+      const user = vfsDirToMenuNodes(USER_PROGRAMS_PATH, { list: listFn });
+      return mergeProgramMenuNodes(common, user);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [programsNode], // recompute only when the Programs folder changes
+    [programsNode, userProgramsNode],
   );
 
   const docs = useMemo(
