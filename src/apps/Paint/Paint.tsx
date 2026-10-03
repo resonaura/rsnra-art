@@ -14,6 +14,7 @@ import { ScrollArea } from "../../components/ScrollArea";
 import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 import { openApp } from "../../data/apps";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { USER_PICTURES_PATH } from "../../lib/windowsPaths";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
@@ -1766,7 +1767,7 @@ export function Paint({ windowId }: { windowId: string }) {
       : "untitled.png";
     const dir = filePath
       ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
-      : "C:\\My Pictures";
+      : USER_PICTURES_PATH;
     const result = await showFileDialog({
       mode: "save",
       title: "Save As",
@@ -1784,7 +1785,7 @@ export function Paint({ windowId }: { windowId: string }) {
   const handleOpenImage = async () => {
     const dir = filePath
       ? filePath.split("\\").slice(0, -1).join("\\") + "\\"
-      : "C:\\My Pictures";
+      : USER_PICTURES_PATH;
     const result = await showFileDialog({
       mode: "open",
       title: "Open",

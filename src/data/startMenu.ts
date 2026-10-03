@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { playSound } from "../lib/audio";
+import { ALL_USERS_START_MENU_PATH, USER_DOCUMENTS_PATH } from "../lib/windowsPaths";
 
 import { showMissingFileAlert } from "../lib/systemDialogs";
 import { openVfsAudio, openWebamp } from "../lib/webamp";
@@ -181,7 +182,7 @@ function openFile(abs: string, node: VfsNode) {
 /**
  * The full Start menu tree.
  *
- * Programs → read dynamically from C:\Windows\Start Menu\Programs in VFS.
+ * Programs → read dynamically from the All Users profile in the VFS.
  *   Any .lnk files or subdirectories the user adds/removes there are reflected
  *   immediately — no code changes needed.
  *
@@ -193,22 +194,12 @@ export function useStartMenuTree(): MenuNode[] {
   // With immutable VFS, each mutation creates new node objects along the
   // changed path. Subscribing to the specific folder node means we only
   // re-render when that exact folder's contents change.
-  const programsNode = useVfsStore((s) => {
-    const win = s.root.children?.find(
-      (c) => c.name.toLowerCase() === "windows",
-    );
-    const sm = win?.children?.find(
-      (c) => c.name.toLowerCase() === "start menu",
-    );
-    return (
-      sm?.children?.find((c) => c.name.toLowerCase() === "programs") ?? null
-    );
-  });
+  const programsNode = useVfsStore((s) =>
+    s.resolve(`${ALL_USERS_START_MENU_PATH}\\Programs`),
+  );
 
   const docsNode = useVfsStore(
-    (s) =>
-      s.root.children?.find((c) => c.name.toLowerCase() === "my documents") ??
-      null,
+    (s) => s.resolve(USER_DOCUMENTS_PATH),
   );
 
   // list() reads the store on demand; wrap in getState() so it doesn't create
@@ -217,13 +208,13 @@ export function useStartMenuTree(): MenuNode[] {
 
   const programsChildren = useMemo(
     () =>
-      vfsDirToMenuNodes("C:\\Windows\\Start Menu\\Programs", { list: listFn }),
+      vfsDirToMenuNodes(`${ALL_USERS_START_MENU_PATH}\\Programs`, { list: listFn }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [programsNode], // recompute only when the Programs folder changes
   );
 
   const docs = useMemo(
-    () => docChildren("C:\\My Documents", { list: listFn }),
+    () => docChildren(USER_DOCUMENTS_PATH, { list: listFn }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [docsNode], // recompute only when My Documents changes
   );
@@ -290,7 +281,7 @@ export function useStartMenuTree(): MenuNode[] {
           closeStartMenu();
         },
       },
-      // Separator before Shut Down — just like real Windows 95
+      // Separator before Shut Down — just like the classic Windows 2000 menu.
       { id: "__sep__", label: "", separator: true },
       {
         id: "shut-down",

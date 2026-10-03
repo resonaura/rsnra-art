@@ -3,7 +3,13 @@ import { persist } from "zustand/middleware";
 import { BIO_TEXT, LINKS } from "../data/content";
 import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
 import { DEFAULT_WALLPAPER_FILES } from "../data/wallpapers";
-import { contentByteSize } from "../lib/vfsSize";
+import { contentByteSize, vfsNodeByteSize } from "../lib/vfsSize";
+import {
+  DEFAULT_SYSTEM_PATH,
+  USER_DOCUMENTS_PATH,
+  USER_PICTURES_PATH,
+  canonicalizeLegacyPath,
+} from "../lib/windowsPaths";
 import { SCREENSAVERS } from "../screensavers";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -34,7 +40,7 @@ export interface RecycledItem {
 
 export interface VfsState {
   root: VfsNode; // C:\
-  cwd: string; // current working directory (absolute, e.g. "C:\\Windows")
+  cwd: string; // current working directory (absolute, e.g. "C:\\WINNT")
   recycled: RecycledItem[];
   canUndo: boolean;
   canRedo: boolean;
@@ -51,7 +57,8 @@ export interface VfsState {
   list: (path: string) => VfsNode[] | null;
   read: (path: string) => string | null;
   exists: (path: string) => boolean;
-  findExecutable: (name: string) => string | null; // search PATH dirs for an .exe
+  findExecutable: (name: string, searchPath?: string) => string | null;
+  // Searches the active command-shell PATH for an executable.
   diskUsage: () => { total: number; used: number; free: number };
 
   // mutations
@@ -125,7 +132,7 @@ function normalizePath(path: string, base = "C:\\"): string | null {
     }
     stack.push(part);
   }
-  return drive + SEP + stack.join(SEP);
+  return canonicalizeLegacyPath(drive + SEP + stack.join(SEP));
 }
 
 // FAT/VFAT long names still reject the DOS device names and these characters.
@@ -218,14 +225,7 @@ function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
 }
 
 function nodeByteSize(node: VfsNode): number {
-  if (node.type === "file") {
-    if (node.content) return contentByteSize(node.content);
-    return node.appId ? 32768 : 0;
-  }
-  return (node.children ?? []).reduce(
-    (sum, child) => sum + nodeByteSize(child),
-    0,
-  );
+  return vfsNodeByteSize(node);
 }
 
 // Generate a non-colliding name inside `parent` based on `name`, using the
@@ -397,7 +397,7 @@ const txt = (name: string, content: string, system = false): VfsNode => ({
   ...timestamps(),
 });
 
-// ─── Canonical Windows 95 filesystem ───────────────────────────────────────
+// ─── Canonical Windows 2000 filesystem ────────────────────────────────────
 function buildInitialTree(): VfsNode {
   const systemDlls = [
     "kernel32.dll",
@@ -435,9 +435,7 @@ function buildInitialTree(): VfsNode {
     file("format.com", { system: true }),
   ]);
 
-  const windows = dir(
-    "Windows",
-    [
+  const systemPrograms = [
       exe("notepad.exe", "notepad"),
       exe("mspaint.exe", "paint"),
       exe("explorer.exe", "my-computer"),
@@ -448,6 +446,7 @@ function buildInitialTree(): VfsNode {
       exe("mshearts.exe", ""),
       exe("pinball.exe", "pinball"),
       exe("command.com", "terminal"),
+      exe("cmd.exe", "terminal"),
       exe("calc.exe", "calculator"),
       exe("sndrec32.exe", "sound-recorder"),
       exe("taskmgr.exe", "task-manager"),
@@ -457,23 +456,55 @@ function buildInitialTree(): VfsNode {
       exe("ping.exe", ""),
       exe("ipconfig.exe", ""),
       exe("rundll32.exe", ""),
+      exe("winlogon.exe", ""),
+    ];
+
+  let windows = dir(
+    "WINNT",
+    [
       file("win.ini", { content: "[windows]\nload=\nrun=\n", system: true }),
       file("system.ini", {
         content: "[boot]\nshell=Explorer.exe\n",
         system: true,
       }),
-      file("winlogon.txt", { content: "", system: true, hidden: true }),
       dir(
-        "System",
+        "System32",
         [
           ...systemDlls,
+          ...systemPrograms,
+          ...(commandDir.children ?? []),
+          dir("Spool", [dir("Printers", [], true)], true),
+          dir(
+            "Config",
+            ["DEFAULT", "SAM", "SECURITY", "SOFTWARE", "SYSTEM"].map((name) =>
+              file(name, { system: true, hidden: true, readonly: true }),
+            ),
+            true,
+          ),
+          dir(
+            "drivers",
+            [
+              ...["acpi.sys", "disk.sys", "ndis.sys", "tcpip.sys"].map((name) =>
+                file(name, { system: true, hidden: false, readonly: true }),
+              ),
+              dir(
+                "etc",
+                ["hosts", "lmhosts.sam", "networks", "protocol", "services"].map((name) =>
+                  file(name, { system: true, readonly: true }),
+                ),
+                true,
+              ),
+            ],
+            true,
+          ),
+          dir("Wbem", [], true),
           // Screen savers — opening a .scr runs it (see data/fileOpen.ts).
           ...SCREENSAVERS.map((s) => file(s.file, { system: true })),
         ],
         true,
       ),
-      // Fonts is a shell folder in Windows 95, not merely another group of
-      // files under SYSTEM. Keeping it in the VFS makes Control Panel and
+      // Fonts is a shell folder in Windows 2000, not merely another group of
+      // files under System32. Keeping it in the VFS makes Control Panel and
       // Explorer agree on where installed fonts live.
       dir("Fonts", fonts, true),
       dir(
@@ -486,7 +517,6 @@ function buildInitialTree(): VfsNode {
         ],
         true,
       ),
-      commandDir,
       dir(
         "Desktop",
         [
@@ -606,8 +636,8 @@ function buildInitialTree(): VfsNode {
       ),
       dir("Help", [file("windows.hlp", { system: true })], true),
       dir("Cursors", CURSORS_VFS_NODES, true),
-      // Default wallpapers — real .bmp files, browsable and pickable from
-      // Display Properties ▸ Background, at the authentic Windows Me location.
+      // Default wallpapers — .bmp files at Windows 2000's Web/Wallpaper path,
+      // browsable and pickable from Display Properties ▸ Background.
       dir(
         "Web",
         [
@@ -619,8 +649,7 @@ function buildInitialTree(): VfsNode {
         ],
         true,
       ),
-      // System sounds — the real Windows Me/95 .wav files, browsable at
-      // C:\Windows\Media just like in real Windows.
+      // System sounds, browsable at the Windows 2000 system-root Media path.
       dir(
         "Media",
         [
@@ -635,8 +664,8 @@ function buildInitialTree(): VfsNode {
         ],
         true,
       ),
-      // C:\Windows\Start Menu — mirrors the real Win95 Start Menu structure.
-      // Programs\ contains .lnk shortcuts that the Start Menu reads dynamically.
+      // All Users\Start Menu is the shared Windows 2000 Start Menu. Programs\
+      // contains .lnk shortcuts that the shell reads dynamically.
       dir(
         "Start Menu",
         [
@@ -759,6 +788,41 @@ function buildInitialTree(): VfsNode {
     true,
   );
 
+  const takeWindowsFolder = (name: string): VfsNode | undefined => {
+    const children = windows.children ?? [];
+    const found = children.find((node) => node.name.toLowerCase() === name.toLowerCase());
+    if (found) {
+      windows = { ...windows, children: children.filter((node) => node !== found) };
+    }
+    return found;
+  };
+  const personalFolder = (
+    node: VfsNode | undefined,
+    name: string,
+    system = false,
+  ): VfsNode => node
+    ? { ...node, name, system, protected: system }
+    : dir(name, [], system);
+
+  // Windows 2000 keeps per-user shell data under Documents and Settings.
+  const userDesktop = personalFolder(takeWindowsFolder("Desktop"), "Desktop");
+  const userApplicationData = personalFolder(
+    takeWindowsFolder("Application Data"),
+    "Application Data",
+  );
+  const userCookies = personalFolder(takeWindowsFolder("Cookies"), "Cookies");
+  const userFavorites = personalFolder(takeWindowsFolder("Favorites"), "Favorites");
+  const userHistory = personalFolder(takeWindowsFolder("History"), "History");
+  const userRecent = personalFolder(takeWindowsFolder("Recent"), "Recent");
+  const userSendTo = personalFolder(takeWindowsFolder("SendTo"), "SendTo");
+  const commonStartMenu = personalFolder(
+    takeWindowsFolder("Start Menu"),
+    "Start Menu",
+    true,
+  );
+  takeWindowsFolder("Profiles");
+  takeWindowsFolder("Spool");
+
   const myDocuments = dir(
     "My Documents",
     [
@@ -792,7 +856,7 @@ This is your My Documents folder. Try these in the terminal:
   type bio.txt
 
 Open apps from anywhere:
-  notepad      (or: C:\\Windows\\notepad.exe)
+  notepad      (or: C:\\WINNT\\System32\\notepad.exe)
   mspaint
   winmine
   snake        minesweeper
@@ -838,7 +902,7 @@ Approx. runtime: 50 min
         "readme.txt",
         `Save images from Paint here using:
   File > Save As PNG...
-  e.g.: C:\\My Pictures\\artwork.png
+  e.g.: ${USER_PICTURES_PATH}\\artwork.png
 
 Images saved here can be opened by
 double-clicking them in My Computer.
@@ -847,6 +911,66 @@ double-clicking them in My Computer.
       ),
     ],
     false,
+  );
+
+  const userProfile = dir(
+    "Administrator",
+    [
+      userApplicationData,
+      userCookies,
+      userDesktop,
+      userFavorites,
+      dir(
+        "Local Settings",
+        [
+          dir("Application Data", [], false),
+          dir("Temp", [], false),
+          userHistory,
+          dir("Temporary Internet Files", [], false),
+        ],
+        false,
+      ),
+      myDocuments,
+      myPictures,
+      dir("NetHood", [], false),
+      dir("PrintHood", [], false),
+      userRecent,
+      userSendTo,
+      dir("Start Menu", [dir("Programs", [], false), dir("StartUp", [], false)], false),
+      dir("Templates", [], false),
+      file("NTUSER.DAT", { system: true, hidden: true, readonly: true }),
+    ],
+    false,
+  );
+  const allUsersProfile = dir(
+    "All Users",
+    [
+      dir("Application Data", [], true),
+      dir("Desktop", [], true),
+      dir("Favorites", [], true),
+      commonStartMenu,
+      dir("Templates", [], true),
+    ],
+    true,
+  );
+  const defaultUserProfile = dir(
+    "Default User",
+    [
+      dir("Application Data", [], true),
+      dir("Desktop", [], true),
+      dir("Favorites", [], true),
+      dir("My Documents", [], true),
+      dir("NetHood", [], true),
+      dir("Start Menu", [dir("Programs", [], true), dir("StartUp", [], true)], true),
+      dir("Templates", [], true),
+      file("NTUSER.DAT", { system: true, hidden: true, readonly: true }),
+    ],
+    true,
+  );
+  const documentsAndSettings = dir(
+    "Documents and Settings",
+    [allUsersProfile, defaultUserProfile, userProfile],
+    true,
   );
 
   const programFiles = dir(
@@ -862,7 +986,7 @@ double-clicking them in My Computer.
           exe("minesweeper.exe", "minesweeper"),
           txt(
             "rsnra.ini",
-            "[RSNRA]\nband=RESONAURA\nversion=95\nyear=1996\n",
+            "[RSNRA]\nband=RESONAURA\nversion=2000\nyear=2000\n",
             false,
           ),
           txt(
@@ -870,7 +994,7 @@ double-clicking them in My Computer.
             `RSNRA.ART — Changelog
 ====================
 
-v4.95.1996
+v4.2000
   + Added Snake game
   + Added MS-DOS Prompt
   + Added Paint with full drawing tools
@@ -890,7 +1014,7 @@ v4.95.1996
         [
           txt(
             "readme.txt",
-            "Microsoft Plus! for Windows 95\nNot included in this version.\n",
+            "Microsoft Plus! for Windows 2000\nNot included in this version.\n",
             true,
           ),
         ],
@@ -905,6 +1029,7 @@ v4.95.1996
         ],
         true,
       ),
+      dir("Common Files", [dir("Microsoft Shared", [], true)], true),
       dir(
         "Winamp",
         [
@@ -922,30 +1047,19 @@ v4.95.1996
   return dir(
     "C:\\",
     [
-      file("AUTOEXEC.BAT", {
-        content: "@ECHO OFF\nPROMPT $p$g\nPATH=C:\\WINDOWS;C:\\WINDOWS\\COMMAND\n",
+      file("boot.ini", {
+        content: "[boot loader]\ntimeout=30\ndefault=multi(0)disk(0)rdisk(0)partition(1)\\WINNT\n[operating systems]\n",
         system: true,
       }),
-      file("CONFIG.SYS", {
-        content: "DEVICE=C:\\WINDOWS\\HIMEM.SYS\nDOS=HIGH,UMB\nFILES=40\n",
-        system: true,
-      }),
-      file("COMMAND.COM", { system: true, readonly: true }),
-      file("IO.SYS", {
+      file("NTDETECT.COM", {
         system: true,
         hidden: true,
         readonly: true,
       }),
-      file("MSDOS.SYS", {
-        content: "[Options]\nBootGUI=1\n",
-        system: true,
-        hidden: true,
-        readonly: true,
-      }),
-      file("BOOTLOG.TXT", { system: true, hidden: true }),
+      file("NTLDR", { system: true, hidden: true, readonly: true }),
+      file("pagefile.sys", { system: true, hidden: true, readonly: true }),
       windows,
-      myDocuments,
-      myPictures,
+      documentsAndSettings,
       programFiles,
       recycled,
     ],
@@ -990,13 +1104,221 @@ function mergeCanonicalTree(
   return { ...canonical, children };
 }
 
-// Directories searched when resolving a bare command name (PATH).
-const PATH_DIRS = [
-  "C:\\Windows",
-  "C:\\Windows\\Command",
-  "C:\\Program Files\\RSNRA",
-  "C:\\Program Files\\Accessories",
-];
+function takeChild(
+  parent: VfsNode,
+  name: string,
+): { parent: VfsNode; child: VfsNode | undefined } {
+  const children = parent.children ?? [];
+  const child = children.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
+  return {
+    parent: child
+      ? { ...parent, children: children.filter((entry) => entry !== child) }
+      : parent,
+    child,
+  };
+}
+
+function putChild(parent: VfsNode, child: VfsNode): VfsNode {
+  const children = parent.children ?? [];
+  const existing = children.findIndex(
+    (entry) => entry.name.toLowerCase() === child.name.toLowerCase(),
+  );
+  if (existing < 0) return { ...parent, children: [...children, child] };
+  const current = children[existing];
+  const merged = current.type === "dir" && child.type === "dir"
+    ? mergeCanonicalTree(current, child)
+    : current;
+  return {
+    ...parent,
+    children: children.map((entry, index) => index === existing ? merged : entry),
+  };
+}
+
+function ensureFolder(parent: VfsNode, name: string, system = false): VfsNode {
+  const found = (parent.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (found?.type === "dir") return found;
+  return dir(name, [], system);
+}
+
+function refreshLegacyBranding(node: VfsNode): VfsNode {
+  if (node.type === "file") {
+    if (typeof node.content !== "string") return node;
+    const content = node.content
+      .replace("version=95\nyear=1996", "version=2000\nyear=2000")
+      .replace("v4.95.1996", "v4.2000")
+      .replace("Microsoft Plus! for Windows 95", "Microsoft Plus! for Windows 2000");
+    return content === node.content ? node : { ...node, content, modified: now() };
+  }
+  const children = node.children ?? [];
+  const nextChildren = children.map(refreshLegacyBranding);
+  if (nextChildren.every((child, index) => child === children[index])) return node;
+  return { ...node, children: nextChildren, modified: now() };
+}
+
+/** Rebase the previous 9x-shaped virtual disk onto Windows 2000 locations. */
+function relocateLegacyFilesystem(root: VfsNode | undefined): VfsNode {
+  if (!root || root.type !== "dir") return buildInitialTree();
+
+  let nextRoot: VfsNode = { ...root, children: [...(root.children ?? [])] };
+  let winnt = (nextRoot.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "winnt",
+  );
+  const legacyWindows = (nextRoot.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "windows",
+  );
+  nextRoot = {
+    ...nextRoot,
+    children: (nextRoot.children ?? []).filter(
+      (entry) => entry !== legacyWindows && entry !== winnt,
+    ),
+  };
+  if (!winnt && legacyWindows) {
+    winnt = { ...legacyWindows, name: "WINNT" };
+  } else if (winnt && legacyWindows && winnt.type === "dir" && legacyWindows.type === "dir") {
+    winnt = mergeCanonicalTree(winnt, legacyWindows);
+  }
+  winnt ??= dir("WINNT", [], true);
+  if (winnt.type !== "dir") winnt = dir("WINNT", [], true);
+
+  let winntChildren: VfsNode = { ...winnt, children: [...(winnt.children ?? [])] };
+  const removed: Record<string, VfsNode | undefined> = {};
+  for (const name of [
+    "System32", "System", "Command", "Spool", "Desktop", "Application Data",
+    "Cookies", "Favorites", "History", "Recent", "SendTo",
+    "Start Menu", "Profiles",
+  ]) {
+    const taken = takeChild(winntChildren, name);
+    winntChildren = taken.parent;
+    removed[name.toLowerCase()] = taken.child;
+  }
+
+  const originalChildren = winntChildren.children ?? [];
+  const systemPrograms = originalChildren.filter(
+    (entry) => entry.type === "file" && /\.(?:exe|com|dll|scr|cpl|ocx|sys)$/i.test(entry.name),
+  );
+  winntChildren = {
+    ...winntChildren,
+    children: originalChildren.filter((entry) => !systemPrograms.includes(entry)),
+  };
+  let system32: VfsNode = removed.system32?.type === "dir"
+    ? removed.system32
+    : dir("System32", [], true);
+  for (const source of [removed.system, removed.command, removed.spool]) {
+    if (source?.type === "dir") {
+      for (const child of source.children ?? []) system32 = putChild(system32, child);
+    }
+  }
+  for (const child of systemPrograms) system32 = putChild(system32, child);
+  system32 = { ...system32, name: "System32", system: true, protected: true };
+  winntChildren = putChild(winntChildren, system32);
+
+  let documentsAndSettings: VfsNode | undefined = (nextRoot.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "documents and settings",
+  );
+  nextRoot = {
+    ...nextRoot,
+    children: (nextRoot.children ?? []).filter(
+      (entry) => entry.name.toLowerCase() !== "documents and settings",
+    ),
+  };
+  documentsAndSettings ??= dir("Documents and Settings", [], true);
+  if (documentsAndSettings.type !== "dir") {
+    documentsAndSettings = dir("Documents and Settings", [], true);
+  }
+  let profiles: VfsNode = { ...documentsAndSettings, children: [...(documentsAndSettings.children ?? [])] };
+  // Remove the old profile before re-inserting its normalized copy. Merging
+  // into the stale profile would preserve an obsolete root-level History
+  // folder as though it were a canonical child.
+  const oldAdministrator = takeChild(profiles, "Administrator");
+  profiles = oldAdministrator.parent;
+  let user: VfsNode = oldAdministrator.child?.type === "dir"
+    ? oldAdministrator.child
+    : ensureFolder(profiles, "Administrator");
+  let allUsers: VfsNode = ensureFolder(profiles, "All Users", true);
+  let defaultUser: VfsNode = ensureFolder(profiles, "Default User", true);
+  const oldDocs = takeChild(nextRoot, "My Documents");
+  nextRoot = oldDocs.parent;
+  const oldPictures = takeChild(nextRoot, "My Pictures");
+  nextRoot = oldPictures.parent;
+  const userDocuments = oldDocs.child ?? (user.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "my documents",
+  );
+  const userPictures = oldPictures.child ?? (user.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "my pictures",
+  );
+  if (userDocuments) user = putChild(user, { ...userDocuments, name: "My Documents", system: false, protected: false });
+  if (userPictures) user = putChild(user, { ...userPictures, name: "My Pictures", system: false, protected: false });
+
+  // In some already-migrated disks History ended up beside the other profile
+  // folders. Windows 2000 keeps it under Local Settings; merge rather than
+  // replace if both locations have accumulated entries.
+  const directHistory = takeChild(user, "History");
+  user = directHistory.parent;
+  if (directHistory.child && directHistory.child.type !== "dir") {
+    user = putChild(user, directHistory.child);
+  }
+
+  for (const name of [
+    "Desktop", "Application Data", "Cookies", "Favorites", "NetHood",
+    "PrintHood", "Recent", "SendTo", "Templates",
+  ]) {
+    const node = removed[name.toLowerCase()];
+    if (node) user = putChild(user, { ...node, system: false, protected: false });
+  }
+  const localSettings = ensureFolder(user, "Local Settings");
+  let localChildren: VfsNode = localSettings;
+  const existingLocalHistory = (localSettings.children ?? []).find(
+    (entry) => entry.name.toLowerCase() === "history",
+  );
+  const historyNodes = [removed.history, directHistory.child, existingLocalHistory]
+    .filter((node): node is VfsNode => node?.type === "dir")
+    .map((node) => ({ ...node, name: "History", system: false, protected: false }));
+  let mergedHistory: VfsNode | undefined;
+  for (const history of historyNodes) {
+    mergedHistory = mergedHistory
+      ? mergeCanonicalTree(mergedHistory, history)
+      : history;
+  }
+  if (mergedHistory) localChildren = putChild(localChildren, mergedHistory);
+  if (removed.history?.type === "file") {
+    localChildren = putChild(localChildren, { ...removed.history, name: "History" });
+  }
+  localChildren = putChild(localChildren, ensureFolder(localChildren, "Application Data"));
+  localChildren = putChild(localChildren, ensureFolder(localChildren, "Temporary Internet Files"));
+  user = putChild(user, localChildren);
+  user = putChild(user, ensureFolder(user, "Start Menu"));
+
+  if (removed["start menu"]) {
+    allUsers = putChild(allUsers, { ...removed["start menu"], name: "Start Menu", system: true, protected: true });
+  }
+  if (removed.profiles?.type === "dir") {
+    for (const previousProfile of removed.profiles.children ?? []) {
+      if (previousProfile.name.toLowerCase() === "default user") {
+        defaultUser = putChild(defaultUser, previousProfile);
+      } else {
+        profiles = putChild(profiles, previousProfile);
+      }
+    }
+  }
+
+  profiles = putChild(profiles, user);
+  profiles = putChild(profiles, allUsers);
+  profiles = putChild(profiles, defaultUser);
+  nextRoot = putChild(nextRoot, winntChildren);
+  nextRoot = putChild(nextRoot, { ...profiles, name: "Documents and Settings", system: true, protected: true });
+
+  // The old root contained DOS boot files that do not belong to an NT 5.0
+  // installation. Keep all other user-added root objects intact.
+  const obsoleteBootFiles = new Set(["autoexec.bat", "config.sys", "command.com", "io.sys", "msdos.sys", "bootlog.txt"]);
+  return refreshLegacyBranding({
+    ...nextRoot,
+    children: (nextRoot.children ?? []).filter(
+      (entry) => !obsoleteBootFiles.has(entry.name.toLowerCase()),
+    ),
+  });
+}
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 export const useVfsStore = create<VfsState>()(
@@ -1056,7 +1378,7 @@ export const useVfsStore = create<VfsState>()(
 
       return ({
       root: buildInitialTree(),
-      cwd: "C:\\My Documents",
+      cwd: USER_DOCUMENTS_PATH,
       recycled: [],
       canUndo: false,
       canRedo: false,
@@ -1158,18 +1480,24 @@ export const useVfsStore = create<VfsState>()(
         return node.content ?? "";
       },
 
-      findExecutable: (name) => {
+      findExecutable: (name, searchPath = DEFAULT_SYSTEM_PATH) => {
         const lower = name.toLowerCase();
         const withExe =
           lower.endsWith(".exe") || lower.endsWith(".com")
             ? lower
             : lower + ".exe";
-        for (const d of PATH_DIRS) {
-          const list = get().list(d);
+        const directories = searchPath
+          .split(";")
+          .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
+          .filter(Boolean);
+        for (const directory of directories) {
+          const resolvedDirectory = normalizePath(directory);
+          if (!resolvedDirectory) continue;
+          const list = get().list(resolvedDirectory);
           const hit = list?.find(
             (c) => c.name.toLowerCase() === withExe && c.appId,
           );
-          if (hit) return d + SEP + hit.name;
+          if (hit) return resolvedDirectory + SEP + hit.name;
         }
         return null;
       },
@@ -1293,7 +1621,7 @@ export const useVfsStore = create<VfsState>()(
         // Check collision at restore path
         const parentNode =
           findNode(get().root, parentPath) ??
-          findNode(get().root, "C:\\My Documents");
+          findNode(get().root, USER_DOCUMENTS_PATH);
         if (!parentNode || parentNode.type !== "dir") return false;
         if (
           (parentNode.children ?? []).some(
@@ -1305,7 +1633,7 @@ export const useVfsStore = create<VfsState>()(
         const targetParent =
           findNode(get().root, parentPath) !== null
             ? parentPath
-            : "C:\\My Documents";
+            : USER_DOCUMENTS_PATH;
         const newRoot = insertNode(get().root, targetParent, item.node);
         if (!newRoot) return false;
         commitFilesystemChange(
@@ -1560,7 +1888,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 11,
+      version: 15,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
@@ -1569,10 +1897,14 @@ export const useVfsStore = create<VfsState>()(
       migrate: (persisted) => {
         const old = persisted as Partial<VfsState> | undefined;
         return {
-          root: mergeCanonicalTree(buildInitialTree(), old?.root),
-          cwd: old?.cwd ?? "C:\\My Documents",
+          root: mergeCanonicalTree(
+            buildInitialTree(),
+            relocateLegacyFilesystem(old?.root),
+          ),
+          cwd: canonicalizeLegacyPath(old?.cwd ?? USER_DOCUMENTS_PATH),
           recycled: (old?.recycled ?? []).map((item, index) => ({
             ...item,
+            originalPath: canonicalizeLegacyPath(item.originalPath),
             id:
               item.id ??
               `recycled-migrated-${item.deletedAt ?? Date.now()}-${index}`,

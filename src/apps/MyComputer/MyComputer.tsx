@@ -23,7 +23,8 @@ import {
   confirmDialog,
   showMissingFileAlert,
 } from "../../lib/systemDialogs";
-import { contentByteSize } from "../../lib/vfsSize";
+import { vfsNodeByteSize } from "../../lib/vfsSize";
+import { ALL_USERS_START_MENU_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useClipboardStore } from "../../store/clipboardStore";
@@ -75,12 +76,9 @@ function describeType(node: VfsNode): string {
 
 function formatSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  const bytes = node.content
-    ? contentByteSize(node.content)
-    : node.appId
-      ? 32768
-      : 0;
-  return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+  const bytes = vfsNodeByteSize(node);
+  if (bytes < 1024) return `${bytes} bytes`;
+  return `${Math.ceil(bytes / 1024)} KB`;
 }
 
 function diskUsageLabel(bytes: number): string {
@@ -740,13 +738,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const sortValue = (n: VfsNode): string | number => {
     switch (sortKey) {
       case "size":
-        return n.type === "dir"
-          ? -1
-          : n.content
-            ? contentByteSize(n.content)
-            : n.appId
-              ? 32768
-              : 0;
+        return n.type === "dir" ? -1 : vfsNodeByteSize(n);
       case "type":
         return describeTypeLocal(n);
       case "date":
@@ -840,7 +832,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       return;
     }
     if (requested.toLowerCase() === "games") {
-      navigateTo("C:\\Windows\\Start Menu\\Programs\\Games");
+      navigateTo(`${ALL_USERS_START_MENU_PATH}\\Programs\\Games`);
       return;
     }
     if (/^[ad]:\\?$/i.test(requested)) {

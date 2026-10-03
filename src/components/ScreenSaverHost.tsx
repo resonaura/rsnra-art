@@ -18,7 +18,9 @@ const WAKE_DISTANCE = 5;
 export function ScreenSaverHost() {
   const saverId = useDisplayStore((s) => s.screenSaverId);
   const waitMinutes = useDisplayStore((s) => s.screenSaverWait);
+  const saverSettings = useDisplayStore((s) => s.screenSaverSettings);
   const runningId = useSaverRunStore((s) => s.runningId);
+  const runningSettings = useSaverRunStore((s) => s.runningSettings);
 
   // ── idle detection ────────────────────────────────────────────────────────
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,7 +103,7 @@ export function ScreenSaverHost() {
           zIndex: 1,
         }}
       />
-      <Saver />
+      <Saver settings={runningSettings ?? saverSettings[runningId]} />
     </div>
   );
 }

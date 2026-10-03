@@ -7,6 +7,7 @@ import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
 import { patternDataUri } from "../../lib/patterns";
 import { confirmDialog } from "../../lib/systemDialogs";
+import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { screenSaverByFile } from "../../screensavers";
 import { useDesktopStore } from "../../store/desktopStore";
@@ -28,8 +29,7 @@ const Wrapper = styled.div`
   image-rendering: pixelated;
 `;
 
-// The desktop folder lives at C:\Windows\Desktop (the classic Win95 location).
-const DESKTOP_PATH = "C:\\Windows\\Desktop";
+const DESKTOP_PATH = USER_DESKTOP_PATH;
 
 interface LnkData {
   type: "app" | "url" | "missing";
@@ -205,16 +205,7 @@ export function Desktop() {
   const recycledCount = useVfsStore((s) => s.recycled.length);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
 
-  const desktopNode = useVfsStore(
-    (s) => {
-      const winNode = s.root.children?.find(
-        (c) => c.name.toLowerCase() === "windows" && c.type === "dir",
-      );
-      return winNode?.children?.find(
-        (c) => c.name.toLowerCase() === "desktop" && c.type === "dir",
-      ) ?? null;
-    },
-  );
+  const desktopNode = useVfsStore((s) => s.resolve(DESKTOP_PATH));
 
   const desktopNodes = useMemo(
     () => desktopNode?.children ?? EMPTY,
@@ -579,7 +570,7 @@ export function Desktop() {
                 onOpen={() =>
                   openApp("my-computer", {
                     title: "My Documents",
-                    data: { path: "C:\\My Documents" },
+                    data: { path: USER_DOCUMENTS_PATH },
                   })
                 }
                 onContextMenu={(e) => {

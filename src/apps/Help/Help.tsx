@@ -77,7 +77,7 @@ export function Help({ windowId }: { windowId: string }) {
 
         <GroupBox label="About this site">
           <p style={{ fontSize: 12, lineHeight: 1.5 }}>
-            This site is a fully clickable homage to Windows 95 — open windows,
+            This site is a fully clickable homage to Windows 2000 — open windows,
             drag them around, minimize, maximize, and explore the Start Menu.
             Built with React, TypeScript, and React95.
           </p>

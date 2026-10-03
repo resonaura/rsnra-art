@@ -10,13 +10,14 @@ import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
+import { SYSTEM_ROOT_PATH } from "../../lib/windowsPaths";
 
 const WAV_FILTERS = [
   { label: "Wave Sound (*.wav)", extensions: ["wav"] },
   { label: "All Files (*.*)", extensions: [] },
 ];
 
-const DEFAULT_DIR = "C:\\Windows\\Media";
+const DEFAULT_DIR = `${SYSTEM_ROOT_PATH}\\Media`;
 
 // The vendored recorder (public/legacy/programs/sound-recorder) declares
 // these with `var`/`function` at the top level of same-origin scripts, which

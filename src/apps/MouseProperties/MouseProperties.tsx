@@ -19,6 +19,7 @@ import { Slider95 } from "../../components/Slider95/Slider95";
 import { CURSOR_ROLES, type CursorRoleId } from "../../data/cursors";
 import { parseAni } from "../../lib/aniParser";
 import { parseCur } from "../../lib/curParser";
+import { SYSTEM_ROOT_PATH } from "../../lib/windowsPaths";
 import {
   SYSTEM_SCHEMES,
   getSchemeFiles,
@@ -467,7 +468,7 @@ export function MouseProperties({ windowId }: { windowId: string }) {
                     const path = await showFileDialog({
                       mode: "open",
                       title: "Browse",
-                      initialDir: "C:\\Windows\\Cursors",
+                      initialDir: `${SYSTEM_ROOT_PATH}\\Cursors`,
                       filters: [
                         {
                           label: "Cursor Files (*.cur;*.ani)",

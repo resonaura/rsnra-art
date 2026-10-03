@@ -11,7 +11,7 @@ export type ClipboardMode = "copy" | "cut";
 
 interface ClipboardState {
   mode: ClipboardMode | null;
-  sourcePaths: string[]; // absolute VFS paths, e.g. "C:\\My Documents\\song.txt"
+  sourcePaths: string[]; // absolute VFS paths, e.g. "C:\\Documents and Settings\\Administrator\\My Documents\\song.txt"
 
   /** Record copied/cut paths (which must already be absolute). */
   set: (mode: ClipboardMode, sourcePaths: string | string[]) => void;

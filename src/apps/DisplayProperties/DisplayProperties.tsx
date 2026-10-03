@@ -35,6 +35,7 @@ import { PATTERN_NAMES, patternDataUri } from "../../lib/patterns";
 import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { R95_SCALE } from "../../react95.conf";
 import { SCREENSAVERS, getScreenSaver } from "../../screensavers";
+import type { ScreenSaverSettings } from "../../screensavers/types";
 import {
   DEFAULT_DESKTOP_ICONS,
   useDisplayStore,
@@ -72,6 +73,7 @@ interface StagedState {
   screenSaverId: string;
   screenSaverWait: number;
   screenSaverPassword: boolean;
+  screenSaverSettings: Record<string, ScreenSaverSettings>;
   zoom: number;
   colorDepth: ColorDepth;
   transitionEffects: boolean;
@@ -464,12 +466,17 @@ function ScreenSaverTab({
   update: UpdateStaged;
 }) {
   const runSaver = useSaverRunStore((s) => s.run);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const saverDef =
     staged.screenSaverId !== "none"
       ? getScreenSaver(staged.screenSaverId)
       : null;
   const SaverComponent = saverDef?.Component ?? null;
+  const SettingsComponent = saverDef?.Settings ?? null;
+  const saverSettings = saverDef
+    ? (staged.screenSaverSettings[saverDef.id] ?? {})
+    : {};
 
   const saverOptions = [
     { value: "none", label: "(None)" },
@@ -479,7 +486,7 @@ function ScreenSaverTab({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
       <MonitorPreview>
-        {SaverComponent && <SaverComponent preview />}
+        {SaverComponent && <SaverComponent preview settings={saverSettings} />}
       </MonitorPreview>
 
       <GroupBox label="Screen Saver">
@@ -493,7 +500,11 @@ function ScreenSaverTab({
               options={saverOptions}
               style={{ flex: 1 }}
             />
-            <Button disabled={!saverDef?.Settings} style={{ width: 80 }}>
+            <Button
+              disabled={!SettingsComponent}
+              style={{ width: 80 }}
+              onClick={() => setSettingsOpen(true)}
+            >
               Settings...
             </Button>
             <Button
@@ -501,7 +512,7 @@ function ScreenSaverTab({
               style={{ width: 80 }}
               onClick={() => {
                 if (staged.screenSaverId !== "none")
-                  runSaver(staged.screenSaverId);
+                  runSaver(staged.screenSaverId, saverSettings);
               }}
             >
               Preview
@@ -528,6 +539,22 @@ function ScreenSaverTab({
           </div>
         </div>
       </GroupBox>
+
+      {settingsOpen && SettingsComponent && saverDef && (
+        <SettingsComponent
+          settings={saverSettings}
+          onApply={(nextSettings) => {
+            update({
+              screenSaverSettings: {
+                ...staged.screenSaverSettings,
+                [saverDef.id]: nextSettings,
+              },
+            });
+            setSettingsOpen(false);
+          }}
+          onCancel={() => setSettingsOpen(false)}
+        />
+      )}
 
       <GroupBox label="Energy saving features of monitor">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -975,7 +1002,7 @@ function AppearanceTab({
     if (res !== "yes") return;
     useThemeStore.getState().deleteCustom(currentCustom.id);
     update({
-      themeId: "original",
+      themeId: "millenium",
       themeOverrides: {},
       itemFonts: {},
       headerGradientEnd: null,
@@ -1535,6 +1562,7 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
     screenSaverId: display.screenSaverId,
     screenSaverWait: display.screenSaverWait,
     screenSaverPassword: display.screenSaverPassword,
+    screenSaverSettings: { ...display.screenSaverSettings },
     zoom: display.zoom,
     colorDepth: display.colorDepth,
     transitionEffects: display.transitionEffects,
@@ -1564,6 +1592,8 @@ export function DisplayProperties({ windowId }: { windowId: string }) {
     JSON.stringify(staged.themeOverrides) !== JSON.stringify(themeOverrides) ||
     JSON.stringify(staged.itemFonts) !== JSON.stringify(themeItemFonts) ||
     staged.headerGradientEnd !== themeHeaderGradientEnd ||
+    JSON.stringify(staged.screenSaverSettings) !==
+      JSON.stringify(display.screenSaverSettings) ||
     ICON_SLOTS.some(
       ({ slot }) => staged.desktopIcons[slot] !== display.desktopIcons[slot],
     );

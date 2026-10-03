@@ -15,3 +15,24 @@ export function contentByteSize(content: string | undefined): number {
   }
   return new Blob([content]).size;
 }
+
+export interface VfsSizeNode {
+  name?: string;
+  type: "file" | "dir";
+  content?: string;
+  appId?: string;
+  children?: VfsSizeNode[];
+}
+
+/** One size rule shared by Explorer, Find, Properties, and the DOS listing. */
+export function vfsNodeByteSize(node: VfsSizeNode): number {
+  if (node.type === "file") {
+    if (node.content) return contentByteSize(node.content);
+    const isExecutable = /\.(?:exe|com|dll|sys|scr|cpl)$/i.test(node.name ?? "");
+    return node.appId || isExecutable ? 32768 : 0;
+  }
+  return (node.children ?? []).reduce(
+    (total, child) => total + vfsNodeByteSize(child),
+    0,
+  );
+}

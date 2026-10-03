@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AppId, Bounds, WindowInstance } from "../types/window";
+import { QUICK_LAUNCH_PATH } from "../lib/windowsPaths";
 import { useVfsStore } from "./vfsStore";
 
 let idCounter = 0;
@@ -157,15 +158,62 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   },
 
   closeWindow: (id) => {
-    set((state) => ({ windows: state.windows.filter((w) => w.id !== id) }));
+    set((state) => {
+      const removed = state.windows.find((w) => w.id === id);
+      if (!removed) return state;
+      const remaining = state.windows.filter((w) => w.id !== id);
+      const focused = remaining.find((w) => w.isFocused && !w.isMinimized);
+      if (!removed.isFocused && focused) return { windows: remaining };
+
+      const next = [...remaining]
+        .filter((w) => !w.isMinimized)
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
+      if (!next) {
+        return {
+          windows: remaining.map((w) => ({ ...w, isFocused: false })),
+        };
+      }
+      const nextZ = state.topZIndex + 1;
+      return {
+        topZIndex: nextZ,
+        windows: remaining.map((w) => ({
+          ...w,
+          isFocused: w.id === next.id,
+          ...(w.id === next.id ? { zIndex: nextZ } : {}),
+        })),
+      };
+    });
   },
 
   minimizeWindow: (id) => {
-    set((state) => ({
-      windows: state.windows.map((w) =>
-        w.id === id ? { ...w, isMinimized: true, isFocused: false } : w,
-      ),
-    }));
+    set((state) => {
+      const target = state.windows.find((w) => w.id === id);
+      if (!target || target.isMinimized) return state;
+      const wasFocused = target.isFocused;
+      const remainingVisible = state.windows.filter(
+        (w) => w.id !== id && !w.isMinimized,
+      );
+      const currentFocus = remainingVisible.find((w) => w.isFocused);
+      const activate =
+        wasFocused || !currentFocus
+          ? [...remainingVisible].sort((a, b) => b.zIndex - a.zIndex)[0]
+          : undefined;
+      const nextZ = activate ? state.topZIndex + 1 : state.topZIndex;
+      return {
+        ...(activate ? { topZIndex: nextZ } : {}),
+        windows: state.windows.map((w) => {
+          if (w.id === id) return { ...w, isMinimized: true, isFocused: false };
+          if (activate) {
+            return {
+              ...w,
+              isFocused: w.id === activate.id,
+              ...(w.id === activate.id ? { zIndex: nextZ } : {}),
+            };
+          }
+          return w;
+        }),
+      };
+    });
   },
 
   toggleMaximize: (id) => {
@@ -301,7 +349,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     const name = item.title.toLowerCase().endsWith(".lnk")
       ? item.title
       : `${item.title}.lnk`;
-    const qlPath = `C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch\\${name}`;
+    const qlPath = `${QUICK_LAUNCH_PATH}\\${name}`;
     const content = JSON.stringify({
       type: item.type === "show-desktop" ? "url" : item.type,
       target:
@@ -316,7 +364,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
   },
   removeFromQuickLaunch: (id) => {
     const vfs = useVfsStore.getState();
-    const qlPath = `C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch\\${id}`;
+    const qlPath = `${QUICK_LAUNCH_PATH}\\${id}`;
     vfs.remove(qlPath);
   },
 }));

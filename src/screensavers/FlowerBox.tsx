@@ -25,9 +25,10 @@ const FACES: { idx: [number, number, number, number]; color: string }[] = [
   { idx: [3, 2, 6, 7], color: "#6fdf6f" },
 ];
 
-export function FlowerBox({ preview }: ScreenSaverProps) {
+export function FlowerBox({ preview, settings }: ScreenSaverProps) {
   const state = useRef({ x: 0.5, y: 0.5, vx: 0.11, vy: 0.083 });
   const last = useRef(0);
+  const speed = Math.max(0.1, (settings?.speed ?? 50) / 50);
 
   const ref = useSaverCanvas((ctx, w, h, t) => {
     const dt = Math.min(0.1, (t - last.current) / 1000);
@@ -38,13 +39,13 @@ export function FlowerBox({ preview }: ScreenSaverProps) {
     ctx.fillRect(0, 0, w, h);
 
     // Box radius: pulses like the morphing flower box.
-    const pulse = 1 + 0.35 * Math.sin(t / 700);
+    const pulse = 1 + 0.35 * Math.sin((t * speed) / 700);
     const size = Math.min(w, h) * (preview ? 0.16 : 0.09) * pulse;
     const margin = size * 1.9;
 
     // DVD-style drift + bounce (normalized coords).
-    s.x += s.vx * dt;
-    s.y += s.vy * dt;
+    s.x += s.vx * speed * dt;
+    s.y += s.vy * speed * dt;
     const minX = margin / w;
     const minY = margin / h;
     if (s.x < minX) { s.x = minX; s.vx = Math.abs(s.vx); }
@@ -55,8 +56,8 @@ export function FlowerBox({ preview }: ScreenSaverProps) {
     const cx = s.x * w;
     const cy = s.y * h;
 
-    const ax = t / 1300;
-    const ay = t / 900;
+    const ax = (t * speed) / 1300;
+    const ay = (t * speed) / 900;
     const cosX = Math.cos(ax), sinX = Math.sin(ax);
     const cosY = Math.cos(ay), sinY = Math.sin(ay);
 

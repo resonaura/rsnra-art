@@ -9,14 +9,16 @@ interface Star {
 }
 
 // Starfield Simulation — flying through space, as shipped since Windows 3.1.
-export function Starfield({ preview }: ScreenSaverProps) {
+export function Starfield({ preview, settings }: ScreenSaverProps) {
   const stars = useRef<Star[] | null>(null);
   const last = useRef(0);
+  const count = Math.max(40, Math.min(400, settings?.count ?? 220));
+  const speed = Math.max(0.1, (settings?.speed ?? 50) / 50);
 
   const ref = useSaverCanvas((ctx, w, h, t) => {
-    const count = preview ? 60 : 220;
+    const starCount = preview ? Math.min(count, 60) : count;
     if (!stars.current) {
-      stars.current = Array.from({ length: count }, () => ({
+      stars.current = Array.from({ length: starCount }, () => ({
         x: Math.random() * 2 - 1,
         y: Math.random() * 2 - 1,
         z: Math.random(),
@@ -30,7 +32,7 @@ export function Starfield({ preview }: ScreenSaverProps) {
     ctx.fillStyle = "#fff";
 
     for (const s of stars.current) {
-      s.z -= dt * 0.35;
+      s.z -= dt * 0.35 * speed;
       if (s.z <= 0.02) {
         s.x = Math.random() * 2 - 1;
         s.y = Math.random() * 2 - 1;

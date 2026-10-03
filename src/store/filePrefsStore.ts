@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AppId } from "../types/window";
 
-// Global folder-view preferences (mirrors Win95's View ▸ Options ▸ View tab,
+// Global folder-view preferences (mirrors Windows 2000's Folder Options ▸ View tab,
 // plus the General tab). These are the same knobs the Folder Options dialog
 // (src/apps/FolderOptions/FolderOptions.tsx) edits — every field here has a
 // real, observable effect somewhere in the Desktop / My Computer explorer.

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { TASKBAR_HEIGHT } from "../constants";
 import { useWindowStore } from "../store/windowStore";
+import { ALL_USERS_START_MENU_PATH } from "../lib/windowsPaths";
 import type { AppId } from "../types/window";
 
 import { Calculator } from "../apps/Calculator/Calculator";
@@ -364,7 +365,7 @@ export function openApp(appId: AppId, overrides?: OpenAppOverrides): string {
       title: overrides?.title ?? "Games",
       data: {
         ...overrides?.data,
-        path: "C:\\Windows\\Start Menu\\Programs\\Games",
+        path: `${ALL_USERS_START_MENU_PATH}\\Programs\\Games`,
       },
     });
   }

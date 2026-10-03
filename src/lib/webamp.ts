@@ -16,6 +16,7 @@
 // Webamp is dynamically imported so its (large) bundle is code-split.
 
 import { useAudioStore } from "../store/audioStore";
+import { SYSTEM_ROOT_PATH } from "./windowsPaths";
 import { useVfsStore } from "../store/vfsStore";
 import { useWindowStore } from "../store/windowStore";
 
@@ -117,7 +118,7 @@ async function getInstance(): Promise<WebampInstance> {
               const path = await vfsPicker({
                 mode: "open",
                 title: "Open Media",
-                initialDir: "C:\\Windows\\Media",
+                initialDir: `${SYSTEM_ROOT_PATH}\\Media`,
                 filters: [
                   {
                     label: "Audio (*.wav;*.mp3;*.mid)",

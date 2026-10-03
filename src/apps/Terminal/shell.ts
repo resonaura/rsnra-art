@@ -2,6 +2,7 @@ import type { Terminal } from "@xterm/xterm";
 import { useVfsStore } from "../../store/vfsStore";
 import { executeLine, expandVars, type CmdContext } from "./commands";
 import { Nano } from "./nano";
+import { DEFAULT_WINDOWS_ENVIRONMENT } from "../../lib/windowsPaths";
 
 /**
  * Terminal shell — real VT100 input handling with cursor movement,
@@ -29,7 +30,7 @@ export class Shell {
   private cursorPos = 0;
   private history: string[] = [];
   private historyIndex = -1;
-  private vars: Record<string, string> = {};
+  private vars: Record<string, string> = { ...DEFAULT_WINDOWS_ENVIRONMENT };
   private promptStr = "$P$G";
   private errorLevel = 0;
   private escapeBuffer = "";
@@ -67,7 +68,7 @@ export class Shell {
   }
 
   start() {
-    this.term.writeln("RSNRA.ART [Version 4.95.1996]");
+    this.term.writeln("Microsoft Windows 2000 [Version 5.00.2195]");
     this.term.writeln("(c) RSNRA. All rights reserved.");
     this.term.writeln("");
     this.term.writeln('Type "help" to see what this thing can do.');
@@ -323,7 +324,10 @@ export class Shell {
       enterNano: (path: string) => this.enterNano(path),
       vars: this.vars,
       setVar: (name: string, value: string) => {
-        this.vars[name] = value;
+        const existingName = Object.keys(this.vars).find(
+          (key) => key.toLowerCase() === name.toLowerCase(),
+        );
+        this.vars[existingName ?? name] = value;
       },
       setTitle: (title: string) => this.updateTitle(this.windowId, title),
       setPromptStr: (p: string) => {

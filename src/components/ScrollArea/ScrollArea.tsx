@@ -395,10 +395,15 @@ export function ScrollArea({
     return () => ro.disconnect();
   }, [sync]);
 
-  // Re-sync when children change (new content may change scroll dimensions)
+  // Re-sync when the rendered content changes. ResizeObserver handles actual
+  // box-size changes; this covers content updates that affect scroll ranges
+  // without resizing the content element's border box. Do not run this after
+  // every render: showing one custom scrollbar can alter the other axis's
+  // viewport measurement and otherwise create a nested update loop.
   useEffect(() => {
-    sync();
-  });
+    const frame = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(frame);
+  }, [children, sync]);
 
   // ── derived values ─────────────────────────────────────────────────────────
 

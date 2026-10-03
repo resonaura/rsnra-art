@@ -157,7 +157,13 @@ export function SystemDialog({
   };
 
   return createPortal(
-    <Backdrop $zIndex={zIndex} $placement={placement} onMouseDown={onClose}>
+    <Backdrop
+      $zIndex={zIndex}
+      $placement={placement}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.();
+      }}
+    >
       <DragPositioner style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}>
         <DialogWindow
           shadow={false}

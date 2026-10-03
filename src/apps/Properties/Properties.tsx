@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { iconForNode } from "../../data/fileIcons";
 import { Icon } from "../../components/Icon/Icon";
-import { contentByteSize } from "../../lib/vfsSize";
+import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
@@ -110,14 +110,7 @@ function shortName(name: string): string {
 }
 
 function fileSize(node: VfsNode): number {
-  if (node.type === "file") return contentByteSize(node.content);
-  let total = 0;
-  const walk = (n: VfsNode) => {
-    if (n.type === "file") total += contentByteSize(n.content);
-    else n.children?.forEach(walk);
-  };
-  node.children?.forEach(walk);
-  return total;
+  return vfsNodeByteSize(node);
 }
 
 function countContents(node: VfsNode): { files: number; folders: number } {
@@ -164,6 +157,14 @@ export function Properties({ windowId }: { windowId: string }) {
   const [readonly, setReadonly] = useState(!!node?.readonly);
   const [archive, setArchive] = useState(node?.archive ?? true);
   const [system, setSystem] = useState(!!node?.system);
+
+  useEffect(() => {
+    if (!node) return;
+    setHidden(!!node.hidden);
+    setReadonly(!!node.readonly);
+    setArchive(node.archive ?? true);
+    setSystem(!!node.system);
+  }, [node]);
 
   const parent = path.includes(SEP)
     ? path.slice(0, path.lastIndexOf(SEP))

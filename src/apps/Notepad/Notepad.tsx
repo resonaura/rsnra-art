@@ -7,13 +7,14 @@ import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { ScrollArea } from "../../components/ScrollArea";
 import { SystemDialog } from "../../components/SystemDialog/SystemDialog";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { useUnsavedStore } from "../../store/unsavedStore";
 import { useVfsStore } from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
 const DOC_PATHS: Record<string, string> = {
-  bio: "C:\\My Documents\\bio.txt",
-  press: "C:\\My Documents\\press-kit.txt",
+  bio: `${USER_DOCUMENTS_PATH}\\bio.txt`,
+  press: `${USER_DOCUMENTS_PATH}\\press-kit.txt`,
 };
 
 const TEXT_FILTERS = [
@@ -124,7 +125,7 @@ export function Notepad({ windowId }: { windowId: string }) {
   const initialPath =
     (data.path as string) ??
     DOC_PATHS[(data.docId as string) ?? "bio"] ??
-    "C:\\My Documents\\bio.txt";
+    `${USER_DOCUMENTS_PATH}\\bio.txt`;
   const [filePath, setFilePath] = useState(initialPath);
   const fileName = filePath.split("\\").pop() ?? "untitled.txt";
   const initial = vfs.read(filePath) ?? "";
@@ -183,7 +184,7 @@ export function Notepad({ windowId }: { windowId: string }) {
   };
 
   const handleNew = () => {
-    setFilePath("C:\\My Documents\\untitled.txt");
+    setFilePath(`${USER_DOCUMENTS_PATH}\\untitled.txt`);
     setText("");
     setDirty(false);
     historyRef.current = [];

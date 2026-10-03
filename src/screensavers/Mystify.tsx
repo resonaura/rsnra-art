@@ -11,21 +11,23 @@ interface Poly {
 }
 
 // Mystify Your Mind — bouncing polygon corners with color-cycling trails.
-export function Mystify(_props: ScreenSaverProps) {
+export function Mystify({ settings }: ScreenSaverProps) {
   const polys = useRef<Poly[] | null>(null);
   const last = useRef(0);
+  const lineCount = Math.max(1, Math.min(6, settings?.count ?? 2));
+  const speed = Math.max(0.1, (settings?.speed ?? 50) / 50);
 
   const ref = useSaverCanvas((ctx, w, h, t) => {
     if (!polys.current) {
-      polys.current = Array.from({ length: 2 }, (_, i) => ({
+      polys.current = Array.from({ length: lineCount }, (_, i) => ({
         pts: Array.from({ length: 4 }, () => ({
           x: Math.random() * w,
           y: Math.random() * h,
-          vx: (Math.random() * 120 + 60) * (Math.random() > 0.5 ? 1 : -1),
-          vy: (Math.random() * 120 + 60) * (Math.random() > 0.5 ? 1 : -1),
+          vx: (Math.random() * 120 + 60) * speed * (Math.random() > 0.5 ? 1 : -1),
+          vy: (Math.random() * 120 + 60) * speed * (Math.random() > 0.5 ? 1 : -1),
         })),
         hue: i * 180,
-        hueSpeed: 24 + i * 12,
+        hueSpeed: (24 + i * 12) * speed,
         trail: [],
       }));
     }

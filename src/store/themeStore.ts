@@ -10,12 +10,13 @@ export interface ThemeOption {
   theme: Theme;
 }
 
-// A curated subset of react95's ~55 bundled schemes — mirrors the classic
-// Windows 95 "Display Properties > Appearance" scheme list (Brick, Eggplant,
+// A curated subset of react95's ~55 bundled schemes — includes the Windows
+// 2000 default, classic 9x "Appearance" schemes (Brick, Eggplant,
 // Hotdog Stand, Lilac, Marine, Plum, Rose, Storm, Teal...) plus a few extra
 // modern/dark options for variety.
 export const THEMES: ThemeOption[] = [
-  { id: "original", label: "Windows Standard", theme: themes.original },
+  { id: "millenium", label: "Windows 2000", theme: themes.millenium },
+  { id: "original", label: "Windows 95 Standard", theme: themes.original },
   { id: "highContrast", label: "High Contrast", theme: themes.highContrast },
   { id: "blackAndWhite", label: "Black & White", theme: themes.blackAndWhite },
   { id: "coldGray", label: "Cold Gray", theme: themes.coldGray },
@@ -38,7 +39,7 @@ export const THEMES: ThemeOption[] = [
   { id: "modernDark", label: "Modern Dark", theme: themes.modernDark },
 ];
 
-const DEFAULT_THEME_ID = "original";
+const DEFAULT_THEME_ID = "millenium";
 
 // ─── Item fonts ─────────────────────────────────────────────────────────────
 // react95's Theme carries colors only, not fonts, so per-item font choices
@@ -61,7 +62,7 @@ export interface FontFamilyOption {
 }
 
 // Only MS Sans Serif is bundled as a real pixel font; the rest are period-
-// accurate picks from the real Windows 95 font list, rendered with whatever
+// accurate Windows 2000-era picks rendered with whatever
 // the browser/OS provides for them (exactly what Windows itself did when a
 // font wasn't installed — it fell back to a substitute).
 export const FONT_FAMILIES: FontFamilyOption[] = [
@@ -172,7 +173,17 @@ export const useThemeStore = create<ThemeStoreState>()(
           return { customThemes };
         }),
     }),
-    { name: "rsnra95-theme" },
+    {
+      name: "rsnra95-theme",
+      version: 2,
+      migrate: (persisted, version) => {
+        const old = persisted as Partial<ThemeStoreState>;
+        if (version < 2 && old.themeId === "original") {
+          return { ...old, themeId: "millenium" };
+        }
+        return old;
+      },
+    },
   ),
 );
 

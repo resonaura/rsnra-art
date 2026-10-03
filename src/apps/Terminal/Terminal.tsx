@@ -4,6 +4,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { alertError } from "../../lib/systemDialogs";
 import { useWindowStore } from "../../store/windowStore";
 import { Shell } from "./shell";
 import { TerminalScrollbar } from "./TerminalScrollbar";
@@ -74,36 +75,6 @@ const TermContainer = styled.div`
   }
 `;
 
-const menus = [
-  {
-    label: "Edit",
-    items: [
-      { label: "Mark", disabled: true },
-      { label: "Copy\tEnter", disabled: true },
-      { label: "Paste", disabled: true },
-      { label: "Scroll", disabled: true },
-      { label: "", divider: true },
-      { label: "Select All", disabled: true },
-    ],
-  },
-  {
-    label: "View",
-    items: [
-      { label: "Font...", disabled: true },
-      { label: "", divider: true },
-      { label: "Full Screen", disabled: true },
-    ],
-  },
-  {
-    label: "Help",
-    items: [
-      { label: "Help Topics", disabled: true },
-      { label: "", divider: true },
-      { label: 'Type "help" for commands', disabled: true },
-    ],
-  },
-];
-
 interface ScrollState {
   scrollTop: number;
   scrollHeight: number;
@@ -128,8 +99,68 @@ export function TerminalApp({ windowId }: { windowId: string }) {
   );
   const [scrollState, setScrollState] = useState<ScrollState>(INITIAL_SCROLL);
   const [bgColor, setBgColor] = useState("#000000");
+  const [hasSelection, setHasSelection] = useState(false);
 
   const { showFileDialog, dialog: fileDialogEl } = useFileDialog();
+
+  const copySelection = useCallback(async () => {
+    const selection = termRef.current?.getSelection();
+    if (!selection) return;
+    try {
+      await navigator.clipboard.writeText(selection);
+    } catch {
+      await alertError(
+        "Command Prompt",
+        "The selected text could not be copied to the clipboard.",
+      );
+    }
+  }, []);
+
+  const pasteClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      termRef.current?.paste(text);
+    } catch {
+      await alertError(
+        "Command Prompt",
+        "The clipboard could not be read. Check your browser's clipboard permission.",
+      );
+    }
+  }, []);
+
+  const menus = [
+    {
+      label: "Edit",
+      items: [
+        { label: "Mark", action: () => termRef.current?.selectAll() },
+        {
+          label: "Copy",
+          disabled: !hasSelection,
+          action: () => void copySelection(),
+        },
+        { label: "Paste", action: () => void pasteClipboard() },
+        { label: "Scroll", disabled: true },
+        { label: "", divider: true },
+        { label: "Select All", action: () => termRef.current?.selectAll() },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Font...", disabled: true },
+        { label: "", divider: true },
+        { label: "Full Screen", disabled: true },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        { label: "Help Topics", disabled: true },
+        { label: "", divider: true },
+        { label: 'Type "help" for commands', disabled: true },
+      ],
+    },
+  ];
 
   const syncScroll = useCallback(() => {
     const term = termRef.current;
@@ -208,6 +239,22 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
     fitAddon.fit();
+    const selectionDisposable = term.onSelectionChange(() => {
+      setHasSelection(term.hasSelection());
+    });
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "c") {
+        void copySelection();
+        return false;
+      }
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "v") {
+        void pasteClipboard();
+        return false;
+      }
+      return true;
+    });
 
     term.registerLinkProvider({
       provideLinks(y, callback) {
@@ -287,6 +334,7 @@ export function TerminalApp({ windowId }: { windowId: string }) {
     const disposables = [
       term.onScroll(syncScroll),
       term.onWriteParsed(syncScroll),
+      selectionDisposable,
     ];
 
     const resizeObserver = new ResizeObserver(() => {

@@ -3,14 +3,18 @@ import { Button, Separator, TextField } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
 import { AppMenuBar } from "../../components/AppMenuBar";
+import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
-import { contentByteSize } from "../../lib/vfsSize";
+import { alertError } from "../../lib/systemDialogs";
+import { vfsNodeByteSize } from "../../lib/vfsSize";
+import { USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { R95_SCALE } from "../../react95.conf";
+import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -28,7 +32,7 @@ const Field = styled.div`
   padding: 8px;
 `;
 
-const Label = styled.label`
+const FieldLabel = styled.label`
   white-space: nowrap;
 `;
 
@@ -98,11 +102,25 @@ interface Hit {
 
 // Recursively walk the VFS tree from `root`, collecting nodes whose name
 // matches the (wildcard) pattern. `*` matches any run, `?` matches one char.
-function search(root: VfsNode, pattern: string): Hit[] {
+function search(
+  root: VfsNode,
+  rootPath: string,
+  pattern: string,
+  showHidden: boolean,
+  hideProtectedSystemFiles: boolean,
+): Hit[] {
+  const trimmed = pattern.trim();
+  if (!trimmed) return [];
+  // The dialog says "all or part" so plain text is a substring search.
+  // Explicit DOS wildcards remain exact; *.* is the standard all-files mask.
+  const glob = trimmed === "*.*"
+    ? "*"
+    : /[*?]/.test(trimmed)
+      ? trimmed
+      : `*${trimmed}*`;
   const rx = new RegExp(
     "^" +
-      pattern
-        .trim()
+      glob
         .toLowerCase()
         .replace(/[.+^${}()|[\]\\]/g, "\\$&")
         .replace(/\*/g, ".*")
@@ -115,7 +133,10 @@ function search(root: VfsNode, pattern: string): Hit[] {
     if (node.type === "dir" && node.children) {
       for (const c of node.children) {
         const childPath =
-          path === "C:\\" ? `C:\\${c.name}` : `${path}\\${c.name}`;
+          path.endsWith("\\") ? `${path}${c.name}` : `${path}\\${c.name}`;
+        if (c.hidden && (!showHidden || (c.system && hideProtectedSystemFiles))) {
+          continue;
+        }
         if (rx.test(c.name)) {
           out.push({ path: childPath, folder: path, node: c });
         }
@@ -123,13 +144,13 @@ function search(root: VfsNode, pattern: string): Hit[] {
       }
     }
   };
-  walk(root, "C:\\");
+  walk(root, rootPath);
   return out;
 }
 
 function describeSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  const bytes = contentByteSize(node.content);
+  const bytes = vfsNodeByteSize(node);
   if (bytes < 1024) return `${bytes} bytes`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
@@ -144,7 +165,7 @@ function openHit(hit: Hit): void {
     }
   }
   if (n.type === "dir") {
-    openApp("my-computer");
+    openApp("my-computer", { title: n.name, data: { path: hit.path } });
     return;
   }
   if (n.appId) {
@@ -185,20 +206,99 @@ function openHit(hit: Hit): void {
     });
   } else if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
     openApp("paint", { title: `${n.name} - Paint`, data: { path: hit.path } });
+  } else {
+    openApp("notepad", {
+      title: `${n.name} - Notepad`,
+      data: { path: hit.path },
+    });
   }
 }
 
 export function Find({ windowId }: { windowId: string }) {
-  const vfs = useVfsStore(useShallow((s) => ({ root: s.root })));
+  const vfs = useVfsStore(
+    useShallow((s) => ({
+      root: s.root,
+      resolve: s.resolve,
+      resolvePath: s.resolvePath,
+      writeFile: s.writeFile,
+    })),
+  );
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const hideProtectedSystemFiles = useFilePrefsStore(
+    (s) => s.hideProtectedSystemFiles,
+  );
+  const { showFileDialog, dialog } = useFileDialog();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [lookIn, setLookIn] = useState("C:\\");
+  const [submittedLocation, setSubmittedLocation] = useState("C:\\");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [locationError, setLocationError] = useState("");
 
-  const hits = useMemo(
-    () => (submitted ? search(vfs.root, submitted) : []),
-    [vfs.root, submitted],
-  );
+  const resolvedLocation = vfs.resolvePath(submittedLocation);
+  const searchRoot = resolvedLocation ? vfs.resolve(resolvedLocation) : null;
+  const hits = useMemo(() => {
+    if (!submitted || !searchRoot || searchRoot.type !== "dir" || !resolvedLocation) {
+      return [];
+    }
+    return search(
+      searchRoot,
+      resolvedLocation,
+      submitted,
+      showHidden,
+      hideProtectedSystemFiles,
+    );
+  }, [
+    submitted,
+    resolvedLocation,
+    searchRoot,
+    showHidden,
+    hideProtectedSystemFiles,
+  ]);
+
+  const runSearch = () => {
+    setSubmitted(query);
+    setSubmittedLocation(lookIn);
+    setSelected([]);
+    const abs = vfs.resolvePath(lookIn);
+    const node = abs ? vfs.resolve(abs) : null;
+    setLocationError(
+      !abs || !node
+        ? "The folder could not be found."
+        : node.type !== "dir"
+          ? "Look in must be a folder."
+          : "",
+    );
+  };
+
+  const saveResults = async () => {
+    if (hits.length === 0) return;
+    const path = await showFileDialog({
+      mode: "save",
+      title: "Save Search Results",
+      initialDir: USER_DOCUMENTS_PATH,
+      initialFileName: "Search Results.txt",
+      filters: [{ label: "Text Files (*.txt)", extensions: ["txt"] }],
+    });
+    if (!path) return;
+    const contents = [
+      `Search results for: ${submitted}`,
+      `Look in: ${submittedLocation}`,
+      "",
+      ...hits.map(
+        (hit) => `${hit.node.name}\t${hit.folder}\t${describeSize(hit.node)}`,
+      ),
+      "",
+      `${hits.length} object(s) found`,
+    ].join("\r\n");
+    if (!vfs.writeFile(path, contents)) {
+      await alertError(
+        "Save Search Results",
+        "The results could not be saved to that location.",
+      );
+    }
+  };
 
   const menus = [
     {
@@ -207,15 +307,27 @@ export function Find({ windowId }: { windowId: string }) {
     },
     {
       label: "Edit",
-      items: [{ label: "Select All", disabled: true }],
+      items: [
+        {
+          label: "Select All",
+          disabled: hits.length === 0,
+          action: () => setSelected(hits.map((hit) => hit.path)),
+        },
+      ],
     },
     {
       label: "View",
-      items: [{ label: "Details", disabled: true }],
+      items: [{ label: "Details", checked: true, radio: true }],
     },
     {
       label: "Options",
-      items: [{ label: "Save Results", disabled: true }],
+      items: [
+        {
+          label: "Save Results",
+          disabled: hits.length === 0,
+          action: () => void saveResults(),
+        },
+      ],
     },
     {
       label: "Help",
@@ -227,24 +339,31 @@ export function Find({ windowId }: { windowId: string }) {
     <Layout>
       <AppMenuBar isInReact95 menus={menus} />
       <Field>
-        <Label>Named:</Label>
+        <FieldLabel>Named:</FieldLabel>
         <TextField
           style={{ flex: 1 }}
           value={query}
-          placeholder="* bio *"
+          placeholder="all or part of the name"
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              setSubmitted(query);
-              setSelected(null);
+              runSearch();
             }
           }}
         />
-        <Button
-          onClick={() => {
-            setSubmitted(query);
-            setSelected(null);
+      </Field>
+      <Field style={{ paddingTop: 0 }}>
+        <FieldLabel>Look in:</FieldLabel>
+        <TextField
+          style={{ flex: 1 }}
+          value={lookIn}
+          onChange={(e) => setLookIn(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") runSearch();
           }}
+        />
+        <Button
+          onClick={runSearch}
         >
           Find Now
         </Button>
@@ -265,16 +384,36 @@ export function Find({ windowId }: { windowId: string }) {
                 textAlign: "center",
               }}
             >
-              {submitted
-                ? `No files found matching "${submitted}".`
-                : "Enter all or part of the file name, then click Find Now."}
+              {locationError
+                ? locationError
+                : submitted
+                  ? `No files found matching "${submitted}".`
+                  : "Enter all or part of the file name, then click Find Now."}
             </div>
           ) : (
             hits.map((h) => (
               <Row
                 key={h.path}
-                $selected={selected === h.path}
-                onClick={() => setSelected(h.path)}
+                $selected={selected.includes(h.path)}
+                onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey) {
+                    setSelected((current) =>
+                      current.includes(h.path)
+                        ? current.filter((path) => path !== h.path)
+                        : [...current, h.path],
+                    );
+                  } else if (event.shiftKey && selected.length > 0) {
+                    const anchor = hits.findIndex(
+                      (hit) => hit.path === selected[0],
+                    );
+                    const target = hits.findIndex((hit) => hit.path === h.path);
+                    const start = Math.min(anchor < 0 ? target : anchor, target);
+                    const end = Math.max(anchor < 0 ? target : anchor, target);
+                    setSelected(hits.slice(start, end + 1).map((hit) => hit.path));
+                  } else {
+                    setSelected([h.path]);
+                  }
+                }}
                 onDoubleClick={() => openHit(h)}
               >
                 <ColName>
@@ -294,9 +433,10 @@ export function Find({ windowId }: { windowId: string }) {
       </ResultList>
       <StatusBar>
         {submitted
-          ? `${hits.length} object(s) found`
+          ? `${hits.length} object(s) found in ${submittedLocation}`
           : "Ready — search the whole C: drive"}
       </StatusBar>
+      {dialog}
     </Layout>
   );
 }

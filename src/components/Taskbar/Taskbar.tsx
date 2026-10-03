@@ -6,10 +6,11 @@ import { ScrollArea } from "../../components/ScrollArea";
 import { TASKBAR_HEIGHT } from "../../constants";
 import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
+import { QUICK_LAUNCH_PATH } from "../../lib/windowsPaths";
 import { getPreferredApp } from "../../data/fileOpen";
 import { focusWebamp, openWebamp } from "../../lib/webamp";
 import { useWindowStore } from "../../store/windowStore";
-import { useVfsStore } from "../../store/vfsStore";
+import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { Icon } from "../Icon/Icon";
 import { NetworkTray } from "./NetworkTray";
 import { TaskbarClock } from "./TaskbarClock";
@@ -23,6 +24,8 @@ const Bar = styled(AppBar)`
   height: ${TASKBAR_HEIGHT}px;
   z-index: 200000;
 `;
+
+const EMPTY_QUICK_LAUNCH: VfsNode[] = [];
 
 const StyledToolbar = styled(Toolbar)`
   height: 100%;
@@ -238,15 +241,10 @@ export function Taskbar() {
   const toggleShowDesktop = useWindowStore((s) => s.toggleShowDesktop);
   const removeFromQuickLaunch = useWindowStore((s) => s.removeFromQuickLaunch);
 
-  // Subscribe to VFS root but resolve Quick Launch folder manually to track changes
-  const quickLaunchVfsItems = useVfsStore((s) => {
-    const win = s.root.children?.find((c) => c.name.toLowerCase() === "windows");
-    const appData = win?.children?.find((c) => c.name.toLowerCase() === "application data");
-    const ms = appData?.children?.find((c) => c.name.toLowerCase() === "microsoft");
-    const ie = ms?.children?.find((c) => c.name.toLowerCase() === "internet explorer");
-    const ql = ie?.children?.find((c) => c.name.toLowerCase() === "quick launch");
-    return ql?.children ?? [];
-  });
+  // Subscribe to the per-user Quick Launch folder, not the obsolete 9x path.
+  // Keep the missing-folder fallback referentially stable for Zustand/React.
+  const quickLaunchFolder = useVfsStore((s) => s.resolve(QUICK_LAUNCH_PATH));
+  const quickLaunchVfsItems = quickLaunchFolder?.children ?? EMPTY_QUICK_LAUNCH;
 
   const resolvedQlItems = useMemo(() => {
     return quickLaunchVfsItems.map((node) => {
@@ -351,7 +349,7 @@ export function Taskbar() {
     const insertIdx = dragOverIndex !== null ? dragOverIndex : visibleItems.length;
     setDragOverIndex(null);
 
-    const QL_PATH = "C:\\Windows\\Application Data\\Microsoft\\Internet Explorer\\Quick Launch";
+    const QL_PATH = QUICK_LAUNCH_PATH;
 
     if (draggedItemId) {
       // Rearrange existing Quick Launch item

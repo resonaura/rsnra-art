@@ -5,7 +5,8 @@ import { useShallow } from "zustand/react/shallow";
 import { ScrollArea } from "../../components/ScrollArea";
 import { FileIcon } from "../FileIcon/FileIcon";
 
-import { contentByteSize } from "../../lib/vfsSize";
+import { vfsNodeByteSize } from "../../lib/vfsSize";
+import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { SystemDialog } from "../SystemDialog/SystemDialog";
 
@@ -197,7 +198,8 @@ function matchesFilter(name: string, filter: FileFilter): boolean {
 /** Format the file size for the listing. */
 function formatSize(node: VfsNode): string {
   if (node.type === "dir") return "";
-  return `${(contentByteSize(node.content) / 1024).toFixed(1)} KB`;
+  const bytes = vfsNodeByteSize(node);
+  return bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 
@@ -221,6 +223,10 @@ export function FileDialog({
       rename: s.rename,
     })),
   );
+  const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const hideProtectedSystemFiles = useFilePrefsStore(
+    (s) => s.hideProtectedSystemFiles,
+  );
   const [currentDir, setCurrentDir] = useState(() => {
     return vfs.resolvePath(initialDir) ?? initialDir;
   });
@@ -237,10 +243,13 @@ export function FileDialog({
     const node = vfs.resolve(currentDir);
     if (!node || node.type !== "dir" || !node.children) return [];
     return node.children
-      .filter((c) => !c.hidden)
+      .filter((c) => showHidden || !c.hidden)
+      .filter(
+        (c) => !hideProtectedSystemFiles || !(c.system && c.hidden),
+      )
       .filter((c) => c.type === "dir" || matchesFilter(c.name, currentFilter))
       .sort(sortNodes);
-  }, [vfs, currentDir, currentFilter]);
+  }, [vfs, currentDir, currentFilter, showHidden, hideProtectedSystemFiles]);
 
   // Build the breadcrumb path stack for the "Look in" dropdown. Each entry's
   // `path` must exactly match how `currentDir` is formatted (single

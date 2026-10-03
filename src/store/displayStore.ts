@@ -1,14 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ScreenSaverSettings } from "../screensavers/types";
 
 export type WallpaperMode = "center" | "tile" | "stretch";
 export type ColorDepth = 4 | 8 | 16 | 32;
 export type FontSizeOption = "small" | "normal" | "large";
 
-// Settings ▸ Font size scales the whole UI (not just text) — exactly how
-// real Windows 95's "Large Fonts (120 DPI)" worked, since it was a display
-// metric change, not a per-glyph one. Layered multiplicatively with Screen
-// area's zoom in DisplayHost.
+// Settings ▸ Font size scales the whole UI (not just text), following the
+// classic Windows 2000 large-font/DPI model. Layered multiplicatively with
+// Screen area's zoom in DisplayHost.
 export const FONT_SIZE_SCALE: Record<FontSizeOption, number> = {
   small: 0.9,
   normal: 1,
@@ -47,6 +47,7 @@ export interface DisplayStoreState {
   screenSaverId: string;
   screenSaverWait: number; // minutes
   screenSaverPassword: boolean;
+  screenSaverSettings: Record<string, ScreenSaverSettings>;
 
   /** Settings ▸ Screen area — zoom applied to <body>. 1 = native. */
   zoom: number;
@@ -74,11 +75,13 @@ export const useDisplayStore = create<DisplayStoreState>()(
       // barely-visible 32–96px patch in the middle of the screen.
       wallpaperMode: "tile",
       pattern: null,
-      desktopColor: "#2d1b4e",
+      desktopColor: "#3a6ea5",
 
-      screenSaverId: "dvd",
+      // Windows 2000's clean-install choice is (None); extras stay opt-in.
+      screenSaverId: "none",
       screenSaverWait: 14,
       screenSaverPassword: false,
+      screenSaverSettings: {},
 
       zoom: 1,
       colorDepth: 32,
@@ -98,17 +101,18 @@ export const useDisplayStore = create<DisplayStoreState>()(
     }),
     {
       name: "rsnra95-display",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const old = persisted as Partial<DisplayStoreState>;
         const icons = old.desktopIcons;
+        let next = old;
         if (
           version < 2 &&
           icons?.recycleFull === "/icons/shell32.dll/078.ico" &&
           icons?.recycleEmpty === "/icons/shell32.dll/079.ico"
         ) {
-          return {
-            ...old,
+          next = {
+            ...next,
             desktopIcons: {
               ...icons,
               recycleFull: "/icons/shell32.dll/079.ico",
@@ -116,7 +120,10 @@ export const useDisplayStore = create<DisplayStoreState>()(
             },
           };
         }
-        return old;
+        if (version < 3 && next.desktopColor === "#2d1b4e") {
+          next = { ...next, desktopColor: "#3a6ea5" };
+        }
+        return next;
       },
     },
   ),

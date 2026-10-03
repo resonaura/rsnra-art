@@ -6,7 +6,16 @@ import {
   LINKS,
 } from "../../data/content";
 import { buildProcessRows, isProtectedPid } from "../../data/processList";
-import { contentByteSize } from "../../lib/vfsSize";
+import { vfsNodeByteSize } from "../../lib/vfsSize";
+import {
+  ALL_USERS_PROFILE_PATH,
+  DEFAULT_SYSTEM_PATH,
+  SYSTEM32_PATH,
+  SYSTEM_ROOT_PATH,
+  USER_APPLICATION_DATA_PATH,
+  USER_DOCUMENTS_PATH,
+  USER_PROFILE_PATH,
+} from "../../lib/windowsPaths";
 import { useVfsStore, type VfsNode, type VfsState } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -77,24 +86,40 @@ export function expandVars(
   // Built-in dynamic variables
   const dynamic: Record<string, string> = {
     cd: vfs.cwd,
-    CD: vfs.cwd,
     date: new Date().toLocaleDateString(),
     time: new Date().toLocaleTimeString(),
     random: String(Math.floor(Math.random() * 32768)),
     errorlevel: String(vars.__errorlevel ?? "0"),
-    path: "C:\\Windows;C:\\Windows\\Command;C:\\Program Files\\RSNRA",
+    path: DEFAULT_SYSTEM_PATH,
     prompt: vars.__prompt ?? "$P$G",
-    username: "RSNRA",
-    computername: "RSNRA95",
-    os: "Windows_95",
-    systemroot: "C:\\Windows",
-    temp: "C:\\Windows\\Temp",
-    tmp: "C:\\Windows\\Temp",
-    ...vars,
+    allusersprofile: ALL_USERS_PROFILE_PATH,
+    allusersappdata: `${ALL_USERS_PROFILE_PATH}\\Application Data`,
+    appdata: USER_APPLICATION_DATA_PATH,
+    comspec: `${SYSTEM32_PATH}\\cmd.exe`,
+    homedrive: "C:",
+    homepath: "\\Documents and Settings\\Administrator",
+    username: "Administrator",
+    userprofile: USER_PROFILE_PATH,
+    userdomain: "WORKGROUP",
+    systemdrive: "C:",
+    programfiles: "C:\\Program Files",
+    commonprogramfiles: "C:\\Program Files\\Common Files",
+    pathext: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH",
+    processor_architecture: "x86",
+    number_of_processors: "1",
+    computername: "RSNRA-2000",
+    os: "Windows_NT",
+    systemroot: SYSTEM_ROOT_PATH,
+    windir: SYSTEM_ROOT_PATH,
+    temp: `${USER_PROFILE_PATH}\\Local Settings\\Temp`,
+    tmp: `${USER_PROFILE_PATH}\\Local Settings\\Temp`,
+    ...Object.fromEntries(
+      Object.entries(vars).map(([name, value]) => [name.toLowerCase(), value]),
+    ),
   };
   return line
-    .replace(/%(\w+)%/g, (_, name: string) => dynamic[name] ?? "")
-    .replace(/!(\w+)!/g, (_, name: string) => dynamic[name] ?? "");
+    .replace(/%(\w+)%/g, (_, name: string) => dynamic[name.toLowerCase()] ?? "")
+    .replace(/!(\w+)!/g, (_, name: string) => dynamic[name.toLowerCase()] ?? "");
 }
 
 /** Format a date like MS-DOS dir listing. */
@@ -110,8 +135,15 @@ function dirStamp(date: Date): string {
 
 /** Get file size for dir listing. */
 function fileSize(node: VfsNode): number {
-  if (node.type === "dir") return 0;
-  return node.content ? contentByteSize(node.content) : node.appId ? 32768 : 0;
+  return node.type === "dir" ? 0 : vfsNodeByteSize(node);
+}
+
+function getEnvVar(vars: Record<string, string>, name: string): string | undefined {
+  return Object.entries(vars).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+}
+
+function commandSearchPath(ctx: CmdContext): string {
+  return getEnvVar(ctx.vars, "PATH") ?? DEFAULT_SYSTEM_PATH;
 }
 
 // ─── Command handlers ─────────────────────────────────────────────────────
@@ -279,7 +311,7 @@ function cmdCd(args: string[], ctx: CmdContext) {
   }
   // Handle cd without args or cd ~
   if (args[0] === "~") {
-    ctx.vfs.setCwd("C:\\My Documents");
+    ctx.vfs.setCwd(USER_DOCUMENTS_PATH);
     return;
   }
   const abs = ctx.vfs.resolvePath(args[0]);
@@ -403,8 +435,7 @@ function cmdRmdir(
   _raw: string,
   cmdName: string,
 ) {
-  const force =
-    args.includes("-f") || args.includes("/s") || args.includes("/q");
+  const force = args.includes("-f") || args.includes("/q");
   const recursive =
     args.includes("-r") || args.includes("-rf") || args.includes("/s");
   const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
@@ -416,7 +447,7 @@ function cmdRmdir(
   for (const t of targets) {
     const abs = ctx.vfs.resolvePath(t);
     const node = abs ? ctx.vfs.resolve(abs) : null;
-    if (!node) {
+    if (!abs || !node) {
       const msg =
         cmdName === "rm"
           ? `rm: cannot remove '${t}': No such file or directory`
@@ -438,6 +469,19 @@ function cmdRmdir(
       }
       continue;
     }
+    const cwdAbs = ctx.vfs.resolvePath(ctx.vfs.cwd);
+    const targetKey = abs.toLowerCase().replace(/[\\/]+$/, "");
+    const cwdKey = cwdAbs?.toLowerCase().replace(/[\\/]+$/, "");
+    if (cwdKey && (cwdKey === targetKey || cwdKey.startsWith(`${targetKey}\\`))) {
+      if (!force) {
+        ctx.print(
+          ["The current directory, or a parent of it, cannot be removed."],
+          "error",
+        );
+      }
+      ctx.setErrorLevel(1);
+      continue;
+    }
     // It's a directory
     if (node.children && node.children.length > 0 && !recursive) {
       const msg =
@@ -448,11 +492,51 @@ function cmdRmdir(
       ctx.setErrorLevel(1);
       continue;
     }
-    if (recursive && node.children) {
-      // Recursively delete all children
-      for (const child of [...node.children].reverse()) {
-        ctx.vfs.remove(abs + "\\" + child.name);
+    if (recursive) {
+      // Preflight the complete tree before changing anything. Windows-owned
+      // and read-only descendants must not leave a half-deleted directory.
+      const pathsToRemove: string[] = [];
+      let blockedPath: string | null = null;
+      const collectPostOrder = (current: VfsNode, currentPath: string) => {
+        if (current.protected || current.readonly) {
+          blockedPath = currentPath;
+          return;
+        }
+        if (current.type === "dir") {
+          for (const child of current.children ?? []) {
+            const childPath = `${currentPath.replace(/[\\/]+$/, "")}\\${child.name}`;
+            collectPostOrder(child, childPath);
+            if (blockedPath) return;
+          }
+        }
+        pathsToRemove.push(currentPath);
+      };
+      collectPostOrder(node, abs);
+      const deniedPath = blockedPath;
+      if (deniedPath) {
+        if (!force) {
+          ctx.print(
+            [`Access is denied — protected or read-only item: ${deniedPath}`],
+            "error",
+          );
+        }
+        ctx.setErrorLevel(1);
+        continue;
       }
+      let removed = true;
+      ctx.vfs.transaction("Remove directory tree", () => {
+        for (const path of pathsToRemove) {
+          if (!ctx.vfs.remove(path)) {
+            removed = false;
+            break;
+          }
+        }
+      });
+      if (!removed) {
+        if (!force) ctx.print(["Access is denied — system directory."], "error");
+        ctx.setErrorLevel(1);
+      }
+      continue;
     }
     if (!ctx.vfs.remove(t)) {
       if (!force) ctx.print(["Access is denied — system directory."], "error");
@@ -809,24 +893,19 @@ function cmdExit(_args: string[], ctx: CmdContext) {
 }
 
 function cmdVer(_args: string[], ctx: CmdContext) {
-  ctx.print(["", "RSNRA.ART [Version 4.95.1996]", ""]);
+  ctx.print(["", "Microsoft Windows 2000 [Version 5.00.2195]", ""]);
 }
 
 function cmdVol(_args: string[], ctx: CmdContext) {
   ctx.print([
-    " Volume in drive C is RSNRA95",
-    " Volume Serial Number is 1996-0824",
+    " Volume in drive C is SYSTEM",
+    " Volume Serial Number is 4A2B-2000",
     "",
   ]);
 }
 
 function cmdPath(_args: string[], ctx: CmdContext) {
-  ctx.print([
-    "PATH=" +
-      ["C:\\Windows", "C:\\Windows\\Command", "C:\\Program Files\\RSNRA"].join(
-        ";",
-      ),
-  ]);
+  ctx.print([`PATH=${commandSearchPath(ctx)}`]);
 }
 
 function cmdHead(args: string[], ctx: CmdContext) {
@@ -1030,18 +1109,23 @@ function cmdSet(args: string[], ctx: CmdContext) {
   }
   const raw = args.join(" ");
   const eqIdx = raw.indexOf("=");
+  const findName = (name: string) =>
+    Object.keys(ctx.vars).find((key) => key.toLowerCase() === name.toLowerCase());
   if (eqIdx < 0) {
     // set VAR — show value
-    const val = ctx.vars[raw.trim()];
-    ctx.print(val ? [`${raw.trim()}=${val}`] : [`${raw.trim()}=`]);
+    const name = raw.trim();
+    const key = findName(name);
+    const val = key ? ctx.vars[key] : undefined;
+    ctx.print(val ? [`${key}=${val}`] : [`${name}=`]);
     return;
   }
   const name = raw.slice(0, eqIdx).trim();
   const value = raw.slice(eqIdx + 1).trim();
+  const existingName = findName(name);
   if (!value) {
-    delete ctx.vars[name];
+    delete ctx.vars[existingName ?? name];
   } else {
-    ctx.setVar(name, value);
+    ctx.setVar(existingName ?? name, value);
   }
 }
 
@@ -1058,7 +1142,7 @@ function cmdStart(args: string[], ctx: CmdContext) {
     return;
   }
   const lower = prog.toLowerCase();
-  const exePath = ctx.vfs.findExecutable(lower);
+  const exePath = ctx.vfs.findExecutable(lower, commandSearchPath(ctx));
   if (exePath) {
     const node = ctx.vfs.resolve(exePath);
     if (node?.appId) {
@@ -1251,7 +1335,7 @@ function cmdWhich(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
-  const exePath = ctx.vfs.findExecutable(args[0].toLowerCase());
+  const exePath = ctx.vfs.findExecutable(args[0].toLowerCase(), commandSearchPath(ctx));
   if (exePath) {
     ctx.print([exePath]);
   } else {
@@ -1984,7 +2068,7 @@ async function dispatchCommand(cmdLine: string, ctx: CmdContext) {
     const abs = ctx.vfs.resolvePath(cmd);
     node = abs ? ctx.vfs.resolve(abs) : null;
   } else {
-    const exePath = ctx.vfs.findExecutable(lower);
+    const exePath = ctx.vfs.findExecutable(lower, commandSearchPath(ctx));
     if (exePath) node = ctx.vfs.resolve(exePath);
   }
 
