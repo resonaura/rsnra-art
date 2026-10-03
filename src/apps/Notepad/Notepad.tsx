@@ -128,8 +128,7 @@ export function Notepad({ windowId }: { windowId: string }) {
     `${USER_DOCUMENTS_PATH}\\bio.txt`;
   const [filePath, setFilePath] = useState(initialPath);
   const fileName = filePath.split("\\").pop() ?? "untitled.txt";
-  const initial = vfs.read(filePath) ?? "";
-  const [text, setText] = useState(initial);
+  const [text, setText] = useState(() => vfs.read(filePath) ?? "");
   const [dirty, setDirty] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);

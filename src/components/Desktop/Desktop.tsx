@@ -11,6 +11,8 @@ import {
   containsReadOnlyFile,
   deleteConfirmationMessage,
   readOnlyFileWarning,
+  recycleBinPayloadSizes,
+  willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
 import { confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
@@ -663,10 +665,26 @@ export function Desktop() {
                   <CtxItem
                     onClick={async () => {
                       const containsReadOnly = containsReadOnlyFile(node);
+                      const vfs = useVfsStore.getState();
+                      const currentPayloadSizes = recycleBinPayloadSizes(
+                        vfs.root,
+                        vfs.recycled,
+                      );
                       if (confirmDelete || containsReadOnly) {
                         const message = confirmDelete
-                          ? deleteConfirmationMessage(`'${label}'`, [node])
-                          : readOnlyFileWarning([node]);
+                          ? deleteConfirmationMessage(
+                              `'${label}'`,
+                              [node],
+                              currentPayloadSizes,
+                            )
+                          : readOnlyFileWarning(
+                              [node],
+                              false,
+                              willRecycleBinEvictOldestItems(
+                                [node],
+                                currentPayloadSizes,
+                              ),
+                            );
                         const result = await confirmDialog(
                           "Confirm File Delete",
                           message,

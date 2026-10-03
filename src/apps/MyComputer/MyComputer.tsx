@@ -23,6 +23,8 @@ import {
   deleteConfirmationMessage,
   isRecycleBinBypassed,
   readOnlyFileWarning,
+  recycleBinPayloadSizes,
+  willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
 import {
   alertError,
@@ -576,6 +578,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       move: s.move,
       diskUsage: s.diskUsage,
       // Free-space display also has to react when only the Recycle Bin changes.
+      recycled: s.recycled,
       recycledCount: s.recycled.length,
       canUndo: s.canUndo,
       canRedo: s.canRedo,
@@ -947,14 +950,29 @@ export function MyComputer({ windowId }: { windowId: string }) {
         : `these ${deletable.length} items`;
     const confirmDelete = useRecycleBinStore.getState().confirmDelete;
     if (confirmDelete || containsReadOnly) {
+      const currentPayloadSizes = recycleBinPayloadSizes(
+        vfs.root,
+        vfs.recycled,
+      );
       const readOnlyNote = containsReadOnly
         ? " This selection contains read-only files; they will also be deleted if you continue."
         : "";
       const message = bypassRecycleBin
         ? `Are you sure you want to permanently delete ${label}?${readOnlyNote}`
         : confirmDelete
-          ? deleteConfirmationMessage(label, deletable)
-          : readOnlyFileWarning(deletable, false);
+          ? deleteConfirmationMessage(
+              label,
+              deletable,
+              currentPayloadSizes,
+            )
+          : readOnlyFileWarning(
+              deletable,
+              false,
+              willRecycleBinEvictOldestItems(
+                deletable,
+                currentPayloadSizes,
+              ),
+            );
       const result = await confirmDialog(
         deletable.length === 1
           ? "Confirm File Delete"

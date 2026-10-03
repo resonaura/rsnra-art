@@ -1989,11 +1989,16 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return null;
         const node = findNode(get().root, abs);
         if (!node || node.type !== "file") return null;
-        const newRoot = updateNode(get().root, abs, (current) => ({
-          ...current,
-          accessed: fatAccessDate(now()),
-        }));
-        if (newRoot) set({ root: newRoot });
+        // FAT stores only the access date. Avoid persisting/re-rendering the
+        // entire virtual tree when a file is read repeatedly on that date.
+        const accessed = fatAccessDate(now());
+        if (node.accessed !== accessed) {
+          const newRoot = updateNode(get().root, abs, (current) => ({
+            ...current,
+            accessed,
+          }));
+          if (newRoot) set({ root: newRoot });
+        }
         return node.content ?? "";
       },
 
