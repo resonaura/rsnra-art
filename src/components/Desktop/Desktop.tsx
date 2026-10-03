@@ -6,6 +6,7 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
 import { patternDataUri } from "../../lib/patterns";
+import { deleteConfirmationMessage } from "../../lib/recycleBin";
 import { confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
@@ -13,6 +14,7 @@ import { screenSaverByFile } from "../../screensavers";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
+import { useRecycleBinStore } from "../../store/recycleBinStore";
 import { useSaverRunStore } from "../../store/saverRunStore";
 import {
   isReadOnlyFile,
@@ -207,6 +209,7 @@ export function Desktop() {
   const extensionIcons = useFilePrefsStore((s) => s.extensionIcons);
   const underline = singleClickOpen ? (underlineMode === "browser" ? "always" : "hover") : "none";
   const recycledCount = useVfsStore((s) => s.recycled.length);
+  const confirmDelete = useRecycleBinStore((s) => s.confirmDelete);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
 
   const desktopNode = useVfsStore((s) => s.resolve(DESKTOP_PATH));
@@ -636,17 +639,28 @@ export function Desktop() {
             $disabled={recycledCount === 0}
             onClick={async () => {
               if (recycledCount === 0) return;
-              const result = await confirmDialog(
-                "Confirm Multiple File Delete",
-                "Are you sure you want to permanently delete all items in the Recycle Bin?",
-              );
-              if (result !== "yes") return;
+              if (confirmDelete) {
+                const result = await confirmDialog(
+                  "Confirm Multiple File Delete",
+                  "Are you sure you want to permanently delete all items in the Recycle Bin?",
+                );
+                if (result !== "yes") return;
+              }
               emptyRecycleBin();
               playSound("recycle");
               setIconCtx(null);
             }}
           >
             Empty Recycle Bin
+          </CtxItem>
+          <CtxDivider />
+          <CtxItem
+            onClick={() => {
+              openApp("recycle-bin-properties");
+              setIconCtx(null);
+            }}
+          >
+            Properties
           </CtxItem>
         </ContextMenu>
       )}
@@ -732,11 +746,13 @@ export function Desktop() {
                   </CtxItem>
                   <CtxItem
                     onClick={async () => {
-                      const result = await confirmDialog(
-                        "Confirm File Delete",
-                        `Are you sure you want to send '${label}' to the Recycle Bin?`,
-                      );
-                      if (result !== "yes") return;
+                      if (confirmDelete) {
+                        const result = await confirmDialog(
+                          "Confirm File Delete",
+                          deleteConfirmationMessage(`'${label}'`, [node]),
+                        );
+                        if (result !== "yes") return;
+                      }
                       useVfsStore.getState().moveToRecycleBin(abs);
                       if (selected === node.name) setSelected(null);
                       setIconCtx(null);

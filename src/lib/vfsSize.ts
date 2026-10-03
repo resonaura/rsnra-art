@@ -28,6 +28,7 @@ export interface VfsSizeNode {
 // Windows 2000's default FAT16 allocation unit is 32 KB, so a non-empty file
 // occupies at least one full cluster even when its logical content is tiny.
 export const VFS_CLUSTER_SIZE = 32 * 1024;
+export const VFS_DISK_CAPACITY = 2 * 1024 * 1024 * 1024;
 
 export function vfsAllocatedByteSize(logicalBytes: number): number {
   return logicalBytes > 0

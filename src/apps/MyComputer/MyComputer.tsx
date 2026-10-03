@@ -19,6 +19,10 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import {
+  deleteConfirmationMessage,
+  isRecycleBinBypassed,
+} from "../../lib/recycleBin";
+import {
   alertError,
   confirmDialog,
   showMissingFileAlert,
@@ -31,6 +35,7 @@ import { screenSaverByFile } from "../../screensavers";
 import { useClipboardStore } from "../../store/clipboardStore";
 import type { FolderViewMode } from "../../store/filePrefsStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
+import { useRecycleBinStore } from "../../store/recycleBinStore";
 import { useSaverRunStore } from "../../store/saverRunStore";
 import {
   isReadOnlyFile,
@@ -569,6 +574,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       exists: s.exists,
       mkdir: s.mkdir,
       writeFile: s.writeFile,
+      remove: s.remove,
       moveToRecycleBin: s.moveToRecycleBin,
       rename: s.rename,
       copyTo: s.copyTo,
@@ -990,7 +996,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
     setRenameVal(name);
   };
 
-  const deleteNodes = async (nodes: VfsNode[]) => {
+  const deleteNodes = async (
+    nodes: VfsNode[],
+    bypassRecycleBin = false,
+  ) => {
     const deletable = nodes.filter(
       (node) => !node.protected && !isReadOnlyFile(node),
     );
@@ -999,18 +1008,35 @@ export function MyComputer({ windowId }: { windowId: string }) {
       deletable.length === 1
         ? `'${deletable[0].name}'`
         : `these ${deletable.length} items`;
-    const result = await confirmDialog(
-      deletable.length === 1
-        ? "Confirm File Delete"
-        : "Confirm Multiple File Delete",
-      `Are you sure you want to send ${label} to the Recycle Bin?`,
-    );
-    if (result !== "yes") return;
+    if (useRecycleBinStore.getState().confirmDelete) {
+      const result = await confirmDialog(
+        deletable.length === 1
+          ? "Confirm File Delete"
+          : "Confirm Multiple File Delete",
+        bypassRecycleBin
+          ? `Are you sure you want to permanently delete ${label}?`
+          : deleteConfirmationMessage(label, deletable),
+      );
+      if (result !== "yes") return;
+    }
     let removed = 0;
-    vfs.transaction("Delete to Recycle Bin", () => {
+    const permanentCount = bypassRecycleBin
+      ? deletable.length
+      : deletable.filter(isRecycleBinBypassed).length;
+    const transactionLabel =
+      permanentCount === deletable.length
+        ? "Permanently delete"
+        : permanentCount > 0
+          ? "Delete files"
+          : "Delete to Recycle Bin";
+    vfs.transaction(transactionLabel, () => {
       for (const node of deletable) {
         const abs = vfs.resolvePath(node.name, path);
-        if (abs && vfs.moveToRecycleBin(abs)) removed++;
+        if (
+          abs &&
+          (bypassRecycleBin ? vfs.remove(abs) : vfs.moveToRecycleBin(abs))
+        )
+          removed++;
       }
     });
     if (removed === deletable.length) {
@@ -1286,7 +1312,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         )
       ) {
         e.preventDefault();
-        void deleteNodes(selectedNodes);
+        void deleteNodes(selectedNodes, e.shiftKey);
       } else if (
         !mod &&
         key === "f2" &&

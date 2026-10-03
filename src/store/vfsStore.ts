@@ -5,9 +5,14 @@ import { CURSORS_VFS_NODES } from "../data/cursorsVfs.generated";
 import { DEFAULT_WALLPAPER_FILES } from "../data/wallpapers";
 import {
   contentByteSize,
+  VFS_DISK_CAPACITY,
   vfsAllocatedByteSize,
   vfsNodeAllocatedByteSize,
 } from "../lib/vfsSize";
+import {
+  isRecycleBinBypassed,
+  recycleBinMaximumBytes,
+} from "../lib/recycleBin";
 import {
   DEFAULT_SYSTEM_PATH,
   USER_DOCUMENTS_PATH,
@@ -110,7 +115,7 @@ export interface VfsState {
 
 // ─── Path helpers ──────────────────────────────────────────────────────────
 const SEP = "\\";
-const DISK_CAPACITY = 2 * 1024 * 1024 * 1024; // period-correct 2 GB FAT volume
+const DISK_CAPACITY = VFS_DISK_CAPACITY; // period-correct 2 GB FAT volume
 
 // Normalize + resolve a (possibly relative) path against a base dir to an
 // absolute "C:\..." string. Returns null if it escapes the filesystem.
@@ -1868,13 +1873,28 @@ export const useVfsStore = create<VfsState>()(
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
+        const maximumSize = recycleBinMaximumBytes();
+        if (isRecycleBinBypassed(ref.node)) {
+          commitFilesystemChange({ root: newRoot }, "Permanently delete");
+          return true;
+        }
         const item: RecycledItem = {
           id: `recycled-${Date.now()}-${_id++}`,
           node: ref.node,
           originalPath: abs,
           deletedAt: Date.now(),
         };
-        const recycled = [...get().recycled, item];
+        const recycled = [...get().recycled, item].sort(
+          (left, right) => left.deletedAt - right.deletedAt,
+        );
+        let recycledBytes = recycled.reduce(
+          (total, entry) => total + vfsNodeAllocatedByteSize(entry.node),
+          0,
+        );
+        while (recycledBytes > maximumSize && recycled.length > 1) {
+          const oldest = recycled.shift();
+          if (oldest) recycledBytes -= vfsNodeAllocatedByteSize(oldest.node);
+        }
         if (!fitsOnDisk(newRoot, recycled)) return false;
         commitFilesystemChange(
           { root: newRoot, recycled },

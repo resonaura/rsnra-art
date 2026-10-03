@@ -6,10 +6,13 @@ import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
 import { playSound } from "../../lib/audio";
+import { recycleBinMaximumBytes } from "../../lib/recycleBin";
 import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { useDisplayStore } from "../../store/displayStore";
+import { useRecycleBinStore } from "../../store/recycleBinStore";
 import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
+import { vfsNodeAllocatedByteSize, vfsNodeByteSize } from "../../lib/vfsSize";
 
 const Layout = styled.div`
   display: flex;
@@ -99,6 +102,12 @@ function formatDate(ts: number) {
   });
 }
 
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function shortPath(p: string) {
   const parts = p.split("\\");
   parts.pop(); // remove filename
@@ -120,6 +129,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   );
   const desktopIcons = useDisplayStore((s) => s.desktopIcons);
   const recycled = useVfsStore((s) => s.recycled);
+  const confirmDelete = useRecycleBinStore((s) => s.confirmDelete);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
   const restoreFromRecycleBin = useVfsStore((s) => s.restoreFromRecycleBin);
   const deleteFromRecycleBin = useVfsStore((s) => s.deleteFromRecycleBin);
@@ -136,6 +146,15 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const [ctx, setCtx] = useState<CtxState | null>(null);
 
   const isEmpty = recycled.length === 0;
+  const recycledBytes = useMemo(
+    () =>
+      recycled.reduce(
+        (total, item) => total + vfsNodeAllocatedByteSize(item.node),
+        0,
+      ),
+    [recycled],
+  );
+  const maximumBytes = recycleBinMaximumBytes();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedItems = recycled.filter((item) => selectedSet.has(item.id));
 
@@ -168,13 +187,15 @@ export function RecycleBin({ windowId }: { windowId: string }) {
       items.length === 1
         ? `'${items[0].node.name}'`
         : `these ${items.length} items`;
-    const result = await confirmDialog(
-      items.length === 1
-        ? "Confirm File Delete"
-        : "Confirm Multiple File Delete",
-      `Are you sure you want to permanently delete ${label}?`,
-    );
-    if (result !== "yes") return;
+    if (confirmDelete) {
+      const result = await confirmDialog(
+        items.length === 1
+          ? "Confirm File Delete"
+          : "Confirm Multiple File Delete",
+        `Are you sure you want to permanently delete ${label}?`,
+      );
+      if (result !== "yes") return;
+    }
     transaction("Delete permanently", () => {
       items.forEach((item) => deleteFromRecycleBin(item.id));
     });
@@ -204,11 +225,13 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           label: "Empty Recycle Bin",
           disabled: isEmpty,
           action: async () => {
-            const result = await confirmDialog(
-              "Confirm Multiple File Delete",
-              "Are you sure you want to permanently delete all items in the Recycle Bin?",
-            );
-            if (result !== "yes") return;
+            if (confirmDelete) {
+              const result = await confirmDialog(
+                "Confirm Multiple File Delete",
+                "Are you sure you want to permanently delete all items in the Recycle Bin?",
+              );
+              if (result !== "yes") return;
+            }
             emptyRecycleBin();
             playSound("recycle");
             setSelected([]);
@@ -341,6 +364,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                 <Th>Name</Th>
                 <Th>Original Location</Th>
                 <Th>Date Deleted</Th>
+                <Th>Size</Th>
                 <Th>Type</Th>
               </tr>
             </thead>
@@ -401,6 +425,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                     {shortPath(item.originalPath)}
                   </Td>
                   <Td>{formatDate(item.deletedAt)}</Td>
+                  <Td>{formatSize(vfsNodeByteSize(item.node))}</Td>
                   <Td>{item.node.type === "dir" ? "Folder" : "File"}</Td>
                 </Tr>
               ))}
@@ -410,6 +435,8 @@ export function RecycleBin({ windowId }: { windowId: string }) {
       </Body>
       <StatusBar>
         {isEmpty ? "0 object(s)" : `${recycled.length} object(s)`}
+        {"    "}
+        {formatSize(recycledBytes)} of {formatSize(maximumBytes)} used
         {selected.length ? `    ${selected.length} selected` : ""}
       </StatusBar>
 

@@ -9,6 +9,7 @@ export type AppId =
   | "snake"
   | "games-folder"
   | "recycle-bin"
+  | "recycle-bin-properties"
   | "help"
   | "control-panel"
   | "display-properties"

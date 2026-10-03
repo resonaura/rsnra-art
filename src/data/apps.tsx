@@ -22,6 +22,7 @@ import { PaintFonts } from "../apps/Paint/PaintFonts";
 import { Pinball } from "../apps/Pinball/Pinball";
 import { Properties } from "../apps/Properties/Properties";
 import { RecycleBin } from "../apps/RecycleBin/RecycleBin";
+import { RecycleBinProperties } from "../apps/RecycleBin/RecycleBinProperties";
 import { Snake } from "../apps/Snake/Snake";
 import { Social } from "../apps/Social/Social";
 import { Solitaire } from "../apps/Solitaire/Solitaire";
@@ -146,8 +147,19 @@ export const APPS: Record<AppId, AppDefinition> = {
     title: "Recycle Bin",
     icon: "/icons/shell32.dll/078.ico",
     component: asComponent(RecycleBin),
-    width: 380,
-    height: 300,
+    width: 560,
+    height: 360,
+    noPadding: true,
+  },
+  "recycle-bin-properties": {
+    id: "recycle-bin-properties",
+    title: "Recycle Bin Properties",
+    icon: "/icons/shell32.dll/078.ico",
+    component: asComponent(RecycleBinProperties),
+    width: 400,
+    height: 350,
+    resizable: false,
+    singleInstance: true,
     noPadding: true,
   },
   help: {
