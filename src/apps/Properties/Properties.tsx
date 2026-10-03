@@ -127,16 +127,6 @@ function readOnlyPropertyState(node: VfsNode | null | undefined): {
   };
 }
 
-// 8.3 short name: keep the first 8 chars of the base and first 3 of the ext.
-function shortName(name: string): string {
-  if (name.length <= 12 && !name.includes(" ")) return name.toUpperCase();
-  const i = name.lastIndexOf(".");
-  const base = (i > 0 ? name.slice(0, i) : name).toUpperCase();
-  const ext = i > 0 ? name.slice(i + 1).toUpperCase() : "";
-  const b = base.replace(/[^A-Z0-9_]/g, "").slice(0, 6) + "~1";
-  return ext ? `${b}.${ext.slice(0, 3)}` : b;
-}
-
 function fileSize(node: VfsNode): number {
   return vfsNodeByteSize(node);
 }
@@ -176,6 +166,7 @@ export function Properties({ windowId }: { windowId: string }) {
     useShallow((s) => ({
       root: s.root,
       resolve: s.resolve,
+      getShortName: s.getShortName,
       setAttributes: s.setAttributes,
       setFolderFilesReadOnly: s.setFolderFilesReadOnly,
     })),
@@ -220,6 +211,7 @@ export function Properties({ windowId }: { windowId: string }) {
   }
 
   const name = node.name;
+  const dosName = vfs.getShortName(path) ?? name.toUpperCase();
   const type = describeType(node);
   const size = fileSize(node);
   const isVolumeRoot =
@@ -315,7 +307,7 @@ export function Properties({ windowId }: { windowId: string }) {
               )}
               <Field>
                 <Key>MS-DOS name:</Key>
-                <Val>{shortName(name)}</Val>
+                <Val>{dosName}</Val>
               </Field>
             </GroupBox>
             <GroupBox style={{ zoom: 0.8 }} label="Date">

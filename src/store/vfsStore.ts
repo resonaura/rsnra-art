@@ -21,6 +21,7 @@ export type VfsNodeType = "dir" | "file";
 
 export interface VfsNode {
   name: string; // filesystem name (case-insensitive lookups, preserves case)
+  shortName?: string; // stable FAT/VFAT 8.3 alias stored with the directory entry
   type: VfsNodeType;
   children?: VfsNode[]; // dir
   content?: string; // text file
@@ -58,6 +59,7 @@ export interface VfsState {
   // lookups
   resolve: (path: string, base?: string) => VfsNode | null;
   resolvePath: (path: string, base?: string) => string | null; // normalized absolute
+  getShortName: (path: string) => string | null;
   list: (path: string) => VfsNode[] | null;
   read: (path: string) => string | null;
   exists: (path: string) => boolean;
@@ -181,6 +183,163 @@ function isValidWindowsName(name: string): boolean {
   return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(stem);
 }
 
+const FAT_SHORT_NAME_CHARS = /^[A-Z0-9_$%'@^_`{}~!#&()-]+$/;
+
+function splitFileName(name: string): { base: string; extension: string } {
+  const dot = name.lastIndexOf(".");
+  return dot > 0
+    ? { base: name.slice(0, dot), extension: name.slice(dot + 1) }
+    : { base: name, extension: "" };
+}
+
+function directShortName(name: string): string | null {
+  const { base, extension } = splitFileName(name);
+  const upperBase = base.toUpperCase();
+  const upperExtension = extension.toUpperCase();
+  if (
+    upperBase.length < 1 ||
+    upperBase.length > 8 ||
+    upperExtension.length > 3 ||
+    !FAT_SHORT_NAME_CHARS.test(upperBase) ||
+    (upperExtension && !FAT_SHORT_NAME_CHARS.test(upperExtension))
+  )
+    return null;
+  return upperExtension ? `${upperBase}.${upperExtension}` : upperBase;
+}
+
+/**
+ * Build the per-directory VFAT aliases. Existing 8.3-compatible names reserve
+ * their aliases first, then long names receive the first available `~n` name.
+ */
+function shortNamesForChildren(children: VfsNode[]): Map<string, string> {
+  const aliases = new Map<string, string>();
+  const used = new Set<string>();
+  const longNames: VfsNode[] = [];
+
+  // Real 8.3 names always win over aliases generated for long names.
+  for (const child of children) {
+    const alias = directShortName(child.name);
+    if (alias) {
+      aliases.set(child.name.toLowerCase(), alias);
+      used.add(alias.toLowerCase());
+    }
+  }
+
+  // Preserve aliases already assigned to existing directory entries.
+  for (const child of children) {
+    if (directShortName(child.name)) continue;
+    const storedAlias = child.shortName && directShortName(child.shortName);
+    if (storedAlias && !used.has(storedAlias.toLowerCase())) {
+      aliases.set(child.name.toLowerCase(), storedAlias);
+      used.add(storedAlias.toLowerCase());
+    } else {
+      longNames.push(child);
+    }
+  }
+
+  // This is needed only for old/unmigrated nodes. Stable creation order keeps
+  // aliases deterministic until the next filesystem migration stores them.
+  longNames.sort(
+    (left, right) =>
+      left.created - right.created || left.name.localeCompare(right.name),
+  );
+  for (const child of longNames) {
+    const alias = generateShortAlias(child.name, used);
+    aliases.set(child.name.toLowerCase(), alias);
+    used.add(alias.toLowerCase());
+  }
+
+  return aliases;
+}
+
+function generateShortAlias(name: string, used: Set<string>): string {
+  const direct = directShortName(name);
+  if (direct) return direct;
+  const { base, extension } = splitFileName(name);
+  const clean = (part: string) =>
+    part
+      .toUpperCase()
+      .replace(/[^A-Z0-9_$%'@^_`{}~!#&()-]/g, "");
+  const aliasBase = clean(base) || "FILE";
+  const aliasExtension = clean(extension).slice(0, 3);
+  for (let ordinal = 1; ordinal < 1_000_000; ordinal++) {
+    const suffix = `~${ordinal}`;
+    const prefix = aliasBase.slice(0, Math.max(1, 8 - suffix.length));
+    const baseAlias = `${prefix}${suffix}`;
+    const alias = aliasExtension
+      ? `${baseAlias}.${aliasExtension}`
+      : baseAlias;
+    if (!used.has(alias.toLowerCase())) return alias;
+  }
+  return "FILE~1";
+}
+
+function shortNameForNewChild(parent: VfsNode, node: VfsNode): string {
+  const newChild = { ...node, shortName: undefined };
+  const aliases = shortNamesForChildren([
+    ...(parent.children ?? []),
+    newChild,
+  ]);
+  return aliases.get(node.name.toLowerCase()) ?? generateShortAlias(node.name, new Set());
+}
+
+function assignShortNamesToTree(node: VfsNode): VfsNode {
+  if (node.type !== "dir") return node;
+  const children = node.children ?? [];
+  const aliases = shortNamesForChildren(children);
+  return {
+    ...node,
+    children: children.map((child) => {
+      const namedChild = {
+        ...child,
+        shortName:
+          aliases.get(child.name.toLowerCase()) ??
+          directShortName(child.name) ??
+          generateShortAlias(child.name, new Set()),
+      };
+      return child.type === "dir"
+        ? assignShortNamesToTree(namedChild)
+        : namedChild;
+    }),
+  };
+}
+
+function findChildByLongOrShortName(
+  parent: VfsNode,
+  name: string,
+): VfsNode | null {
+  const children = parent.children ?? [];
+  const exact = children.find(
+    (child) => child.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (exact) return exact;
+  const wantedAlias = name.toUpperCase();
+  const aliases = shortNamesForChildren(children);
+  return (
+    children.find(
+      (child) =>
+        aliases.get(child.name.toLowerCase())?.toUpperCase() === wantedAlias,
+    ) ?? null
+  );
+}
+
+function canonicalizeExistingPath(root: VfsNode, absPath: string): string {
+  const parts = splitAbs(absPath);
+  const canonicalParts: string[] = [];
+  let current = root;
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index];
+    const child = findChildByLongOrShortName(current, part);
+    if (!child) {
+      canonicalParts.push(...parts.slice(index));
+      break;
+    }
+    canonicalParts.push(child.name);
+    current = child;
+  }
+  return `C:${SEP}${canonicalParts.join(SEP)}`;
+}
+
 function splitAbs(absPath: string): string[] {
   // "C:\Windows\System" -> ["Windows","System"]
   return absPath
@@ -195,9 +354,7 @@ function findNode(root: VfsNode, absPath: string): VfsNode | null {
   let cur: VfsNode = root;
   for (const part of parts) {
     if (cur.type !== "dir" || !cur.children) return null;
-    const next = cur.children.find(
-      (c) => c.name.toLowerCase() === part.toLowerCase(),
-    );
+    const next = findChildByLongOrShortName(cur, part);
     if (!next) return null;
     cur = next;
   }
@@ -216,9 +373,7 @@ function findParent(
       ? root
       : findNode(root, "C:" + SEP + parts.slice(0, -1).join(SEP));
   if (!parent || parent.type !== "dir" || !parent.children) return null;
-  const node = parent.children.find(
-    (c) => c.name.toLowerCase() === name.toLowerCase(),
-  );
+  const node = findChildByLongOrShortName(parent, name);
   if (!node) return null;
   return { parent, node, name };
 }
@@ -312,12 +467,18 @@ function updateNode(
     }
     if (cur.type !== "dir" || !cur.children) return null;
     const part = parts[depth];
-    const idx = cur.children.findIndex(
-      (c) => c.name.toLowerCase() === part.toLowerCase(),
-    );
+    const child = findChildByLongOrShortName(cur, part);
+    const idx = child ? cur.children.indexOf(child) : -1;
     if (idx === -1) return null;
     const newChild = walk(cur.children[idx], depth + 1);
     if (newChild === null) return null;
+    const previousChild = cur.children[idx];
+    if (newChild.name !== previousChild.name) {
+      newChild.shortName = shortNameForNewChild(
+        { ...cur, children: cur.children.filter((_, i) => i !== idx) },
+        newChild,
+      );
+    }
     const newChildren = [...cur.children];
     newChildren[idx] = newChild;
     return { ...cur, children: newChildren };
@@ -337,18 +498,28 @@ function insertNode(
 ): VfsNode | null {
   // parentAbsPath === "C:\\" means insert directly into root's children
   if (parentAbsPath.replace(/\\+$/, "").toUpperCase() === "C:") {
+    if (findChildByLongOrShortName(root, newNode.name)) return null;
+    const namedNode = {
+      ...newNode,
+      shortName: shortNameForNewChild(root, newNode),
+    };
     return {
       ...root,
       modified: now(),
-      children: [...(root.children ?? []), newNode],
+      children: [...(root.children ?? []), namedNode],
     };
   }
   return updateNode(root, parentAbsPath, (parent) => {
     if (parent.type !== "dir") return null;
+    if (findChildByLongOrShortName(parent, newNode.name)) return null;
+    const namedNode = {
+      ...newNode,
+      shortName: shortNameForNewChild(parent, newNode),
+    };
     return {
       ...parent,
       modified: now(),
-      children: [...(parent.children ?? []), newNode],
+      children: [...(parent.children ?? []), namedNode],
     };
   });
 }
@@ -365,22 +536,22 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
     parentParts.length === 0 ? "C:\\" : "C:" + SEP + parentParts.join(SEP);
 
   if (parentParts.length === 0) {
+    const target = findChildByLongOrShortName(root, name);
+    if (!target) return null;
     return {
       ...root,
       modified: now(),
-      children: (root.children ?? []).filter(
-        (c) => c.name.toLowerCase() !== name.toLowerCase(),
-      ),
+      children: (root.children ?? []).filter((child) => child !== target),
     };
   }
   return updateNode(root, parentAbs, (parent) => {
     if (parent.type !== "dir") return null;
+    const target = findChildByLongOrShortName(parent, name);
+    if (!target) return null;
     return {
       ...parent,
       modified: now(),
-      children: (parent.children ?? []).filter(
-        (c) => c.name.toLowerCase() !== name.toLowerCase(),
-      ),
+      children: (parent.children ?? []).filter((child) => child !== target),
     };
   });
 }
@@ -1421,9 +1592,15 @@ export const useVfsStore = create<VfsState>()(
           redoDescription: null,
         });
       };
+      const resolveInputPath = (path: string, base = get().cwd) => {
+        const normalized = normalizePath(path, base);
+        return normalized
+          ? canonicalizeExistingPath(get().root, normalized)
+          : null;
+      };
 
       return ({
-      root: buildInitialTree(),
+      root: assignShortNamesToTree(buildInitialTree()),
       cwd: USER_DOCUMENTS_PATH,
       recycled: [],
       canUndo: false,
@@ -1497,12 +1674,29 @@ export const useVfsStore = create<VfsState>()(
         }
       },
 
-      resolvePath: (path, base) => normalizePath(path, base ?? get().cwd),
+      resolvePath: (path, base) =>
+        resolveInputPath(path, base ?? get().cwd),
 
       resolve: (path, base) => {
-        const abs = normalizePath(path, base ?? get().cwd);
+        const abs = resolveInputPath(path, base ?? get().cwd);
         if (!abs) return null;
         return findNode(get().root, abs);
+      },
+
+      getShortName: (path) => {
+        const abs = resolveInputPath(path);
+        if (!abs) return null;
+        const node = findNode(get().root, abs);
+        if (!node) return null;
+        const ref = findParent(get().root, abs);
+        if (!ref) return node.name.toUpperCase();
+        return (
+          node.shortName ??
+          shortNamesForChildren(ref.parent.children ?? []).get(
+            node.name.toLowerCase(),
+          ) ??
+          node.name.toUpperCase()
+        );
       },
 
       exists: (path) => !!get().resolve(path),
@@ -1514,7 +1708,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       read: (path) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return null;
         const node = findNode(get().root, abs);
         if (!node || node.type !== "file") return null;
@@ -1537,7 +1731,7 @@ export const useVfsStore = create<VfsState>()(
           .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
           .filter(Boolean);
         for (const directory of directories) {
-          const resolvedDirectory = normalizePath(directory);
+          const resolvedDirectory = resolveInputPath(directory, "C:\\");
           if (!resolvedDirectory) continue;
           const list = get().list(resolvedDirectory);
           const hit = list?.find(
@@ -1559,7 +1753,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       mkdir: (path) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         if (findNode(get().root, abs)) return false;
         const parts = splitAbs(abs);
@@ -1580,7 +1774,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       writeFile: (path, content) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
@@ -1628,7 +1822,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       remove: (path) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
@@ -1639,7 +1833,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       moveToRecycleBin: (path) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
@@ -1677,12 +1871,7 @@ export const useVfsStore = create<VfsState>()(
           findNode(get().root, parentPath) ??
           findNode(get().root, USER_DOCUMENTS_PATH);
         if (!parentNode || parentNode.type !== "dir") return false;
-        if (
-          (parentNode.children ?? []).some(
-            (c) => c.name.toLowerCase() === item.node.name.toLowerCase(),
-          )
-        )
-          return false;
+        if (findChildByLongOrShortName(parentNode, item.node.name)) return false;
 
         const targetParent =
           findNode(get().root, parentPath) !== null
@@ -1716,19 +1905,14 @@ export const useVfsStore = create<VfsState>()(
       },
 
       move: (src, destDir) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destDir, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return false;
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
-        if (
-          dest.children.some(
-            (c) => c.name.toLowerCase() === ref.node.name.toLowerCase(),
-          )
-        )
-          return false;
+        if (findChildByLongOrShortName(dest, ref.node.name)) return false;
         // Remove from source then insert at dest
         let newRoot = removeNode(get().root, srcAbs);
         if (!newRoot) return false;
@@ -1739,8 +1923,8 @@ export const useVfsStore = create<VfsState>()(
       },
 
       copy: (src, destDir) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destDir, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return false;
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
@@ -1750,12 +1934,7 @@ export const useVfsStore = create<VfsState>()(
           return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
-        if (
-          dest.children.some(
-            (c) => c.name.toLowerCase() === node.name.toLowerCase(),
-          )
-        )
-          return false;
+        if (findChildByLongOrShortName(dest, node.name)) return false;
         const newRoot = insertNode(get().root, destAbs, cloneNode(node));
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Copy");
@@ -1763,8 +1942,8 @@ export const useVfsStore = create<VfsState>()(
       },
 
       copyAs: (src, destPath) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destPath, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destPath);
         if (!srcAbs || !destAbs || findNode(get().root, destAbs)) return false;
         const node = findNode(get().root, srcAbs);
         if (
@@ -1792,8 +1971,8 @@ export const useVfsStore = create<VfsState>()(
       },
 
       moveAs: (src, destPath) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destPath, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destPath);
         if (!srcAbs || !destAbs) return false;
         if (srcAbs.toLowerCase() === destAbs.toLowerCase()) return true;
         if (findNode(get().root, destAbs)) return false;
@@ -1820,8 +1999,8 @@ export const useVfsStore = create<VfsState>()(
       },
 
       copyTo: (src, destDir) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destDir, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return null;
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
@@ -1841,8 +2020,8 @@ export const useVfsStore = create<VfsState>()(
       },
 
       moveTo: (src, destDir) => {
-        const srcAbs = normalizePath(src, get().cwd);
-        const destAbs = normalizePath(destDir, get().cwd);
+        const srcAbs = resolveInputPath(src);
+        const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return null;
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
@@ -1870,18 +2049,16 @@ export const useVfsStore = create<VfsState>()(
       },
 
       rename: (path, newName) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         if (!isValidWindowsName(newName)) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
-        if (
-          ref.parent.children!.some(
-            (c) =>
-              c.name.toLowerCase() === newName.toLowerCase() && c !== ref.node,
-          )
-        )
-          return false;
+        const siblings = {
+          ...ref.parent,
+          children: ref.parent.children!.filter((child) => child !== ref.node),
+        };
+        if (findChildByLongOrShortName(siblings, newName)) return false;
         const newRoot = updateNode(get().root, abs, (node) => ({
           ...node,
           name: newName,
@@ -1893,7 +2070,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       setCwd: (path) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         const node = findNode(get().root, abs);
         if (!node || node.type !== "dir") return false;
@@ -1902,7 +2079,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       setAttributes: (path, attrs) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         const node = findNode(get().root, abs);
         if (!node || node.protected) return false;
@@ -1919,7 +2096,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       setFolderFilesReadOnly: (path, readonly) => {
-        const abs = normalizePath(path, get().cwd);
+        const abs = resolveInputPath(path);
         if (!abs) return false;
         let changed = false;
         const newRoot = updateNode(get().root, abs, (node) => {
@@ -1950,7 +2127,7 @@ export const useVfsStore = create<VfsState>()(
       },
 
       reorderChildren: (dirPath, name, targetIndex) => {
-        const abs = normalizePath(dirPath, get().cwd);
+        const abs = resolveInputPath(dirPath);
         if (!abs) return false;
         let success = false;
         const newRoot = updateNode(get().root, abs, (parent) => {
@@ -1980,7 +2157,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 15,
+      version: 16,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
@@ -1988,15 +2165,24 @@ export const useVfsStore = create<VfsState>()(
       }),
       migrate: (persisted) => {
         const old = persisted as Partial<VfsState> | undefined;
-        return {
-          root: mergeCanonicalTree(
+        const root = assignShortNamesToTree(
+          mergeCanonicalTree(
             buildInitialTree(),
             relocateLegacyFilesystem(old?.root),
           ),
-          cwd: canonicalizeLegacyPath(old?.cwd ?? USER_DOCUMENTS_PATH),
+        );
+        return {
+          root,
+          cwd: canonicalizeExistingPath(
+            root,
+            canonicalizeLegacyPath(old?.cwd ?? USER_DOCUMENTS_PATH),
+          ),
           recycled: (old?.recycled ?? []).map((item, index) => ({
             ...item,
-            originalPath: canonicalizeLegacyPath(item.originalPath),
+            originalPath: canonicalizeExistingPath(
+              root,
+              canonicalizeLegacyPath(item.originalPath),
+            ),
             id:
               item.id ??
               `recycled-migrated-${item.deletedAt ?? Date.now()}-${index}`,

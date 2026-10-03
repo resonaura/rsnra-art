@@ -191,6 +191,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
   }
   const bare = flags.some((f) => /^\/b/i.test(f));
   const wide = flags.some((f) => /^\/w/i.test(f));
+  const showShortNames = flags.some((f) => /^\/x$/i.test(f));
   const sorted = [...entries].sort((a, b) => {
     if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -232,14 +233,25 @@ function cmdDir(args: string[], ctx: CmdContext) {
   let totalBytes = 0;
   for (const e of sorted) {
     const stamp = dirStamp(new Date(e.modified ?? e.created));
+    const shortName = showShortNames
+      ? ctx.vfs.getShortName(`${abs.replace(/\\+$/, "")}\\${e.name}`)
+      : null;
+    const shortNameColumn =
+      shortName && shortName.toLowerCase() !== e.name.toLowerCase()
+        ? `${shortName.padEnd(13)}`
+        : "".padEnd(13);
     if (e.type === "dir") {
       dirCount++;
-      lines.push(`${stamp}    <DIR>          ${e.name}`);
+      lines.push(
+        `${stamp}    <DIR>          ${shortNameColumn}${e.name}`,
+      );
     } else {
       fileCount++;
       const size = fileSize(e);
       totalBytes += size;
-      lines.push(`${stamp}    ${String(size).padStart(14)} ${e.name}`);
+      lines.push(
+        `${stamp}    ${String(size).padStart(14)} ${shortNameColumn}${e.name}`,
+      );
     }
   }
   lines.push("");
@@ -1814,7 +1826,8 @@ const REGISTRY: Record<string, CmdHandler> = {
 
 const HELP_TOPICS: Record<string, string[]> = {
   dir: [
-    "DIR [path][/B][/W][/A]",
+    "DIR [path][/B][/W][/A][/X]",
+    "  /X  Show short 8.3 names next to long file names.",
     "  Lists directory contents.",
     "  /B  Bare format (names only)",
     "  /W  Wide format",
@@ -1918,7 +1931,7 @@ export function buildHelpText(): string[] {
     "============================",
     "",
     "Directory & Navigation:",
-    "  dir [path][/b][/w]   ls [-l][-a]     cd <path>",
+    "  dir [path][/b][/w][/x] ls [-l][-a]  cd <path>",
     "  pwd                  tree [path]     chdir <path>",
     "",
     "File Operations:",
