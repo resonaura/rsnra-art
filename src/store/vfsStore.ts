@@ -43,6 +43,19 @@ export interface VfsNode {
 
 export interface RecycledItem {
   id: string;
+  storageName: string;
+  recordNumber: number;
+  originalName: string;
+  originalPath: string;
+  deletedAt: number;
+  attributes: Pick<
+    VfsNode,
+    "hidden" | "system" | "protected" | "readonly" | "archive" | "shortName"
+  >;
+}
+
+interface LegacyRecycledItem {
+  id?: string;
   node: VfsNode;
   originalPath: string;
   deletedAt: number;
@@ -116,6 +129,11 @@ export interface VfsState {
 // ─── Path helpers ──────────────────────────────────────────────────────────
 const SEP = "\\";
 const DISK_CAPACITY = VFS_DISK_CAPACITY; // period-correct 2 GB FAT volume
+const RECYCLED_PATH = "C:\\Recycled";
+const RECYCLED_INDEX_PATH = `${RECYCLED_PATH}\\INFO2`;
+const INFO2_HEADER_SIZE = 20;
+const INFO2_RECORD_SIZE = 800;
+const INFO2_VERSION = 5;
 
 // Normalize + resolve a (possibly relative) path against a base dir to an
 // absolute "C:\..." string. Returns null if it escapes the filesystem.
@@ -286,6 +304,221 @@ function shortNameForNewChild(parent: VfsNode, node: VfsNode): string {
     newChild,
   ]);
   return aliases.get(node.name.toLowerCase()) ?? generateShortAlias(node.name, new Set());
+}
+
+function recycledNodePath(item: Pick<RecycledItem, "storageName">): string {
+  return `${RECYCLED_PATH}\\${item.storageName}`;
+}
+
+function findRecycledNode(
+  root: VfsNode,
+  item: Pick<RecycledItem, "storageName">,
+): VfsNode | null {
+  return findNode(root, recycledNodePath(item));
+}
+
+function nextRecycleStorageName(
+  root: VfsNode,
+  node: VfsNode,
+): { recordNumber: number; storageName: string } {
+  const dot = node.type === "file" ? node.name.lastIndexOf(".") : -1;
+  const extension = dot > 0 ? `.${node.name.slice(dot + 1, dot + 4)}` : "";
+  for (
+    let recordNumber = nextInfo2RecordNumber(root);
+    recordNumber < 1_000_000;
+    recordNumber++
+  ) {
+    const name = `Dc${recordNumber}${extension}`;
+    if (!findNode(root, `${RECYCLED_PATH}\\${name}`)) {
+      return { recordNumber, storageName: name };
+    }
+  }
+  const recordNumber = Math.floor(Date.now() / 1000);
+  return { recordNumber, storageName: `Dc${recordNumber}${extension}` };
+}
+
+function emptyInfo2(): Uint8Array {
+  const bytes = new Uint8Array(INFO2_HEADER_SIZE);
+  const header = new DataView(bytes.buffer);
+  header.setUint32(0, INFO2_VERSION, true);
+  header.setUint32(8, 1, true);
+  header.setUint32(12, INFO2_RECORD_SIZE, true);
+  return bytes;
+}
+
+function readInfo2(root: VfsNode): Uint8Array | null {
+  const node = findNode(root, RECYCLED_INDEX_PATH);
+  const match = node?.type === "file"
+    ? node.content?.match(/^data:application\/octet-stream;base64,([\s\S]*)$/)
+    : null;
+  if (!match) return null;
+  try {
+    const binary = atob(match[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    if (
+      bytes.length < INFO2_HEADER_SIZE ||
+      new DataView(bytes.buffer).getUint32(0, true) !== INFO2_VERSION ||
+      new DataView(bytes.buffer).getUint32(12, true) !== INFO2_RECORD_SIZE
+    ) {
+      return null;
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function nextInfo2RecordNumber(root: VfsNode): number {
+  const bytes = readInfo2(root);
+  if (!bytes) return 1;
+  return Math.max(1, new DataView(bytes.buffer).getUint32(8, true));
+}
+
+function info2DataUrl(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return `data:application/octet-stream;base64,${btoa(binary)}`;
+}
+
+function writeInfo2(root: VfsNode, bytes: Uint8Array): VfsNode | null {
+  const content = info2DataUrl(bytes);
+  const updated = updateNode(root, RECYCLED_INDEX_PATH, (node) => {
+    if (node.type !== "file") return null;
+    return {
+      ...node,
+      content,
+      modified: fatWriteTime(now()),
+      accessed: fatAccessDate(now()),
+      archive: true,
+    };
+  });
+  if (updated) return updated;
+  return insertNode(
+    root,
+    RECYCLED_PATH,
+    file("INFO2", { content, hidden: true, system: true }),
+  );
+}
+
+function writeAnsiPath(bytes: Uint8Array, offset: number, path: string): void {
+  const specialCharacters = new Map<number, number>([
+    [0x20ac, 0x80], [0x201a, 0x82], [0x0192, 0x83], [0x201e, 0x84],
+    [0x2026, 0x85], [0x2020, 0x86], [0x2021, 0x87], [0x02c6, 0x88],
+    [0x2030, 0x89], [0x0160, 0x8a], [0x2039, 0x8b], [0x0152, 0x8c],
+    [0x017d, 0x8e], [0x2018, 0x91], [0x2019, 0x92], [0x201c, 0x93],
+    [0x201d, 0x94], [0x2022, 0x95], [0x2013, 0x96], [0x2014, 0x97],
+    [0x02dc, 0x98], [0x2122, 0x99], [0x0161, 0x9a], [0x203a, 0x9b],
+    [0x0153, 0x9c], [0x017e, 0x9e], [0x0178, 0x9f],
+  ]);
+  let cursor = offset;
+  for (const character of path.slice(0, 259)) {
+    const codePoint = character.codePointAt(0) ?? 0x3f;
+    const cp1252 = specialCharacters.get(codePoint);
+    bytes[cursor++] = cp1252 ?? (codePoint <= 0xff ? codePoint : 0x3f);
+  }
+}
+
+function writeInfo2Record(
+  bytes: Uint8Array,
+  item: RecycledItem,
+  storedNode: VfsNode,
+): void {
+  const recordOffset =
+    INFO2_HEADER_SIZE + (item.recordNumber - 1) * INFO2_RECORD_SIZE;
+  const view = new DataView(bytes.buffer);
+  writeAnsiPath(bytes, recordOffset, item.originalPath);
+  view.setUint32(recordOffset + 260, item.recordNumber, true);
+  view.setUint32(recordOffset + 264, 2, true);
+  const filetime =
+    (BigInt(Math.round(item.deletedAt)) + 11644473600000n) * 10000n;
+  view.setBigUint64(recordOffset + 268, filetime, true);
+  view.setUint32(
+    recordOffset + 276,
+    Math.min(0xffffffff, vfsNodeAllocatedByteSize(storedNode)),
+    true,
+  );
+  const path = item.originalPath.slice(0, 259);
+  for (let index = 0; index < path.length; index++) {
+    view.setUint16(recordOffset + 280 + index * 2, path.charCodeAt(index), true);
+  }
+}
+
+function updateInfo2Header(
+  bytes: Uint8Array,
+  items: RecycledItem[],
+  root: VfsNode,
+): void {
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, INFO2_VERSION, true);
+  view.setUint32(4, (bytes.length - INFO2_HEADER_SIZE) / INFO2_RECORD_SIZE, true);
+  view.setUint32(8, Math.max(1, nextInfo2RecordNumber(root)), true);
+  view.setUint32(12, INFO2_RECORD_SIZE, true);
+  view.setUint32(
+    16,
+    Math.min(0xffffffff, recycledAllocatedUsage(root, items)),
+    true,
+  );
+}
+
+function appendInfo2Record(
+  root: VfsNode,
+  item: RecycledItem,
+  items: RecycledItem[],
+): VfsNode | null {
+  const previous = readInfo2(root) ?? emptyInfo2();
+  const requiredLength =
+    INFO2_HEADER_SIZE + item.recordNumber * INFO2_RECORD_SIZE;
+  const bytes = new Uint8Array(Math.max(previous.length, requiredLength));
+  bytes.set(previous);
+  const storedNode = findRecycledNode(root, item);
+  if (!storedNode) return null;
+  writeInfo2Record(bytes, item, storedNode);
+  updateInfo2Header(bytes, items, root);
+  // The header points to the next unused record, not the most recent one.
+  new DataView(bytes.buffer).setUint32(8, item.recordNumber + 1, true);
+  return writeInfo2(root, bytes);
+}
+
+function removeInfo2Record(
+  root: VfsNode,
+  item: RecycledItem,
+  remaining: RecycledItem[],
+): VfsNode {
+  const previous = readInfo2(root);
+  if (!previous) return root;
+  const recordOffset =
+    INFO2_HEADER_SIZE + (item.recordNumber - 1) * INFO2_RECORD_SIZE;
+  if (recordOffset + INFO2_RECORD_SIZE > previous.length) return root;
+  const bytes = previous.slice();
+  bytes[recordOffset] = 0;
+  bytes[recordOffset + 280] = 0;
+  bytes[recordOffset + 281] = 0;
+  updateInfo2Header(bytes, remaining, root);
+  return writeInfo2(root, bytes) ?? root;
+}
+
+function recycledAllocatedUsage(root: VfsNode, items: RecycledItem[]): number {
+  return items.reduce((total, item) => {
+    const node = findRecycledNode(root, item);
+    return total + (node ? vfsNodeAllocatedByteSize(node) : 0);
+  }, 0);
+}
+
+function recycledNodeForStorage(node: VfsNode, storageName: string): VfsNode {
+  return {
+    ...node,
+    name: storageName,
+    shortName: undefined,
+    hidden: true,
+    system: true,
+    protected: true,
+  };
 }
 
 function assignShortNamesToTree(node: VfsNode): VfsNode {
@@ -1281,7 +1514,20 @@ v4.2000
     true,
   );
 
-  const recycled = dir("Recycled", [], true);
+  const recycled = dir(
+    "Recycled",
+    [
+      file("Desktop.ini", {
+        content:
+          "[.ShellClassInfo]\r\nCLSID={645FF040-5081-101B-9F08-00AA002F954E}\r\n",
+        hidden: true,
+        system: true,
+        readonly: true,
+      }),
+    ],
+    true,
+  );
+  recycled.hidden = true;
 
   return dir(
     "C:\\",
@@ -1588,16 +1834,10 @@ export const useVfsStore = create<VfsState>()(
           undoDescription: undoStack.at(-1)?.label ?? null,
           redoDescription: redoStack.at(-1)?.label ?? null,
         });
-      const allocatedUsage = (root: VfsNode, recycled: RecycledItem[]) =>
-        vfsNodeAllocatedByteSize(root, true) +
-        recycled.reduce(
-          (sum, item) => sum + vfsNodeAllocatedByteSize(item.node),
-          0,
-        );
-      const fitsOnDisk = (
-        root: VfsNode,
-        recycled = get().recycled,
-      ) => allocatedUsage(root, recycled) <= DISK_CAPACITY;
+      const allocatedUsage = (root: VfsNode) =>
+        vfsNodeAllocatedByteSize(root, true);
+      const fitsOnDisk = (root: VfsNode) =>
+        allocatedUsage(root) <= DISK_CAPACITY;
       const commitFilesystemChange = (
         next: Partial<VfsState>,
         label: string,
@@ -1778,7 +2018,7 @@ export const useVfsStore = create<VfsState>()(
 
       diskUsage: () => {
         // Recycled files still occupy clusters on C: until the bin is emptied.
-        const used = allocatedUsage(get().root, get().recycled);
+        const used = allocatedUsage(get().root);
         return {
           total: DISK_CAPACITY,
           used,
@@ -1871,31 +2111,62 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const ref = findParent(get().root, abs);
         if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
-        const newRoot = removeNode(get().root, abs);
+        let newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         const maximumSize = recycleBinMaximumBytes();
         if (isRecycleBinBypassed(ref.node)) {
           commitFilesystemChange({ root: newRoot }, "Permanently delete");
           return true;
         }
+        const { recordNumber, storageName } = nextRecycleStorageName(
+          newRoot,
+          ref.node,
+        );
         const item: RecycledItem = {
           id: `recycled-${Date.now()}-${_id++}`,
-          node: ref.node,
+          storageName,
+          recordNumber,
+          originalName: ref.node.name,
           originalPath: abs,
           deletedAt: Date.now(),
+          attributes: {
+            hidden: ref.node.hidden,
+            system: ref.node.system,
+            protected: ref.node.protected,
+            readonly: ref.node.readonly,
+            archive: ref.node.archive,
+            shortName: ref.node.shortName,
+          },
         };
+        newRoot = insertNode(
+          newRoot,
+          RECYCLED_PATH,
+          recycledNodeForStorage(ref.node, storageName),
+        );
+        if (!newRoot) return false;
         const recycled = [...get().recycled, item].sort(
           (left, right) => left.deletedAt - right.deletedAt,
         );
-        let recycledBytes = recycled.reduce(
-          (total, entry) => total + vfsNodeAllocatedByteSize(entry.node),
-          0,
-        );
-        while (recycledBytes > maximumSize && recycled.length > 1) {
+        const indexedRoot = appendInfo2Record(newRoot, item, recycled);
+        if (!indexedRoot) return false;
+        newRoot = indexedRoot;
+        let recycledBytes = recycledAllocatedUsage(newRoot, recycled);
+        while (recycledBytes > maximumSize && recycled.length > 0) {
           const oldest = recycled.shift();
-          if (oldest) recycledBytes -= vfsNodeAllocatedByteSize(oldest.node);
+          if (oldest) {
+            const oldestNode = findRecycledNode(newRoot, oldest);
+            recycledBytes -= oldestNode
+              ? vfsNodeAllocatedByteSize(oldestNode)
+              : 0;
+            const withoutOldest = removeNode(
+              newRoot,
+              recycledNodePath(oldest),
+            );
+            if (!withoutOldest) return false;
+            newRoot = removeInfo2Record(withoutOldest, oldest, recycled);
+          }
         }
-        if (!fitsOnDisk(newRoot, recycled)) return false;
+        if (!fitsOnDisk(newRoot)) return false;
         commitFilesystemChange(
           { root: newRoot, recycled },
           "Delete to Recycle Bin",
@@ -1908,6 +2179,9 @@ export const useVfsStore = create<VfsState>()(
           (r) => r.id === itemId,
         );
         if (!item) return false;
+        const currentRoot = get().root;
+        const storedNode = findRecycledNode(currentRoot, item);
+        if (!storedNode) return false;
         const parts = splitAbs(item.originalPath);
         if (parts.length === 0) return false;
         const parentPath =
@@ -1917,21 +2191,30 @@ export const useVfsStore = create<VfsState>()(
 
         // Check collision at restore path
         const parentNode =
-          findNode(get().root, parentPath) ??
-          findNode(get().root, USER_DOCUMENTS_PATH);
+          findNode(currentRoot, parentPath) ??
+          findNode(currentRoot, USER_DOCUMENTS_PATH);
         if (!parentNode || parentNode.type !== "dir") return false;
-        if (findChildByLongOrShortName(parentNode, item.node.name)) return false;
+        if (findChildByLongOrShortName(parentNode, item.originalName)) return false;
 
         const targetParent =
-          findNode(get().root, parentPath) !== null
+          findNode(currentRoot, parentPath) !== null
             ? parentPath
             : USER_DOCUMENTS_PATH;
-        const newRoot = insertNode(get().root, targetParent, item.node);
+        let newRoot = removeNode(currentRoot, recycledNodePath(item));
+        if (!newRoot) return false;
+        const restoredNode: VfsNode = {
+          ...storedNode,
+          ...item.attributes,
+          name: item.originalName,
+        };
+        newRoot = insertNode(newRoot, targetParent, restoredNode);
         const recycled = get().recycled.filter((r) => r !== item);
-        if (!newRoot || !fitsOnDisk(newRoot, recycled)) return false;
+        if (!newRoot) return false;
+        const withoutRecord = removeInfo2Record(newRoot, item, recycled);
+        if (!fitsOnDisk(withoutRecord)) return false;
         commitFilesystemChange(
           {
-            root: newRoot,
+            root: withoutRecord,
             recycled,
           },
           "Restore from Recycle Bin",
@@ -1941,16 +2224,29 @@ export const useVfsStore = create<VfsState>()(
 
       deleteFromRecycleBin: (itemId) => {
         const recycled = get().recycled;
-        if (!recycled.some((item) => item.id === itemId)) return;
+        const item = recycled.find((entry) => entry.id === itemId);
+        if (!item) return;
+        let root = removeNode(get().root, recycledNodePath(item));
+        if (!root) root = get().root;
+        const remaining = recycled.filter((entry) => entry.id !== itemId);
+        root = removeInfo2Record(root, item, remaining);
         commitFilesystemChange(
-          { recycled: recycled.filter((r) => r.id !== itemId) },
+          { root, recycled: remaining },
           "Delete permanently",
         );
       },
 
       emptyRecycleBin: () => {
         if (!get().recycled.length) return;
-        commitFilesystemChange({ recycled: [] }, "Empty Recycle Bin");
+        let root = get().root;
+        for (const item of get().recycled) {
+          root = removeNode(root, recycledNodePath(item)) ?? root;
+        }
+        root = removeNode(root, RECYCLED_INDEX_PATH) ?? root;
+        commitFilesystemChange(
+          { root, recycled: [] },
+          "Empty Recycle Bin",
+        );
       },
 
       move: (src, destDir) => {
@@ -2209,15 +2505,15 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 17,
+      version: 19,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
         recycled: state.recycled,
       }),
-      migrate: (persisted) => {
+      migrate: (persisted, version) => {
         const old = persisted as Partial<VfsState> | undefined;
-        const root = assignShortNamesToTree(
+        let root = assignShortNamesToTree(
           normalizeFatTimestamps(
             mergeCanonicalTree(
               buildInitialTree(),
@@ -2225,23 +2521,97 @@ export const useVfsStore = create<VfsState>()(
             ),
           ),
         );
+        const recycled: RecycledItem[] = [];
+        const persistedRecycleItems = (old?.recycled ?? []) as unknown as Array<
+          LegacyRecycledItem | RecycledItem
+        >;
+        if (version === 18) {
+          // v18 was an intermediate development schema with virtual payloads
+          // already in C:\Recycled but a text INFO2 placeholder. Keep those
+          // files and rebuild the historical binary index from its metadata.
+          root = removeNode(root, RECYCLED_INDEX_PATH) ?? root;
+          for (const [index, oldItem] of persistedRecycleItems.entries()) {
+            const item = oldItem as RecycledItem;
+            const storedNode = findRecycledNode(root, item);
+            if (!storedNode) {
+              throw new Error(
+                `Could not migrate recycled item '${item.originalName}' from ${RECYCLED_PATH}`,
+              );
+            }
+            const migrated: RecycledItem = {
+              ...item,
+              recordNumber: index + 1,
+              originalPath: canonicalizeExistingPath(
+                root,
+                canonicalizeLegacyPath(item.originalPath),
+              ),
+            };
+            recycled.push(migrated);
+            const indexedRoot = appendInfo2Record(root, migrated, recycled);
+            if (!indexedRoot) {
+              throw new Error(
+                `Could not migrate INFO2 record for '${item.originalName}'`,
+              );
+            }
+            root = indexedRoot;
+          }
+        } else {
+          for (const [index, legacyItem] of persistedRecycleItems.entries()) {
+            const oldItem = legacyItem as LegacyRecycledItem;
+            const originalNode = normalizeFatTimestamps(oldItem.node);
+            const { recordNumber, storageName } = nextRecycleStorageName(
+              root,
+              originalNode,
+            );
+            const storedNode = recycledNodeForStorage(
+              originalNode,
+              storageName,
+            );
+            const withStoredNode = insertNode(root, RECYCLED_PATH, storedNode);
+            if (!withStoredNode) {
+              throw new Error(
+                `Could not migrate recycled item '${originalNode.name}' to ${RECYCLED_PATH}`,
+              );
+            }
+            root = withStoredNode;
+            const item: RecycledItem = {
+              id:
+                oldItem.id ??
+                `recycled-migrated-${oldItem.deletedAt ?? Date.now()}-${index}`,
+              storageName,
+              recordNumber,
+              originalName: originalNode.name,
+              originalPath: canonicalizeExistingPath(
+                root,
+                canonicalizeLegacyPath(oldItem.originalPath),
+              ),
+              deletedAt: oldItem.deletedAt ?? Date.now(),
+              attributes: {
+                hidden: originalNode.hidden,
+                system: originalNode.system,
+                protected: originalNode.protected,
+                readonly: originalNode.readonly,
+                archive: originalNode.archive,
+                shortName: originalNode.shortName,
+              },
+            };
+            recycled.push(item);
+            const indexedRoot = appendInfo2Record(root, item, recycled);
+            if (!indexedRoot) {
+              throw new Error(
+                `Could not migrate INFO2 record for '${originalNode.name}'`,
+              );
+            }
+            root = indexedRoot;
+          }
+        }
         return {
           root,
           cwd: canonicalizeExistingPath(
             root,
             canonicalizeLegacyPath(old?.cwd ?? USER_DOCUMENTS_PATH),
           ),
-          recycled: (old?.recycled ?? []).map((item, index) => ({
-            ...item,
-            node: normalizeFatTimestamps(item.node),
-            originalPath: canonicalizeExistingPath(
-              root,
-              canonicalizeLegacyPath(item.originalPath),
-            ),
-            id:
-              item.id ??
-              `recycled-migrated-${item.deletedAt ?? Date.now()}-${index}`,
-          })),
+          recycled,
         };
       },
     },

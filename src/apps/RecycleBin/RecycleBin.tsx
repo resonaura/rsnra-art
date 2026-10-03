@@ -10,7 +10,11 @@ import { recycleBinMaximumBytes } from "../../lib/recycleBin";
 import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { useDisplayStore } from "../../store/displayStore";
 import { useRecycleBinStore } from "../../store/recycleBinStore";
-import { useVfsStore, type RecycledItem } from "../../store/vfsStore";
+import {
+  useVfsStore,
+  type RecycledItem,
+  type VfsNode,
+} from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 import { vfsNodeAllocatedByteSize, vfsNodeByteSize } from "../../lib/vfsSize";
 
@@ -114,10 +118,25 @@ function shortPath(p: string) {
   return parts.join("\\") || "C:\\";
 }
 
+function recycledNode(root: VfsNode, storageName: string): VfsNode | null {
+  const bin = root.children?.find(
+    (entry) => entry.name.toLowerCase() === "recycled" && entry.type === "dir",
+  );
+  return (
+    bin?.children?.find(
+      (entry) => entry.name.toLowerCase() === storageName.toLowerCase(),
+    ) ?? null
+  );
+}
+
 interface CtxState {
   x: number;
   y: number;
-  item: RecycledItem;
+  item: RecycledEntry;
+}
+
+interface RecycledEntry extends RecycledItem {
+  node: VfsNode;
 }
 
 export function RecycleBin({ windowId }: { windowId: string }) {
@@ -129,6 +148,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   );
   const desktopIcons = useDisplayStore((s) => s.desktopIcons);
   const recycled = useVfsStore((s) => s.recycled);
+  const root = useVfsStore((s) => s.root);
   const confirmDelete = useRecycleBinStore((s) => s.confirmDelete);
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
   const restoreFromRecycleBin = useVfsStore((s) => s.restoreFromRecycleBin);
@@ -145,29 +165,39 @@ export function RecycleBin({ windowId }: { windowId: string }) {
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CtxState | null>(null);
 
-  const isEmpty = recycled.length === 0;
+  const recycledEntries = useMemo(
+    () =>
+      recycled.flatMap((item) => {
+        const node = recycledNode(root, item.storageName);
+        return node ? [{ ...item, node }] : [];
+      }),
+    [recycled, root],
+  );
+  const isEmpty = recycledEntries.length === 0;
   const recycledBytes = useMemo(
     () =>
-      recycled.reduce(
+      recycledEntries.reduce(
         (total, item) => total + vfsNodeAllocatedByteSize(item.node),
         0,
       ),
-    [recycled],
+    [recycledEntries],
   );
   const maximumBytes = recycleBinMaximumBytes();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const selectedItems = recycled.filter((item) => selectedSet.has(item.id));
+  const selectedItems = recycledEntries.filter((item) =>
+    selectedSet.has(item.id),
+  );
 
-  const restoreItem = async (item: RecycledItem) => {
+  const restoreItem = async (item: RecycledEntry) => {
     if (restoreFromRecycleBin(item.id)) return true;
     await alertError(
       "Error Restoring File",
-      `Cannot restore '${item.node.name}'. A file with the same name already exists, or the original location is unavailable.`,
+      `Cannot restore '${item.originalName}'. A file with the same name already exists, or the original location is unavailable.`,
     );
     return false;
   };
 
-  const restoreItems = async (items: RecycledItem[]) => {
+  const restoreItems = async (items: RecycledEntry[]) => {
     const failed: string[] = [];
     transaction("Restore from Recycle Bin", () => {
       for (const item of items) {
@@ -181,11 +211,11 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     setSelected(failed);
   };
 
-  const deleteItems = async (items: RecycledItem[]) => {
+  const deleteItems = async (items: RecycledEntry[]) => {
     if (!items.length) return;
     const label =
       items.length === 1
-        ? `'${items[0].node.name}'`
+        ? `'${items[0].originalName}'`
         : `these ${items.length} items`;
     if (confirmDelete) {
       const result = await confirmDialog(
@@ -260,7 +290,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           label: "Restore All",
           disabled: isEmpty,
           action: () => {
-            void restoreItems(recycled);
+            void restoreItems(recycledEntries);
           },
         },
         { label: "", divider: true },
@@ -268,8 +298,8 @@ export function RecycleBin({ windowId }: { windowId: string }) {
           label: "Select All",
           disabled: isEmpty,
           action: () => {
-            setSelected(recycled.map((item) => item.id));
-            setSelectionAnchor(recycled.at(-1)?.id ?? null);
+            setSelected(recycledEntries.map((item) => item.id));
+            setSelectionAnchor(recycledEntries.at(-1)?.id ?? null);
           },
         },
       ],
@@ -287,7 +317,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     },
   ];
 
-  const openCtx = (e: React.MouseEvent, item: RecycledItem) => {
+  const openCtx = (e: React.MouseEvent, item: RecycledEntry) => {
     e.preventDefault();
     e.stopPropagation();
     if (!selectedSet.has(item.id)) {
@@ -322,8 +352,8 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         undo();
       } else if (mod && key === "a") {
         event.preventDefault();
-        setSelected(recycled.map((item) => item.id));
-        setSelectionAnchor(recycled.at(-1)?.id ?? null);
+        setSelected(recycledEntries.map((item) => item.id));
+        setSelectionAnchor(recycledEntries.at(-1)?.id ?? null);
       } else if (!mod && key === "delete" && selectedItems.length) {
         event.preventDefault();
         void deleteItems(selectedItems);
@@ -337,7 +367,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, selected, recycled, undo, redo]);
+  }, [isFocused, selected, recycled, recycledEntries, undo, redo]);
 
   return (
     <Layout onClick={closeCtx}>
@@ -369,7 +399,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
               </tr>
             </thead>
             <tbody>
-              {recycled.map((item) => (
+              {recycledEntries.map((item) => (
                 <Tr
                   key={item.id}
                   $selected={selectedSet.has(item.id)}
@@ -378,18 +408,20 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                     if (
                       e.shiftKey &&
                       selectionAnchor &&
-                      recycled.some((entry) => entry.id === selectionAnchor)
+                      recycledEntries.some(
+                        (entry) => entry.id === selectionAnchor,
+                      )
                     ) {
-                      const anchor = recycled.findIndex(
+                      const anchor = recycledEntries.findIndex(
                         (entry) => entry.id === selectionAnchor,
                       );
-                      const index = recycled.findIndex(
+                      const index = recycledEntries.findIndex(
                         (entry) => entry.id === item.id,
                       );
                       const start = Math.min(anchor, index);
                       const end = Math.max(anchor, index);
                       setSelected(
-                        recycled
+                        recycledEntries
                           .slice(start, end + 1)
                           .map((entry) => entry.id),
                       );
@@ -419,7 +451,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
                         marginRight: 6,
                       }}
                     />
-                    {item.node.name}
+                    {item.originalName}
                   </Td>
                   <Td title={shortPath(item.originalPath)}>
                     {shortPath(item.originalPath)}
@@ -434,7 +466,7 @@ export function RecycleBin({ windowId }: { windowId: string }) {
         )}
       </Body>
       <StatusBar>
-        {isEmpty ? "0 object(s)" : `${recycled.length} object(s)`}
+        {isEmpty ? "0 object(s)" : `${recycledEntries.length} object(s)`}
         {"    "}
         {formatSize(recycledBytes)} of {formatSize(maximumBytes)} used
         {selected.length ? `    ${selected.length} selected` : ""}
