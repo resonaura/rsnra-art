@@ -5,24 +5,21 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
+import { openVfsNode, parseVfsShortcut } from "../../lib/openVfsNode";
 import { patternDataUri } from "../../lib/patterns";
 import { deleteConfirmationMessage } from "../../lib/recycleBin";
 import { confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
-import { openVfsAudio, openWebamp } from "../../lib/webamp";
-import { screenSaverByFile } from "../../screensavers";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useRecycleBinStore } from "../../store/recycleBinStore";
-import { useSaverRunStore } from "../../store/saverRunStore";
 import {
   isReadOnlyFile,
   useVfsStore,
   type VfsNode,
 } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
-import type { AppId } from "../../types/window";
 import { ContextMenu, CtxDivider, CtxItem } from "../ContextMenu";
 import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
 import { DesktopContextMenu } from "./DesktopContextMenu";
@@ -37,94 +34,8 @@ const Wrapper = styled.div`
 
 const DESKTOP_PATH = USER_DESKTOP_PATH;
 
-interface LnkData {
-  type: "app" | "url" | "missing";
-  target: string;
-  icon?: string;
-  shortcut?: boolean;
-  title?: string;
-  data?: Record<string, unknown>;
-  file?: string;
-}
-
-function parseLnk(node: VfsNode): LnkData | null {
-  try {
-    return JSON.parse(node.content ?? "") as LnkData;
-  } catch {
-    return null;
-  }
-}
-
-function openLnk(lnk: LnkData) {
-  if (lnk.type === "app") {
-    if (lnk.target === "winamp") void openWebamp();
-    else openApp(lnk.target as AppId, { title: lnk.title, data: lnk.data });
-  } else if (lnk.type === "url") {
-    window.open(lnk.target, "_blank", "noopener,noreferrer");
-  }
-}
-
-function openNode(node: VfsNode, abs: string) {
-  // .scr — run the screen saver, like double-clicking one in real Windows.
-  if (node.type === "file" && node.name.toLowerCase().endsWith(".scr")) {
-    const saver = screenSaverByFile(node.name);
-    if (saver) {
-      useSaverRunStore.getState().run(saver.id);
-      return;
-    }
-  }
-  if (node.type === "file" && !node.name.toLowerCase().endsWith(".lnk")) {
-    const preferred = getPreferredApp(node.name);
-    if (preferred) {
-      preferred.open(abs, node.name);
-      return;
-    }
-  }
-  if (node.type === "dir") {
-    openApp("my-computer", { title: node.name, data: { path: abs } });
-    return;
-  }
-  if (node.appId) {
-    if (node.appId === "winamp") {
-      void openWebamp();
-    } else {
-      openApp(node.appId as AppId);
-    }
-    return;
-  }
-  const lower = node.name.toLowerCase();
-  if (lower.endsWith(".lnk")) {
-    const lnk = parseLnk(node);
-    if (lnk) openLnk(lnk);
-    return;
-  }
-  if (isAudioExt(lower)) {
-    void openVfsAudio(abs).then((played) => {
-      if (!played && lower.endsWith(".wav")) {
-        openApp("sound-recorder", {
-          title: `${node.name} - Sound Recorder`,
-          data: { path: abs },
-        });
-      }
-    });
-    return;
-  }
-  if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
-    openApp("paint", { title: `${node.name} - Paint`, data: { path: abs } });
-    return;
-  }
-  // Every remaining file type (txt/log/ini, but also bat/sys/reg/dll/unknown
-  // extensions, …) opens as text in Notepad — real Windows always has some
-  // default handler, and Notepad can display any content as a last resort.
-  openApp("notepad", {
-    title: `${node.name} - Notepad`,
-    data: { path: abs },
-  });
-}
-
-const AUDIO_EXTS = [".wav", ".mp3", ".mid", ".midi", ".rmi", ".ogg"];
-function isAudioExt(lowerName: string): boolean {
-  return AUDIO_EXTS.some((e) => lowerName.endsWith(e));
+function parseLnk(node: VfsNode) {
+  return parseVfsShortcut(node);
 }
 
 const EMPTY: VfsNode[] = [];
@@ -307,7 +218,7 @@ export function Desktop() {
           setSelected(node.name);
           closeAll();
         }}
-        onOpen={() => openLnk(lnk)}
+        onOpen={() => openVfsNode(node, `${DESKTOP_PATH}\\${node.name}`)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -345,7 +256,7 @@ export function Desktop() {
           setSelected(node.name);
           closeAll();
         }}
-        onOpen={() => openNode(node, `${DESKTOP_PATH}\\${node.name}`)}
+        onOpen={() => openVfsNode(node, `${DESKTOP_PATH}\\${node.name}`)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -680,8 +591,7 @@ export function Desktop() {
             >
               <CtxItem
                 onClick={() => {
-                  if (isLnk && lnk) openLnk(lnk);
-                  else openNode(node, abs);
+                  openVfsNode(node, abs);
                   setIconCtx(null);
                 }}
               >

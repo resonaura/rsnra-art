@@ -28,6 +28,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | FAT timestamps | Access time stored arbitrary milliseconds and rename changed a file's modified time, despite the volume being modeled as FAT16. | Implemented and live checked after v17 migration: the existing `press-kit.txt` remained present; Properties showed Modified on a 2-second boundary and Accessed at local midnight. Creation rounds to 10 ms; migration normalizes existing metadata; same-volume rename/move preserves a file's last-write time; terminal text reads update access date. |
 | P2 | Folder attributes | Properties treated a folder's Read-only checkbox as a lock on the directory, preventing rename/move/delete; it exposed Archive and System controls that the Windows 2000 folder Properties page does not show. | Implemented: folder Read-only applies to unprotected files directly inside the folder, directory operations ignore the flag, and folder Properties shows only Read-only/Hidden with a mixed-state checkbox. |
 | P2 | File associations | File Properties hard-coded “Opens with” labels and offered no way to change the per-user association from the file itself. | Implemented: Properties reads the same association catalog/preferences as Folder Options and opens the existing Open With picker from Change…; live checked on a PNG without altering its association. |
+| P1 | File-open dispatch | Desktop, Explorer, and Find duplicated file-opening rules: the same object could behave differently, Find treated `.lnk` as text, and an Open With choice could intercept a registered executable. | Implemented: one VFS shell dispatcher now handles Desktop, Explorer, and Find; a desktop `.lnk` opened My Computer correctly, and Find located and launched that same shortcut. Folder browsing preferences, screen savers, Quick Launch's Show Desktop command, app executables, user associations, media, and the Notepad fallback keep their respective behavior. |
 | P2 | Screen saver files | Double-clicking a `.scr` in Explorer or Find fell through to Notepad instead of running the selected saver. | Implemented: known `.scr` files launch the registered saver from Explorer and Find, matching Desktop behavior. |
 | P2 | File Dialog | Open/Save dialogs always hid Hidden files, regardless of Explorer's shared visibility preferences. | Implemented |
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
@@ -48,7 +49,9 @@ not a claim that every Windows 2000 feature is implemented.
    versus per-user shell folders, file associations, and built-in system files;
    assess the volume type and user model before adding a Security page.
 7. Unify file-open dispatch across Explorer, Desktop, Find, and the Start menu
-   while preserving installed-app and per-user association behavior.
+   while preserving installed-app and per-user association behavior. **Complete:**
+   `openVfsNode` is shared by Explorer, Desktop, and Find; the desktop shortcut
+   and Find result were live checked.
 
 ## Historical checks used
 
@@ -65,7 +68,6 @@ not a claim that every Windows 2000 feature is implemented.
 - [Microsoft Learn: Naming Files, Paths, and Namespaces](https://learn.microsoft.com/en-us/windows/desktop/fileio/naming-a-file): distinguishes `C:\file` (rooted) from `C:file` (relative to the current directory on C:).
 - [Microsoft Learn: MS-FSCC 8.3 Filename](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/18e63b13-ba43-4f5f-a5b7-11e871b71f14): defines the character and length constraints for an 8.3/DOS filename.
 - [Microsoft Learn: File Times](https://learn.microsoft.com/en-us/windows/win32/sysinfo/file-times): FAT creation time resolves to 10 ms, write time to 2 seconds, and access time to one day (the access date).
-- [Windows 2000 Recycle Bin Properties walkthrough](https://www.informit.com/articles/article.aspx?p=411736&seqNum=96): per-drive settings, bypass, quota slider, and delete-confirmation option.
 - [NIST: Security Administration Guidance for Windows 2000 Professional](https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-43.pdf): period-specific baseline with the Recycle Bin quota set to 10%.
 - [Microsoft KB 136517: How the Recycle Bin Stores Files](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/136/517.HTM): documents the per-volume Recycled directory, original-path metadata, restoration, and removal of older items when the quota is exceeded. Its listed platforms are Windows 95/98 and NT 4.0; using the documented quota behavior for Windows 2000 is an era-continuity inference.
 - [Rifiuti2 technical notes](https://abelcheung.github.io/rifiuti2/technical/): forensic reference distinguishing FAT16/32 `C:\RECYCLED` from NTFS `C:\RECYCLER\<SID>` and describing the historical `INFO2` index.

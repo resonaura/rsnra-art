@@ -13,7 +13,7 @@ import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { Icon } from "../../components/Icon/Icon";
 import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
 import { ScrollArea } from "../../components/ScrollArea";
-import { APPS, openApp } from "../../data/apps";
+import { openApp } from "../../data/apps";
 import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
@@ -29,14 +29,12 @@ import {
 } from "../../lib/systemDialogs";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { ALL_USERS_START_MENU_PATH } from "../../lib/windowsPaths";
-import { openVfsAudio, openWebamp } from "../../lib/webamp";
+import { openVfsNode } from "../../lib/openVfsNode";
 import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
-import { screenSaverByFile } from "../../screensavers";
 import { useClipboardStore } from "../../store/clipboardStore";
 import type { FolderViewMode } from "../../store/filePrefsStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useRecycleBinStore } from "../../store/recycleBinStore";
-import { useSaverRunStore } from "../../store/saverRunStore";
 import {
   isReadOnlyFile,
   useVfsStore,
@@ -125,12 +123,6 @@ function isSameOrDescendant(
   const a = descendantAbs.toLowerCase();
   const b = ancestorAbs.toLowerCase();
   return a === b || a.startsWith(b.replace(/\\+$/, "") + "\\");
-}
-
-// Audio extensions Webamp can play when opened from the Explorer.
-function isAudioFile(name: string): boolean {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return ["wav", "mp3", "mid", "midi", "rmi", "ogg"].includes(ext);
 }
 
 const Layout = styled.div`
@@ -873,13 +865,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const openNode = (node: VfsNode) => {
-    if (node.type === "file" && node.name.toLowerCase().endsWith(".scr")) {
-      const saver = screenSaverByFile(node.name);
-      if (saver) {
-        useSaverRunStore.getState().run(saver.id);
-        return;
-      }
-    }
     if (path === "Control Panel" || path === "Games") {
       const vNode = node as any;
       if (!vNode.disabled && vNode.onOpen) {
@@ -889,69 +874,20 @@ export function MyComputer({ windowId }: { windowId: string }) {
       }
       return;
     }
-    if (node.name.toLowerCase().endsWith(".lnk")) {
-      try {
-        const lnk = JSON.parse(node.content ?? "");
-        if (lnk.type === "app") {
-          if (lnk.target === "winamp") {
-            void openWebamp();
-          } else {
-            openApp(lnk.target as any, {
-              title: lnk.title || node.name.replace(/\.lnk$/i, ""),
-              data: lnk.data,
-            });
-          }
-        } else if (lnk.type === "url") {
-          window.open(lnk.target, "_blank", "noopener,noreferrer");
-        }
-      } catch {}
-      return;
-    }
     const abs = vfs.resolvePath(node.name, path);
     if (!abs) return;
-    const preferred = node.type === "file" ? getPreferredApp(node.name) : null;
-    if (preferred) {
-      preferred.open(abs, node.name);
-    } else if (node.type === "dir") {
-      if (browseFoldersMode === "own" || launchFoldersInSeparateProcess) {
-        openApp("my-computer", { title: node.name, data: { path: abs } });
-      } else {
-        navigateTo(abs);
-      }
-    } else if (node.appId && APPS[node.appId as keyof typeof APPS]) {
-      const id = node.appId as keyof typeof APPS;
-      if (id === "winamp") {
-        void openWebamp();
-      } else if (id === "notepad")
-        openApp("notepad", {
-          title: `${node.name} - Notepad`,
-          data: { path: abs },
-        });
-      else openApp(id);
-    } else if (isAudioFile(node.name)) {
-      void openVfsAudio(abs).then((played) => {
-        if (!played && node.name.toLowerCase().endsWith(".wav")) {
-          openApp("sound-recorder", {
-            title: `${node.name} - Sound Recorder`,
-            data: { path: abs },
+    openVfsNode(node, abs, {
+      openDirectory: (directory, directoryPath) => {
+        if (browseFoldersMode === "own" || launchFoldersInSeparateProcess) {
+          openApp("my-computer", {
+            title: directory.name,
+            data: { path: directoryPath },
           });
+        } else {
+          navigateTo(directoryPath);
         }
-      });
-    } else if (
-      node.name.toLowerCase().endsWith(".png") ||
-      node.name.toLowerCase().endsWith(".bmp")
-    ) {
-      openApp("paint", { title: `${node.name} - Paint`, data: { path: abs } });
-    } else {
-      // Every remaining file type (txt/log/ini, but also bat/sys/reg/dll/
-      // unknown extensions, …) opens as text in Notepad — real Windows
-      // always has some default handler, and Notepad can display any
-      // content as a last resort.
-      openApp("notepad", {
-        title: `${node.name} - Notepad`,
-        data: { path: abs },
-      });
-    }
+      },
+    });
   };
 
   const goUp = () => {

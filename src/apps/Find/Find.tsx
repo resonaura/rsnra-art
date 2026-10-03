@@ -6,17 +6,13 @@ import { AppMenuBar } from "../../components/AppMenuBar";
 import { useFileDialog } from "../../components/FileDialog/FileDialog";
 import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
-import { openApp } from "../../data/apps";
 import { iconForNode } from "../../data/fileIcons";
-import { getPreferredApp } from "../../data/fileOpen";
 import { alertError } from "../../lib/systemDialogs";
+import { openVfsNode } from "../../lib/openVfsNode";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
-import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { R95_SCALE } from "../../react95.conf";
-import { screenSaverByFile } from "../../screensavers";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
-import { useSaverRunStore } from "../../store/saverRunStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -158,69 +154,7 @@ function describeSize(node: VfsNode): string {
 }
 
 function openHit(hit: Hit): void {
-  const n = hit.node;
-  if (n.type === "file" && n.name.toLowerCase().endsWith(".scr")) {
-    const saver = screenSaverByFile(n.name);
-    if (saver) {
-      useSaverRunStore.getState().run(saver.id);
-      return;
-    }
-  }
-  if (n.type === "file") {
-    const preferred = getPreferredApp(n.name);
-    if (preferred) {
-      preferred.open(hit.path, n.name);
-      return;
-    }
-  }
-  if (n.type === "dir") {
-    openApp("my-computer", { title: n.name, data: { path: hit.path } });
-    return;
-  }
-  if (n.appId) {
-    if (n.appId === "winamp") {
-      void openWebamp();
-    } else {
-      openApp(n.appId as never);
-    }
-    return;
-  }
-  const lower = n.name.toLowerCase();
-  if (
-    lower.endsWith(".wav") ||
-    lower.endsWith(".mp3") ||
-    lower.endsWith(".mid") ||
-    lower.endsWith(".midi") ||
-    lower.endsWith(".rmi") ||
-    lower.endsWith(".ogg")
-  ) {
-    void openVfsAudio(hit.path).then((played) => {
-      if (!played && lower.endsWith(".wav")) {
-        openApp("sound-recorder", {
-          title: `${n.name} - Sound Recorder`,
-          data: { path: hit.path },
-        });
-      }
-    });
-    return;
-  }
-  if (
-    lower.endsWith(".txt") ||
-    lower.endsWith(".log") ||
-    lower.endsWith(".ini")
-  ) {
-    openApp("notepad", {
-      title: `${n.name} - Notepad`,
-      data: { path: hit.path },
-    });
-  } else if (lower.endsWith(".png") || lower.endsWith(".bmp")) {
-    openApp("paint", { title: `${n.name} - Paint`, data: { path: hit.path } });
-  } else {
-    openApp("notepad", {
-      title: `${n.name} - Notepad`,
-      data: { path: hit.path },
-    });
-  }
+  openVfsNode(hit.node, hit.path);
 }
 
 export function Find({ windowId }: { windowId: string }) {
