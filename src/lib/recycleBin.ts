@@ -22,16 +22,38 @@ export function isRecycleBinBypassed(node: VfsNode): boolean {
   );
 }
 
+/** Read-only is a DOS file attribute, not a deletion lock in Explorer. */
+export function containsReadOnlyFile(node: VfsNode): boolean {
+  if (node.type === "file") return !!node.readonly;
+  return (node.children ?? []).some(containsReadOnlyFile);
+}
+
+export function readOnlyFileWarning(
+  nodes: VfsNode[],
+  permanentlyDelete = false,
+): string {
+  const selectedCount = nodes.filter(containsReadOnlyFile).length;
+  const result = permanentlyDelete
+    ? "permanently deleted"
+    : "sent to the Recycle Bin";
+  return selectedCount === 1
+    ? `This item contains a read-only file. It will be ${result} if you continue.`
+    : `One or more selected items contain read-only files. They will be ${result} if you continue.`;
+}
+
 export function deleteConfirmationMessage(
   label: string,
   nodes: VfsNode[],
 ): string {
+  const readOnlyWarning = nodes.some(containsReadOnlyFile)
+    ? " This selection contains read-only files; they will also be deleted if you continue."
+    : "";
   const permanentCount = nodes.filter(isRecycleBinBypassed).length;
   if (permanentCount === nodes.length) {
-    return `Are you sure you want to permanently delete ${label}?`;
+    return `Are you sure you want to permanently delete ${label}?${readOnlyWarning}`;
   }
   if (permanentCount > 0) {
-    return `Are you sure you want to delete ${label}? Some items will be permanently deleted because they exceed the Recycle Bin size limit.`;
+    return `Are you sure you want to delete ${label}? Some items will be permanently deleted because they exceed the Recycle Bin size limit.${readOnlyWarning}`;
   }
   const mayEvictOlderItems =
     useRecycleBinStore.getState().maximumSizePercent < 100;
@@ -39,5 +61,5 @@ export function deleteConfirmationMessage(
     mayEvictOlderItems
       ? " Older items may be permanently deleted to make room."
       : ""
-  }`;
+  }${readOnlyWarning}`;
 }

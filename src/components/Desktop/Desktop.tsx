@@ -7,7 +7,11 @@ import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
 import { openVfsNode, parseVfsShortcut } from "../../lib/openVfsNode";
 import { patternDataUri } from "../../lib/patterns";
-import { deleteConfirmationMessage } from "../../lib/recycleBin";
+import {
+  containsReadOnlyFile,
+  deleteConfirmationMessage,
+  readOnlyFileWarning,
+} from "../../lib/recycleBin";
 import { confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { useDesktopStore } from "../../store/desktopStore";
@@ -642,28 +646,36 @@ export function Desktop() {
                   Open With...
                 </CtxItem>
               )}
-              {!node.protected && !isReadOnlyFile(node) && (
+              {!node.protected && (
                 <>
                   <CtxDivider />
-                  <CtxItem
-                    onClick={() => {
-                      setRenaming(node.name);
-                      setRenameVal(label);
-                      setIconCtx(null);
-                    }}
-                  >
-                    Rename
-                  </CtxItem>
+                  {!isReadOnlyFile(node) && (
+                    <CtxItem
+                      onClick={() => {
+                        setRenaming(node.name);
+                        setRenameVal(label);
+                        setIconCtx(null);
+                      }}
+                    >
+                      Rename
+                    </CtxItem>
+                  )}
                   <CtxItem
                     onClick={async () => {
-                      if (confirmDelete) {
+                      const containsReadOnly = containsReadOnlyFile(node);
+                      if (confirmDelete || containsReadOnly) {
+                        const message = confirmDelete
+                          ? deleteConfirmationMessage(`'${label}'`, [node])
+                          : readOnlyFileWarning([node]);
                         const result = await confirmDialog(
                           "Confirm File Delete",
-                          deleteConfirmationMessage(`'${label}'`, [node]),
+                          message,
                         );
                         if (result !== "yes") return;
                       }
-                      useVfsStore.getState().moveToRecycleBin(abs);
+                      useVfsStore
+                        .getState()
+                        .moveToRecycleBin(abs, { allowReadOnly: true });
                       if (selected === node.name) setSelected(null);
                       setIconCtx(null);
                     }}

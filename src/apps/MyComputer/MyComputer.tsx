@@ -19,8 +19,10 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
 import {
+  containsReadOnlyFile,
   deleteConfirmationMessage,
   isRecycleBinBypassed,
+  readOnlyFileWarning,
 } from "../../lib/recycleBin";
 import {
   alertError,
@@ -936,22 +938,28 @@ export function MyComputer({ windowId }: { windowId: string }) {
     nodes: VfsNode[],
     bypassRecycleBin = false,
   ) => {
-    const deletable = nodes.filter(
-      (node) => !node.protected && !isReadOnlyFile(node),
-    );
+    const deletable = nodes.filter((node) => !node.protected);
     if (!deletable.length) return;
+    const containsReadOnly = deletable.some(containsReadOnlyFile);
     const label =
       deletable.length === 1
         ? `'${deletable[0].name}'`
         : `these ${deletable.length} items`;
-    if (useRecycleBinStore.getState().confirmDelete) {
+    const confirmDelete = useRecycleBinStore.getState().confirmDelete;
+    if (confirmDelete || containsReadOnly) {
+      const readOnlyNote = containsReadOnly
+        ? " This selection contains read-only files; they will also be deleted if you continue."
+        : "";
+      const message = bypassRecycleBin
+        ? `Are you sure you want to permanently delete ${label}?${readOnlyNote}`
+        : confirmDelete
+          ? deleteConfirmationMessage(label, deletable)
+          : readOnlyFileWarning(deletable, false);
       const result = await confirmDialog(
         deletable.length === 1
           ? "Confirm File Delete"
           : "Confirm Multiple File Delete",
-        bypassRecycleBin
-          ? `Are you sure you want to permanently delete ${label}?`
-          : deleteConfirmationMessage(label, deletable),
+        message,
       );
       if (result !== "yes") return;
     }
@@ -970,7 +978,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
         const abs = vfs.resolvePath(node.name, path);
         if (
           abs &&
-          (bypassRecycleBin ? vfs.remove(abs) : vfs.moveToRecycleBin(abs))
+          (bypassRecycleBin
+            ? vfs.remove(abs, { allowReadOnly: true })
+            : vfs.moveToRecycleBin(abs, { allowReadOnly: true }))
         )
           removed++;
       }
@@ -1243,9 +1253,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       } else if (
         !mod &&
         key === "delete" &&
-        selectedNodes.some(
-          (node) => !node.protected && !isReadOnlyFile(node),
-        )
+        selectedNodes.some((node) => !node.protected)
       ) {
         e.preventDefault();
         void deleteNodes(selectedNodes, e.shiftKey);
@@ -1329,9 +1337,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Delete",
           action: () => void deleteNodes(selectedNodes),
           disabled:
-            !selectedNodes.some(
-              (node) => !node.protected && !isReadOnlyFile(node),
-            ) ||
+            !selectedNodes.some((node) => !node.protected) ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1872,9 +1878,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxDivider />
               <CtxItem
                 $disabled={
-                  !contextNodes.some(
-                    (node) => !node.protected && !isReadOnlyFile(node),
-                  )
+                  !contextNodes.some((node) => !node.protected)
                 }
                 onClick={() =>
                   runCtx(() => cutSelected(contextNodes))

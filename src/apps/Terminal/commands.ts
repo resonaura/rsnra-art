@@ -577,6 +577,8 @@ function cmdDel(
   cmdName: string,
 ) {
   const force = args.includes("-f") || args.includes("/q");
+  const forceReadOnly = args.some((arg) => arg.toLowerCase() === "/f") ||
+    args.includes("-f");
   const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
   if (!targets.length) {
     ctx.print(["The syntax of the command is incorrect."], "error");
@@ -600,7 +602,9 @@ function cmdDel(
       const matches = expandWildcards(pattern, node.children ?? []);
       for (const m of matches) {
         if (m.type === "file" && !m.system) {
-          ctx.vfs.remove(abs + "\\" + m.name);
+          ctx.vfs.remove(abs + "\\" + m.name, {
+            allowReadOnly: forceReadOnly,
+          });
         }
       }
       continue;
@@ -621,7 +625,9 @@ function cmdDel(
           : `Access is denied.`;
       ctx.print([msg], "error");
       ctx.setErrorLevel(1);
-    } else if (!ctx.vfs.remove(t)) {
+    } else if (
+      !ctx.vfs.remove(t, { allowReadOnly: forceReadOnly })
+    ) {
       if (!force) ctx.print(["Access is denied — system file."], "error");
       ctx.setErrorLevel(1);
     } else {
@@ -1872,6 +1878,7 @@ const HELP_TOPICS: Record<string, string[]> = {
   del: [
     "DEL <file>   (ERASE, RM)",
     "  Deletes a file.",
+    "  /F  Force deletion of read-only files",
     "  /Q  Quiet mode",
     "  Supports wildcards: del *.txt",
   ],
@@ -1946,7 +1953,8 @@ export function buildHelpText(): string[] {
     "  type <file>          cat [-n] <file>    more <file>",
     "  mkdir <name>         md <name>          touch <file>",
     "  rmdir <name>         rd <name>          rm [-rf] <name>",
-    "  del <file>           erase <file>       (supports *.txt)",
+    "  del /f <file>        Force-delete read-only files",
+    "  erase <file>         (supports *.txt)",
     "  copy <src> <dst>     cp <src> <dst>",
     "  move <src> <dst>     mv <src> <dst>",
     "  ren <old> <new>      rename <old> <new>",

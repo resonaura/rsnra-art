@@ -88,8 +88,11 @@ export interface VfsState {
   // mutations
   mkdir: (path: string) => boolean;
   writeFile: (path: string, content: string) => boolean;
-  remove: (path: string) => boolean;
-  moveToRecycleBin: (path: string) => boolean;
+  remove: (path: string, options?: { allowReadOnly?: boolean }) => boolean;
+  moveToRecycleBin: (
+    path: string,
+    options?: { allowReadOnly?: boolean },
+  ) => boolean;
   restoreFromRecycleBin: (itemId: string) => boolean;
   deleteFromRecycleBin: (itemId: string) => void;
   emptyRecycleBin: () => void;
@@ -2095,22 +2098,32 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
-      remove: (path) => {
+      remove: (path, options) => {
         const abs = resolveInputPath(path);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
+        if (
+          !ref ||
+          ref.node.protected ||
+          (isReadOnlyFile(ref.node) && !options?.allowReadOnly)
+        )
+          return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         commitFilesystemChange({ root: newRoot }, "Permanently delete");
         return true;
       },
 
-      moveToRecycleBin: (path) => {
+      moveToRecycleBin: (path, options) => {
         const abs = resolveInputPath(path);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
+        if (
+          !ref ||
+          ref.node.protected ||
+          (isReadOnlyFile(ref.node) && !options?.allowReadOnly)
+        )
+          return false;
         let newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         const maximumSize = recycleBinMaximumBytes();
