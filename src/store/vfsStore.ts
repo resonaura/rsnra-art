@@ -304,6 +304,22 @@ function assignShortNamesToTree(node: VfsNode): VfsNode {
   };
 }
 
+function normalizeFatTimestamps(node: VfsNode): VfsNode {
+  const created = fatCreationTime(node.created);
+  const modified = fatWriteTime(node.modified ?? node.created);
+  const accessed = fatAccessDate(node.accessed ?? node.created);
+  if (node.type === "file") {
+    return { ...node, created, modified, accessed };
+  }
+  return {
+    ...node,
+    created,
+    modified,
+    accessed,
+    children: (node.children ?? []).map(normalizeFatTimestamps),
+  };
+}
+
 function findChildByLongOrShortName(
   parent: VfsNode,
   name: string,
@@ -381,24 +397,20 @@ function findParent(
 // Deep-clone a node (and any children) with fresh `created` timestamps so a
 // pasted copy doesn't share identity/timestamps with the original.
 function cloneNode(node: VfsNode): VfsNode {
-  const created = now();
+  const timestamps = fileSystemTimestamps();
   if (node.type === "file") {
     return {
       ...node,
       // `protected` represents ownership by this installed Windows image,
       // not a DOS attribute. A user copy of an OS file must remain editable.
       protected: false,
-      created,
-      modified: created,
-      accessed: created,
+      ...timestamps,
     };
   }
   return {
     ...node,
     protected: false,
-    created,
-    modified: created,
-    accessed: created,
+    ...timestamps,
     children: (node.children ?? []).map(cloneNode),
   };
 }
@@ -481,7 +493,13 @@ function updateNode(
     }
     const newChildren = [...cur.children];
     newChildren[idx] = newChild;
-    return { ...cur, children: newChildren };
+    return {
+      ...cur,
+      ...(newChild.name !== previousChild.name && {
+        modified: fatWriteTime(now()),
+      }),
+      children: newChildren,
+    };
   }
 
   return walk(root, 0);
@@ -505,7 +523,7 @@ function insertNode(
     };
     return {
       ...root,
-      modified: now(),
+      modified: fatWriteTime(now()),
       children: [...(root.children ?? []), namedNode],
     };
   }
@@ -518,7 +536,7 @@ function insertNode(
     };
     return {
       ...parent,
-      modified: now(),
+      modified: fatWriteTime(now()),
       children: [...(parent.children ?? []), namedNode],
     };
   });
@@ -540,7 +558,7 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
     if (!target) return null;
     return {
       ...root,
-      modified: now(),
+      modified: fatWriteTime(now()),
       children: (root.children ?? []).filter((child) => child !== target),
     };
   }
@@ -550,7 +568,7 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
     if (!target) return null;
     return {
       ...parent,
-      modified: now(),
+      modified: fatWriteTime(now()),
       children: (parent.children ?? []).filter((child) => child !== target),
     };
   });
@@ -558,10 +576,19 @@ function removeNode(root: VfsNode, absPath: string): VfsNode | null {
 
 let _id = 0;
 const now = () => Date.now() + _id++;
-const timestamps = () => {
-  const created = now();
-  return { created, modified: created, accessed: created };
+const fatCreationTime = (time: number) => Math.floor(time / 10) * 10;
+const fatWriteTime = (time: number) => Math.floor(time / 2000) * 2000;
+const fatAccessDate = (time: number) => {
+  const date = new Date(time);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
 };
+const fileSystemTimestamps = (time = now()) => ({
+  created: fatCreationTime(time),
+  modified: fatWriteTime(time),
+  accessed: fatAccessDate(time),
+});
+const timestamps = () => fileSystemTimestamps();
 const dir = (
   name: string,
   children: VfsNode[] = [],
@@ -1356,12 +1383,14 @@ function refreshLegacyBranding(node: VfsNode): VfsNode {
       .replace("version=95\nyear=1996", "version=2000\nyear=2000")
       .replace("v4.95.1996", "v4.2000")
       .replace("Microsoft Plus! for Windows 95", "Microsoft Plus! for Windows 2000");
-    return content === node.content ? node : { ...node, content, modified: now() };
+    return content === node.content
+      ? node
+      : { ...node, content, modified: fatWriteTime(now()) };
   }
   const children = node.children ?? [];
   const nextChildren = children.map(refreshLegacyBranding);
   if (nextChildren.every((child, index) => child === children[index])) return node;
-  return { ...node, children: nextChildren, modified: now() };
+  return { ...node, children: nextChildren, modified: fatWriteTime(now()) };
 }
 
 /** Rebase the previous 9x-shaped virtual disk onto Windows 2000 locations. */
@@ -1714,7 +1743,7 @@ export const useVfsStore = create<VfsState>()(
         if (!node || node.type !== "file") return null;
         const newRoot = updateNode(get().root, abs, (current) => ({
           ...current,
-          accessed: now(),
+          accessed: fatAccessDate(now()),
         }));
         if (newRoot) set({ root: newRoot });
         return node.content ?? "";
@@ -1791,8 +1820,8 @@ export const useVfsStore = create<VfsState>()(
             ...node,
             content,
             archive: true,
-            modified: now(),
-            accessed: now(),
+            modified: fatWriteTime(now()),
+            accessed: fatAccessDate(now()),
           }));
           if (!newRoot || !fitsOnDisk(newRoot)) return false;
           commitFilesystemChange({ root: newRoot }, "Edit file");
@@ -1989,7 +2018,7 @@ export const useVfsStore = create<VfsState>()(
             : "C:" + SEP + parts.slice(0, -1).join(SEP);
         const parent = findNode(get().root, parentPath);
         if (!parent || parent.type !== "dir") return false;
-        const movedNode = { ...ref.node, name, modified: now() };
+        const movedNode = { ...ref.node, name };
         let newRoot = removeNode(get().root, srcAbs);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         newRoot = insertNode(newRoot, parentPath, movedNode);
@@ -2062,7 +2091,6 @@ export const useVfsStore = create<VfsState>()(
         const newRoot = updateNode(get().root, abs, (node) => ({
           ...node,
           name: newName,
-          modified: now(),
         }));
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Rename");
@@ -2145,7 +2173,11 @@ export const useVfsStore = create<VfsState>()(
             ...rest.slice(target),
           ];
           success = true;
-          return { ...parent, modified: now(), children: newChildren };
+          return {
+            ...parent,
+            modified: fatWriteTime(now()),
+            children: newChildren,
+          };
         });
         if (newRoot && success) {
           commitFilesystemChange({ root: newRoot }, "Arrange icons");
@@ -2157,7 +2189,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 16,
+      version: 17,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
@@ -2166,9 +2198,11 @@ export const useVfsStore = create<VfsState>()(
       migrate: (persisted) => {
         const old = persisted as Partial<VfsState> | undefined;
         const root = assignShortNamesToTree(
-          mergeCanonicalTree(
-            buildInitialTree(),
-            relocateLegacyFilesystem(old?.root),
+          normalizeFatTimestamps(
+            mergeCanonicalTree(
+              buildInitialTree(),
+              relocateLegacyFilesystem(old?.root),
+            ),
           ),
         );
         return {
@@ -2179,6 +2213,7 @@ export const useVfsStore = create<VfsState>()(
           ),
           recycled: (old?.recycled ?? []).map((item, index) => ({
             ...item,
+            node: normalizeFatTimestamps(item.node),
             originalPath: canonicalizeExistingPath(
               root,
               canonicalizeLegacyPath(item.originalPath),

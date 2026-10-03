@@ -143,6 +143,14 @@ function fileSize(node: VfsNode): number {
   return node.type === "dir" ? 0 : vfsNodeByteSize(node);
 }
 
+function readFileContent(
+  ctx: CmdContext,
+  path: string | null,
+  node: VfsNode,
+): string {
+  return path ? (ctx.vfs.read(path) ?? node.content ?? "") : (node.content ?? "");
+}
+
 function getEnvVar(vars: Record<string, string>, name: string): string | undefined {
   return Object.entries(vars).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
 }
@@ -374,7 +382,7 @@ function cmdType(
       ctx.setErrorLevel(1);
       continue;
     }
-    const lines = (node.content ?? "").split("\n");
+    const lines = readFileContent(ctx, abs, node).split("\n");
     if (showNum) {
       ctx.print(lines.map((l, i) => `    ${String(i + 1).padStart(4)}  ${l}`));
     } else {
@@ -950,7 +958,7 @@ function cmdHead(args: string[], ctx: CmdContext) {
       ctx.setErrorLevel(1);
       continue;
     }
-    const lines = (node.content ?? "").split("\n").slice(0, n);
+    const lines = readFileContent(ctx, abs, node).split("\n").slice(0, n);
     ctx.print(lines);
   }
 }
@@ -980,7 +988,7 @@ function cmdTail(args: string[], ctx: CmdContext) {
       ctx.setErrorLevel(1);
       continue;
     }
-    const lines = (node.content ?? "").split("\n");
+    const lines = readFileContent(ctx, abs, node).split("\n");
     ctx.print(lines.slice(-n));
   }
 }
@@ -1005,7 +1013,7 @@ function cmdGrep(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
-  const lines = (node.content ?? "").split("\n");
+  const lines = readFileContent(ctx, abs, node).split("\n");
   let matchCount = 0;
   const out: string[] = [];
   const flags = caseInsensitive ? "i" : "";
@@ -1052,7 +1060,7 @@ function cmdWc(args: string[], ctx: CmdContext) {
       ctx.setErrorLevel(1);
       continue;
     }
-    const content = node.content ?? "";
+    const content = readFileContent(ctx, abs, node);
     const lines = content.split("\n").length;
     const words = content.split(/\s+/).filter(Boolean).length;
     const chars = content.length;
@@ -1343,7 +1351,7 @@ function cmdMore(
     ctx.setErrorLevel(1);
     return;
   }
-  ctx.print((node.content ?? "").split("\n"));
+  ctx.print(readFileContent(ctx, abs, node).split("\n"));
 }
 
 function cmdWhich(args: string[], ctx: CmdContext) {
@@ -1375,7 +1383,7 @@ function cmdSort(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
-  const lines = (node.content ?? "").split("\n").sort();
+  const lines = readFileContent(ctx, abs, node).split("\n").sort();
   ctx.print(lines);
 }
 
