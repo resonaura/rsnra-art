@@ -27,10 +27,16 @@ import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { ALL_USERS_START_MENU_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
+import { screenSaverByFile } from "../../screensavers";
 import { useClipboardStore } from "../../store/clipboardStore";
 import type { FolderViewMode } from "../../store/filePrefsStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
-import { useVfsStore, type VfsNode } from "../../store/vfsStore";
+import { useSaverRunStore } from "../../store/saverRunStore";
+import {
+  isReadOnlyFile,
+  useVfsStore,
+  type VfsNode,
+} from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
 const MY_COMPUTER = "My Computer";
@@ -861,6 +867,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const openNode = (node: VfsNode) => {
+    if (node.type === "file" && node.name.toLowerCase().endsWith(".scr")) {
+      const saver = screenSaverByFile(node.name);
+      if (saver) {
+        useSaverRunStore.getState().run(saver.id);
+        return;
+      }
+    }
     if (path === "Control Panel" || path === "Games") {
       const vNode = node as any;
       if (!vNode.disabled && vNode.onOpen) {
@@ -978,7 +991,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const deleteNodes = async (nodes: VfsNode[]) => {
-    const deletable = nodes.filter((node) => !node.protected && !node.readonly);
+    const deletable = nodes.filter(
+      (node) => !node.protected && !isReadOnlyFile(node),
+    );
     if (!deletable.length) return;
     const label =
       deletable.length === 1
@@ -1038,7 +1053,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
 
   const cutSelected = (nodes: VfsNode[]) => {
     const paths = pathsFor(
-      nodes.filter((node) => !node.protected && !node.readonly),
+      nodes.filter((node) => !node.protected && !isReadOnlyFile(node)),
     );
     if (paths.length) clipboard.set("cut", paths);
   };
@@ -1248,7 +1263,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
       } else if (
         mod &&
         key === "x" &&
-        selectedNodes.some((node) => !node.protected && !node.readonly)
+        selectedNodes.some(
+          (node) => !node.protected && !isReadOnlyFile(node),
+        )
       ) {
         e.preventDefault();
         cutSelected(selectedNodes);
@@ -1264,7 +1281,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
       } else if (
         !mod &&
         key === "delete" &&
-        selectedNodes.some((node) => !node.protected && !node.readonly)
+        selectedNodes.some(
+          (node) => !node.protected && !isReadOnlyFile(node),
+        )
       ) {
         e.preventDefault();
         void deleteNodes(selectedNodes);
@@ -1274,7 +1293,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         selectedNodes.length === 1 &&
         selectedNode &&
         !selectedNode.protected &&
-        !selectedNode.readonly
+        !isReadOnlyFile(selectedNode)
       ) {
         e.preventDefault();
         setRenaming(selectedNode.name);
@@ -1349,7 +1368,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           action: () => void deleteNodes(selectedNodes),
           disabled:
             !selectedNodes.some(
-              (node) => !node.protected && !node.readonly,
+              (node) => !node.protected && !isReadOnlyFile(node),
             ) ||
             path === "Control Panel" ||
             path === "Games",
@@ -1365,7 +1384,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           disabled:
             selectedNodes.length !== 1 ||
             !!selectedNode?.protected ||
-            !!selectedNode?.readonly ||
+            !!selectedNode && isReadOnlyFile(selectedNode) ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1400,7 +1419,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           action: () => cutSelected(selectedNodes),
           disabled:
             !selectedNodes.some(
-              (node) => !node.protected && !node.readonly,
+              (node) => !node.protected && !isReadOnlyFile(node),
             ) ||
             path === "Control Panel" ||
             path === "Games",
@@ -1892,7 +1911,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxItem
                 $disabled={
                   !contextNodes.some(
-                    (node) => !node.protected && !node.readonly,
+                    (node) => !node.protected && !isReadOnlyFile(node),
                   )
                 }
                 onClick={() =>
@@ -1909,10 +1928,13 @@ export function MyComputer({ windowId }: { windowId: string }) {
                 $disabled={
                   contextNodes.length !== 1 ||
                   !!ctx.node!.protected ||
-                  !!ctx.node!.readonly
+                  isReadOnlyFile(ctx.node!)
                 }
                 onClick={() => {
-                  if (ctx.node!.protected || ctx.node!.readonly) return;
+                  if (
+                    ctx.node!.protected ||
+                    isReadOnlyFile(ctx.node!)
+                  ) return;
                   runCtx(() => {
                     setRenaming(ctx.node!.name);
                     setRenameVal(ctx.node!.name);
@@ -1924,7 +1946,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxItem
                 $disabled={
                   !contextNodes.some(
-                    (node) => !node.protected && !node.readonly,
+                    (node) => !node.protected && !isReadOnlyFile(node),
                   )
                 }
                 onClick={() => {

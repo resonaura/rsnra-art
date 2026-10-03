@@ -24,7 +24,7 @@ export interface VfsNode {
   system?: boolean; // DOS System attribute (controls protected-file visibility)
   protected?: boolean; // immutable OS-owned object (separate from attributes)
   hidden?: boolean;
-  readonly?: boolean; // read-only — cannot be modified/deleted
+  readonly?: boolean; // file Read-only attribute; Explorer folder UI applies it to child files
   archive?: boolean; // archive bit (Win95)
   created: number;
   modified?: number;
@@ -82,8 +82,8 @@ export interface VfsState {
   moveTo: (src: string, destDir: string) => string | null;
   rename: (path: string, newName: string) => boolean;
   setCwd: (path: string) => boolean;
-  // Toggle file/folder attributes (Hidden, Read-only, Archive). Refuses on
-  // system items. Partial — only the provided fields are changed.
+  // Toggle DOS file/folder attributes. Refuses on immutable OS-owned objects;
+  // that protection is separate from the DOS System attribute. Partial update.
   setAttributes: (
     path: string,
     attrs: {
@@ -93,6 +93,8 @@ export interface VfsState {
       system?: boolean;
     },
   ) => boolean;
+  /** Folder Properties' Read-only control affects files directly in that folder. */
+  setFolderFilesReadOnly: (path: string, readonly: boolean) => boolean;
   reorderChildren: (
     dirPath: string,
     name: string,
@@ -226,6 +228,13 @@ function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
 
 function nodeByteSize(node: VfsNode): number {
   return vfsNodeByteSize(node);
+}
+
+/** The DOS Read-only attribute is enforced for files, not directories. */
+export function isReadOnlyFile(
+  node: Pick<VfsNode, "type" | "readonly">,
+): boolean {
+  return node.type === "file" && !!node.readonly;
 }
 
 // Generate a non-colliding name inside `parent` based on `name`, using the
@@ -1540,7 +1549,7 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         const existing = findNode(get().root, abs);
         if (existing && existing.type === "file") {
-          if (existing.protected || existing.readonly) return false;
+          if (existing.protected || isReadOnlyFile(existing)) return false;
           const nextSize = contentByteSize(content);
           const currentSize = nodeByteSize(existing);
           if (nextSize - currentSize > get().diskUsage().free) return false;
@@ -1579,7 +1588,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         commitFilesystemChange({ root: newRoot }, "Permanently delete");
@@ -1590,7 +1599,7 @@ export const useVfsStore = create<VfsState>()(
         const abs = normalizePath(path, get().cwd);
         if (!abs) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         const newRoot = removeNode(get().root, abs);
         if (!newRoot) return false;
         const item: RecycledItem = {
@@ -1667,7 +1676,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         if (
           dest.children.some(
             (c) => c.name.toLowerCase() === ref.node.name.toLowerCase(),
@@ -1738,7 +1747,7 @@ export const useVfsStore = create<VfsState>()(
         if (srcAbs.toLowerCase() === destAbs.toLowerCase()) return true;
         if (findNode(get().root, destAbs)) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         const parts = splitAbs(destAbs);
@@ -1786,7 +1795,7 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || ref.node.readonly) return null;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return null;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         // No-op if dropped back into its own parent.
@@ -1813,7 +1822,7 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         if (!isValidWindowsName(newName)) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || ref.node.readonly) return false;
+        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
         if (
           ref.parent.children!.some(
             (c) =>
@@ -1854,6 +1863,37 @@ export const useVfsStore = create<VfsState>()(
         }));
         if (!newRoot) return false;
         commitFilesystemChange({ root: newRoot }, "Change attributes");
+        return true;
+      },
+
+      setFolderFilesReadOnly: (path, readonly) => {
+        const abs = normalizePath(path, get().cwd);
+        if (!abs) return false;
+        let changed = false;
+        const newRoot = updateNode(get().root, abs, (node) => {
+          if (node.type !== "dir") return null;
+          const children = (node.children ?? []).map((child) => {
+            if (
+              child.type !== "file" ||
+              child.protected ||
+              !!child.readonly === readonly
+            ) {
+              return child;
+            }
+            changed = true;
+            return { ...child, readonly };
+          });
+          return changed ? { ...node, children } : node;
+        });
+        if (!newRoot) return false;
+        if (changed) {
+          commitFilesystemChange(
+            { root: newRoot },
+            readonly
+              ? "Make folder files read-only"
+              : "Clear Read-only from folder files",
+          );
+        }
         return true;
       },
 

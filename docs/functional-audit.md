@@ -20,6 +20,9 @@ not a claim that every Windows 2000 feature is implemented.
 | P1 | Command Prompt | Edit menu exposed Copy, Paste, and Select All as disabled even though xterm supports these operations. | Implemented; build checked |
 | P2 | Command Prompt | `SET` started empty and PATH output diverged from the command-search folders. | Implemented: Windows 2000-style environment variables, case-insensitive variable access, and one shared System32/WINNT/Wbem path; visually checked with `set path` |
 | P2 | File metadata | File sizes were calculated differently in Explorer, Find, Properties, File Dialog, and the terminal; stub executable files appeared empty in some views. | Implemented; live checked for application size |
+| P2 | Folder attributes | Properties treated a folder's Read-only checkbox as a lock on the directory, preventing rename/move/delete; it exposed Archive and System controls that the Windows 2000 folder Properties page does not show. | Implemented: folder Read-only applies to unprotected files directly inside the folder, directory operations ignore the flag, and folder Properties shows only Read-only/Hidden with a mixed-state checkbox. |
+| P2 | File associations | File Properties hard-coded “Opens with” labels and offered no way to change the per-user association from the file itself. | Implemented: Properties reads the same association catalog/preferences as Folder Options and opens the existing Open With picker from Change…; live checked on a PNG without altering its association. |
+| P2 | Screen saver files | Double-clicking a `.scr` in Explorer or Find fell through to Notepad instead of running the selected saver. | Implemented: known `.scr` files launch the registered saver from Explorer and Find, matching Desktop behavior. |
 | P2 | File Dialog | Open/Save dialogs always hid Hidden files, regardless of Explorer's shared visibility preferences. | Implemented |
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
 | P2 | Find | Results had no working Select All or Save Results command. | Implemented; selection and saving wired to the virtual filesystem |
@@ -36,7 +39,10 @@ not a claim that every Windows 2000 feature is implemented.
    filesystem preferences and metadata.
 5. Revisit the remaining disabled secondary menu items in a follow-up audit pass.
 6. Continue the NTFS-era filesystem audit: attributes/security semantics, shared
-   versus per-user shell folders, file associations, and built-in system files.
+   versus per-user shell folders, file associations, and built-in system files;
+   assess the volume type and user model before adding a Security page.
+7. Unify file-open dispatch across Explorer, Desktop, Find, and the Start menu
+   while preserving installed-app and per-user association behavior.
 
 ## Historical checks used
 
@@ -47,5 +53,8 @@ not a claim that every Windows 2000 feature is implemented.
 - [NT-era 3D Text setup reference](https://www.bitsavers.org/pdf/microsoft/windows_NT_4.0/Osborne_-_Windows_NT_Registry_Settings_Reference_1998.pdf): documents the period setup controls for size, speed, resolution, spin style, and solid/textured surfaces. Using it as a Windows 2000 UI reference is an era-continuity inference; the Windows 2000-specific exercise above confirms Text/Time and custom text.
 - [DVD-Video logo color reference](https://m.svgmix.com/item/zlrZW4/dvd-video): lists the mark's blue as `#51688E`; used to steer the default away from unrelated neon cycling.
 - [Microsoft Learn: CSIDL shell folders](https://learn.microsoft.com/en-us/windows/win32/shell/csidl): shell-folder conventions, including per-user Cookies/Favorites/Start Menu and `Local Settings\Temporary Internet Files`.
+- [Microsoft KB 326549 (Windows 2000 predecessor KB 256614)](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/326/549.HTM): folder Properties' Read-only control applies to files directly in the folder; the directory's own Read-only bit is normally ignored.
+- [Microsoft Learn: File Attribute Constants](https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants): definitions for Read-only, Hidden, System, and Archive attributes.
+- [Microsoft Learn: File Types](https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types): extension-to-application association model and Open With conventions.
 - [Microsoft Windows 2000 profile guidance](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/314/045.HTM): default profile placement under `Documents and Settings`.
 - [Windows 2000 color reference](https://desktopcolors.com/os/windows-2000): desktop blue `#3a6ea5`.

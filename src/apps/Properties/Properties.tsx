@@ -2,10 +2,17 @@ import { useEffect, useState } from "react";
 import { Button, Checkbox, Frame, GroupBox, Tab, TabBody, Tabs } from "react95";
 import styled from "styled-components";
 import { useShallow } from "zustand/react/shallow";
+import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
+import { getDefaultOpener } from "../../data/fileOpen";
 import { iconForNode } from "../../data/fileIcons";
 import { Icon } from "../../components/Icon/Icon";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
-import { useVfsStore, type VfsNode } from "../../store/vfsStore";
+import { useFilePrefsStore } from "../../store/filePrefsStore";
+import {
+  isReadOnlyFile,
+  useVfsStore,
+  type VfsNode,
+} from "../../store/vfsStore";
 import { useWindowData, useWindowStore } from "../../store/windowStore";
 
 const Layout = styled.div`
@@ -99,6 +106,24 @@ function describeType(node: VfsNode): string {
   return `${ext} File`;
 }
 
+function readOnlyPropertyState(node: VfsNode | null | undefined): {
+  checked: boolean;
+  indeterminate: boolean;
+} {
+  if (!node) return { checked: false, indeterminate: false };
+  if (node.type === "file") {
+    return { checked: isReadOnlyFile(node), indeterminate: false };
+  }
+  const files = (node.children ?? []).filter(
+    (child) => child.type === "file" && !child.protected,
+  );
+  const readonlyCount = files.filter(isReadOnlyFile).length;
+  return {
+    checked: files.length > 0 && readonlyCount === files.length,
+    indeterminate: readonlyCount > 0 && readonlyCount < files.length,
+  };
+}
+
 // 8.3 short name: keep the first 8 chars of the base and first 3 of the ext.
 function shortName(name: string): string {
   if (name.length <= 12 && !name.includes(" ")) return name.toUpperCase();
@@ -145,23 +170,30 @@ function formatDate(ts: number): string {
 export function Properties({ windowId }: { windowId: string }) {
   const data = useWindowData(windowId);
   const vfs = useVfsStore(
-    useShallow((s) => ({ resolve: s.resolve, setAttributes: s.setAttributes })),
+    useShallow((s) => ({
+      root: s.root,
+      resolve: s.resolve,
+      setAttributes: s.setAttributes,
+      setFolderFilesReadOnly: s.setFolderFilesReadOnly,
+    })),
   );
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const openWithDefaults = useFilePrefsStore((s) => s.openWithDefaults);
   const path = (data.path as string) ?? "C:\\";
   const node = vfs.resolve(path);
   const [tab, setTab] = useState("General");
+  const [showOpenWith, setShowOpenWith] = useState(false);
   // Local mirror of the attributes so checkboxes feel instant; persisted to
   // the VFS on each toggle. System items can't be changed.
   const [hidden, setHidden] = useState(!!node?.hidden);
-  const [readonly, setReadonly] = useState(!!node?.readonly);
+  const [readOnlyState, setReadOnlyState] = useState(readOnlyPropertyState(node));
   const [archive, setArchive] = useState(node?.archive ?? true);
   const [system, setSystem] = useState(!!node?.system);
 
   useEffect(() => {
     if (!node) return;
     setHidden(!!node.hidden);
-    setReadonly(!!node.readonly);
+    setReadOnlyState(readOnlyPropertyState(node));
     setArchive(node.archive ?? true);
     setSystem(!!node.system);
   }, [node]);
@@ -192,6 +224,24 @@ export function Properties({ windowId }: { windowId: string }) {
   const hasVersionInfo =
     node.type === "file" &&
     (node.appId !== undefined || ["EXE", "DLL", "CPL"].includes(extOf(name)));
+  const hasAssociation =
+    node.type === "file" &&
+    !node.appId &&
+    !["LNK", "EXE", "COM", "BAT", "CMD", "SCR", "DLL", "CPL"].includes(
+      extOf(name),
+    );
+  const extensionKey = name.split(".").pop()?.toLowerCase() ?? "";
+  // This subscription makes the displayed opener update immediately after
+  // Change... saves the per-user file-type association.
+  const opener = hasAssociation
+    ? getDefaultOpener(name, openWithDefaults[extensionKey])
+    : null;
+  const canChangeReadOnly =
+    node.type === "file"
+      ? !node.protected
+      : (node.children ?? []).some(
+          (child) => child.type === "file" && !child.protected,
+        );
 
   return (
     <Layout>
@@ -220,17 +270,15 @@ export function Properties({ windowId }: { windowId: string }) {
                 <Key>Type:</Key>
                 <Val>{type}</Val>
               </Field>
-              {node.type === "file" && (
+              {opener && (
                 <Field>
                   <Key>Opens with:</Key>
-                  <Val>
-                    {node.appId
-                      ? "RSNRA.ART Application"
-                      : extOf(name) === "TXT" || extOf(name) === "LOG"
-                        ? "Notepad"
-                        : ["BMP", "PNG", "JPG"].includes(extOf(name))
-                          ? "Paint"
-                          : "Unknown"}
+                  <Val style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Icon src={opener.icon} size={16} isInReact95 />
+                    <span style={{ flex: 1 }}>{opener.label}</span>
+                    <Button onClick={() => setShowOpenWith(true)}>
+                      Change...
+                    </Button>
                   </Val>
                 </Field>
               )}
@@ -282,13 +330,23 @@ export function Properties({ windowId }: { windowId: string }) {
             <GroupBox style={{ zoom: 0.8 }} label="Attributes">
               <AttrRow style={{ zoom: 0.8 }}>
                 <Checkbox
-                  label="Read-only"
-                  checked={readonly}
-                  disabled={!!node.protected}
+                  label={
+                    node.type === "dir"
+                      ? "Read-only (Only applies to files in folder)"
+                      : "Read-only"
+                  }
+                  checked={readOnlyState.checked}
+                  indeterminate={readOnlyState.indeterminate}
+                  disabled={!canChangeReadOnly}
                   onChange={() => {
-                    const v = !readonly;
-                    setReadonly(v);
-                    vfs.setAttributes(path, { readonly: v });
+                    const v = !readOnlyState.checked;
+                    const changed =
+                      node.type === "dir"
+                        ? vfs.setFolderFilesReadOnly(path, v)
+                        : vfs.setAttributes(path, { readonly: v });
+                    if (changed) {
+                      setReadOnlyState({ checked: v, indeterminate: false });
+                    }
                   }}
                 />
                 <Checkbox
@@ -301,26 +359,30 @@ export function Properties({ windowId }: { windowId: string }) {
                     vfs.setAttributes(path, { hidden: v });
                   }}
                 />
-                <Checkbox
-                  label="Archive"
-                  checked={archive}
-                  disabled={!!node.protected}
-                  onChange={() => {
-                    const v = !archive;
-                    setArchive(v);
-                    vfs.setAttributes(path, { archive: v });
-                  }}
-                />
-                <Checkbox
-                  label="System"
-                  checked={system}
-                  disabled={!!node.protected}
-                  onChange={() => {
-                    const v = !system;
-                    setSystem(v);
-                    vfs.setAttributes(path, { system: v });
-                  }}
-                />
+                {node.type === "file" && (
+                  <>
+                    <Checkbox
+                      label="Archive"
+                      checked={archive}
+                      disabled={!!node.protected}
+                      onChange={() => {
+                        const v = !archive;
+                        setArchive(v);
+                        vfs.setAttributes(path, { archive: v });
+                      }}
+                    />
+                    <Checkbox
+                      label="System"
+                      checked={system}
+                      disabled={!!node.protected}
+                      onChange={() => {
+                        const v = !system;
+                        setSystem(v);
+                        vfs.setAttributes(path, { system: v });
+                      }}
+                    />
+                  </>
+                )}
               </AttrRow>
             </GroupBox>
           </>
@@ -349,6 +411,14 @@ export function Properties({ windowId }: { windowId: string }) {
           </Button>
         </BtnRow>
       </Body>
+      {showOpenWith && (
+        <OpenWithDialog
+          fileName={name}
+          filePath={path}
+          associateOnly
+          onClose={() => setShowOpenWith(false)}
+        />
+      )}
     </Layout>
   );
 }

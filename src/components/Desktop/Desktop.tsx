@@ -14,7 +14,11 @@ import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useSaverRunStore } from "../../store/saverRunStore";
-import { useVfsStore, type VfsNode } from "../../store/vfsStore";
+import {
+  isReadOnlyFile,
+  useVfsStore,
+  type VfsNode,
+} from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 import type { AppId } from "../../types/window";
 import { ContextMenu, CtxDivider, CtxItem } from "../ContextMenu";
@@ -714,7 +718,7 @@ export function Desktop() {
                   Open With...
                 </CtxItem>
               )}
-              {!node.protected && !node.readonly && (
+              {!node.protected && !isReadOnlyFile(node) && (
                 <>
                   <CtxDivider />
                   <CtxItem

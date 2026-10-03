@@ -37,6 +37,13 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
       openApp("paint", { title: `${name} - Paint`, data: { path } }),
   },
   {
+    appId: "winamp",
+    label: "Winamp",
+    icon: "/icons/winamp.exe/000.ico",
+    extensions: ["wav", "mp3", "mid", "midi", "rmi", "ogg"],
+    open: (path) => void openVfsAudio(path),
+  },
+  {
     appId: "sound-recorder",
     label: "Sound Recorder",
     icon: "/icons/sndrec32.exe/000.ico",
@@ -46,13 +53,6 @@ export const OPEN_WITH_CATALOG: OpenWithApp[] = [
         title: `${name} - Sound Recorder`,
         data: { path },
       }),
-  },
-  {
-    appId: "winamp",
-    label: "Winamp",
-    icon: "/icons/winamp.exe/000.ico",
-    extensions: ["wav", "mp3", "mid", "midi", "rmi", "ogg"],
-    open: (path) => void openVfsAudio(path),
   },
 ];
 
@@ -78,4 +78,16 @@ export function getPreferredApp(name: string): OpenWithApp | null {
   const preferred = useFilePrefsStore.getState().openWithDefaults[ext];
   if (!preferred) return null;
   return candidatesFor(name).find((a) => a.appId === preferred) ?? null;
+}
+
+/** Current opener for Properties and Folder Options, including system defaults. */
+export function getDefaultOpener(
+  name: string,
+  preferredAppId = useFilePrefsStore.getState().openWithDefaults[extOf(name)],
+): OpenWithApp {
+  const candidates = candidatesFor(name);
+  return (
+    (preferredAppId && candidates.find((app) => app.appId === preferredAppId)) ??
+    candidates[0]!
+  );
 }

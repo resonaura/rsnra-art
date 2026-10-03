@@ -14,7 +14,9 @@ import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { openVfsAudio, openWebamp } from "../../lib/webamp";
 import { R95_SCALE } from "../../react95.conf";
+import { screenSaverByFile } from "../../screensavers";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
+import { useSaverRunStore } from "../../store/saverRunStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
@@ -157,6 +159,13 @@ function describeSize(node: VfsNode): string {
 
 function openHit(hit: Hit): void {
   const n = hit.node;
+  if (n.type === "file" && n.name.toLowerCase().endsWith(".scr")) {
+    const saver = screenSaverByFile(n.name);
+    if (saver) {
+      useSaverRunStore.getState().run(saver.id);
+      return;
+    }
+  }
   if (n.type === "file") {
     const preferred = getPreferredApp(n.name);
     if (preferred) {

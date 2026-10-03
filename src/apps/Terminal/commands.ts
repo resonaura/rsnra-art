@@ -16,7 +16,12 @@ import {
   USER_DOCUMENTS_PATH,
   USER_PROFILE_PATH,
 } from "../../lib/windowsPaths";
-import { useVfsStore, type VfsNode, type VfsState } from "../../store/vfsStore";
+import {
+  isReadOnlyFile,
+  useVfsStore,
+  type VfsNode,
+  type VfsState,
+} from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -498,7 +503,7 @@ function cmdRmdir(
       const pathsToRemove: string[] = [];
       let blockedPath: string | null = null;
       const collectPostOrder = (current: VfsNode, currentPath: string) => {
-        if (current.protected || current.readonly) {
+        if (current.protected || isReadOnlyFile(current)) {
           blockedPath = currentPath;
           return;
         }
