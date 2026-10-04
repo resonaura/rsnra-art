@@ -1010,6 +1010,57 @@ function cmdMove(
     ctx.setErrorLevel(1);
     return;
   }
+
+  if (/[*?]/.test(src)) {
+    const lastSep = Math.max(src.lastIndexOf("\\"), src.lastIndexOf("/"));
+    const sourceDirArg = lastSep >= 0
+      ? src.slice(0, lastSep + 1)
+      : ctx.vfs.cwd;
+    const pattern = lastSep >= 0 ? src.slice(lastSep + 1) : src;
+    const sourceDirAbs = ctx.vfs.resolvePath(sourceDirArg);
+    const sourceDir = sourceDirAbs ? ctx.vfs.resolve(sourceDirAbs) : null;
+    if (!sourceDirAbs || sourceDir?.type !== "dir") {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const sources = expandWildcards(pattern, sourceDir.children ?? []).filter(
+      (node) => node.type === "file",
+    );
+    if (!sources.length) {
+      ctx.print(["The system cannot find the file specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const destinationAbs = ctx.vfs.resolvePath(dst);
+    const destination = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
+    if (destination?.type !== "dir") {
+      ctx.print(["The destination must be a directory for multiple files."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+
+    let moved = 0;
+    let failed = false;
+    ctx.vfs.transaction("Move files", () => {
+      for (const source of sources) {
+        const sourcePath = `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`;
+        if (ctx.vfs.move(sourcePath, dst)) {
+          moved++;
+        } else {
+          failed = true;
+          ctx.print(
+            [`The system cannot move ${sourcePath}; the file exists or is protected.`],
+            "error",
+          );
+        }
+      }
+    });
+    if (moved) ctx.print([`        ${moved} file(s) moved.`]);
+    if (failed) ctx.setErrorLevel(1);
+    return;
+  }
+
   const dstAbs = ctx.vfs.resolvePath(dst);
   const dstNode = dstAbs ? ctx.vfs.resolve(dstAbs) : null;
   if (dstNode && dstNode.type === "dir") {

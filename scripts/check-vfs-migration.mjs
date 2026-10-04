@@ -301,6 +301,28 @@ assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
 assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
 
+const moveTarget = `${commandFixture}\\MoveTarget`;
+assert.equal(state.mkdir(moveTarget), true);
+assert.equal(state.writeFile(`${commandFixture}\\move-one.dat`, "one"), true);
+assert.equal(state.writeFile(`${commandFixture}\\move-two.dat`, "two"), true);
+const wildcardMove = await runTerminalCommand(
+  `move "${commandFixture}\\move-*.dat" "${moveTarget}"`,
+);
+assert.equal(wildcardMove.errorLevel, 0);
+assert.equal(wildcardMove.text, "        2 file(s) moved.");
+assert.equal(state.exists(`${commandFixture}\\move-one.dat`), false);
+assert.equal(state.exists(`${commandFixture}\\move-two.dat`), false);
+assert.equal(state.read(`${moveTarget}\\move-one.dat`), "one");
+assert.equal(state.read(`${moveTarget}\\move-two.dat`), "two");
+assert.equal(useVfsStore.getState().undoDescription, "Move files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(`${commandFixture}\\move-one.dat`), true);
+assert.equal(state.exists(`${commandFixture}\\move-two.dat`), true);
+assert.equal(state.list(moveTarget).length, 0);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.read(`${moveTarget}\\move-one.dat`), "one");
+assert.equal(state.read(`${moveTarget}\\move-two.dat`), "two");
+
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
 assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\system.txt"`)).errorLevel, 1);
