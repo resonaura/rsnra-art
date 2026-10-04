@@ -133,6 +133,11 @@ assert.equal(
   state.writeFile(`${commandFixture}\\Folder\\Nested\\Deep note.txt`, "deep"),
   true,
 );
+assert.equal(state.writeFile(`${commandFixture}\\root.tmp`, "root temp"), true);
+assert.equal(
+  state.writeFile(`${commandFixture}\\Folder\\Nested\\deep.tmp`, "nested temp"),
+  true,
+);
 
 const runTerminalCommand = async (command) => {
   const output = [];
@@ -166,6 +171,7 @@ assert.deepEqual(
     "plain.txt",
     "readonly.txt",
     "README",
+    "root.tmp",
   ].sort(),
 );
 const allDir = await runTerminalCommand(`dir /b /a "${commandFixture}"`);
@@ -179,6 +185,7 @@ assert.deepEqual(
     "plain.txt",
     "readonly.txt",
     "README",
+    "root.tmp",
     "system.txt",
   ].sort(),
 );
@@ -218,6 +225,7 @@ assert.deepEqual(
     "plain.txt",
     "readonly.txt",
     "system.txt",
+    "root.tmp",
   ].sort(),
 );
 const exactFileDir = await runTerminalCommand(`dir /b "${commandFixture}\\plain.txt"`);
@@ -244,6 +252,8 @@ assert.deepEqual(
     `${commandFixture}\\plain.txt`,
     `${commandFixture}\\readonly.txt`,
     `${commandFixture}\\system.txt`,
+    `${commandFixture}\\root.tmp`,
+    `${commandFixture}\\Folder\\Nested\\deep.tmp`,
   ].sort(),
 );
 const recursiveTextFiles = await runTerminalCommand(
@@ -296,6 +306,26 @@ assert.equal((await runTerminalCommand(`del "${commandFixture}\\readonly.txt"`))
 assert.equal(state.exists(`${commandFixture}\\readonly.txt`), true);
 assert.equal((await runTerminalCommand(`del /f /a:r "${commandFixture}\\readonly.txt"`)).errorLevel, 0);
 assert.equal(state.exists(`${commandFixture}\\readonly.txt`), false);
+const recursiveDelete = await runTerminalCommand(
+  `del /s "${commandFixture}\\*.tmp"`,
+);
+assert.equal(recursiveDelete.errorLevel, 0);
+assert.deepEqual(
+  recursiveDelete.text.split("\n").sort(),
+  [
+    `Deleting ${commandFixture}\\root.tmp`,
+    `Deleting ${commandFixture}\\Folder\\Nested\\deep.tmp`,
+  ].sort(),
+);
+assert.equal(state.exists(`${commandFixture}\\root.tmp`), false);
+assert.equal(state.exists(`${commandFixture}\\Folder\\Nested\\deep.tmp`), false);
+assert.equal(useVfsStore.getState().undoDescription, "Delete files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(`${commandFixture}\\root.tmp`), true);
+assert.equal(state.exists(`${commandFixture}\\Folder\\Nested\\deep.tmp`), true);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.exists(`${commandFixture}\\root.tmp`), false);
+assert.equal(state.exists(`${commandFixture}\\Folder\\Nested\\deep.tmp`), false);
 assert.equal(state.remove(commandFixture), true);
 
 const protectedCommandPath = "C:\\WINNT\\System32\\cmd.exe";

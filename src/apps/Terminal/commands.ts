@@ -719,6 +719,7 @@ function cmdDel(
   const hasFlag = (flag: string) =>
     args.some((argument) => argument.toLowerCase() === flag.toLowerCase());
   const forceReadOnly = hasFlag("/f") || hasFlag("-f");
+  const recursive = hasFlag("/s");
   const quiet = cmdName === "rm" && hasFlag("-f");
   const attributeFlag = args.find((argument) => /^\/a(?::|[rhsad]+|$)/i.test(argument));
   const attributeSelector = attributeFlag
@@ -738,6 +739,92 @@ function cmdDel(
     ctx.setErrorLevel(1);
     return;
   }
+
+  if (recursive) {
+    const candidates = new Map<string, { path: string; node: VfsNode }>();
+    let failed = false;
+    for (const target of targets) {
+      const targetAbs = ctx.vfs.resolvePath(target);
+      const targetNode = targetAbs ? ctx.vfs.resolve(targetAbs) : null;
+      let rootPath: string;
+      let rootNode: VfsNode | null;
+      let pattern: string;
+
+      if (targetNode?.type === "dir") {
+        rootPath = targetAbs!;
+        rootNode = targetNode;
+        pattern = "*.*";
+      } else {
+        const lastSep = Math.max(target.lastIndexOf("\\"), target.lastIndexOf("/"));
+        const directoryTarget = lastSep >= 0
+          ? target.slice(0, lastSep + 1)
+          : ctx.vfs.cwd;
+        pattern = lastSep >= 0 ? target.slice(lastSep + 1) : target;
+        const resolvedRoot = ctx.vfs.resolvePath(directoryTarget);
+        rootPath = resolvedRoot ?? "";
+        rootNode = resolvedRoot ? ctx.vfs.resolve(resolvedRoot) : null;
+      }
+
+      if (!rootPath || !rootNode || rootNode.type !== "dir" || !pattern) {
+        failed = true;
+        if (!quiet) {
+          ctx.print(["The system cannot find the path specified."], "error");
+        }
+        continue;
+      }
+
+      let targetMatched = false;
+      const collect = (directoryPath: string, directory: VfsNode) => {
+        const matchingChildren = expandWildcards(pattern, directory.children ?? []);
+        for (const child of matchingChildren) {
+          if (
+            child.type !== "file" ||
+            !matchesDosAttributeSelector(child, attributeSelector)
+          )
+            continue;
+          const childPath = `${directoryPath.replace(/[\\/]+$/, "")}\\${child.name}`;
+          candidates.set(childPath.toLowerCase(), { path: childPath, node: child });
+          targetMatched = true;
+        }
+        for (const child of directory.children ?? []) {
+          if (child.type !== "dir") continue;
+          collect(
+            `${directoryPath.replace(/[\\/]+$/, "")}\\${child.name}`,
+            child,
+          );
+        }
+      };
+      collect(rootPath, rootNode);
+      if (!targetMatched) {
+        failed = true;
+        if (!quiet) ctx.print([`Could not find ${target}.`], "error");
+      }
+    }
+
+    if (candidates.size) {
+      let denied = false;
+      ctx.vfs.transaction("Delete files", () => {
+        for (const candidate of candidates.values()) {
+          if (
+            !ctx.vfs.remove(candidate.path, {
+              allowReadOnly: forceReadOnly,
+            })
+          ) {
+            denied = true;
+            if (!quiet) {
+              ctx.print([`Access is denied - ${candidate.path}.`], "error");
+            }
+          } else {
+            ctx.print([`Deleting ${candidate.path}`]);
+          }
+        }
+      });
+      if (denied) failed = true;
+    }
+    if (failed) ctx.setErrorLevel(1);
+    return;
+  }
+
   for (const t of targets) {
     // Wildcard support
     if (/[*?]/.test(t)) {
@@ -2046,8 +2133,9 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  -f  Force (no error if not found)",
   ],
   del: [
-    "DEL [/F] [/A[[:]attributes]] <file>   (ERASE)",
+    "DEL [/S] [/F] [/A[[:]attributes]] <file>   (ERASE)",
     "  Deletes a file.",
+    "  /S  Deletes matching files in the current directory and subdirectories",
     "  /F  Force deletion of read-only files",
     "  /A  Select by attributes (R/H/S/A); hidden/system files are skipped by default",
     "  Supports wildcards: del *.txt",
