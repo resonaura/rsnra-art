@@ -1399,26 +1399,103 @@ function cmdRen(
   _raw: string,
   cmdName: string,
 ) {
-  const targets = args.filter((a) => !a.startsWith("-"));
-  const [target, newName] = targets;
+  const [target, newName] = args;
   if (!target || !newName) {
     ctx.print(["The syntax of the command is incorrect."], "error");
     ctx.setErrorLevel(1);
     return;
   }
-  if (ctx.vfs.rename(target, newName)) {
-    if (cmdName === "mv") {
-      // mv is quiet on success
-    } else {
-      ctx.print([`Renamed to ${newName}.`]);
-    }
-  } else {
-    const msg =
-      cmdName === "mv"
-        ? `mv: cannot move '${target}' to '${newName}': No such file or directory`
-        : `The system cannot find the file, or the name is in use.`;
-    ctx.print([msg], "error");
+
+  // REN changes a name within its existing directory; unlike MOVE, a target
+  // containing another path is never a destination directory.
+  if (/[\\/]/.test(newName)) {
+    ctx.print(["The syntax of the command is incorrect."], "error");
     ctx.setErrorLevel(1);
+    return;
+  }
+
+  const wildcardSource = /[*?]/.test(target);
+  const candidates: Array<{ path: string; name: string }> = [];
+  if (wildcardSource) {
+    const lastSep = Math.max(target.lastIndexOf("\\"), target.lastIndexOf("/"));
+    const directoryArg = lastSep >= 0 ? target.slice(0, lastSep) : ctx.vfs.cwd;
+    const pattern = lastSep >= 0 ? target.slice(lastSep + 1) : target;
+    const directoryPath = ctx.vfs.resolvePath(directoryArg);
+    const directory = directoryPath ? ctx.vfs.resolve(directoryPath) : null;
+    if (!directoryPath || directory?.type !== "dir") {
+      ctx.print(["Duplicate file name or file not found."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    candidates.push(
+      ...expandWildcards(pattern, directory.children ?? []).map((node) => ({
+        path: `${directoryPath.replace(/[\\/]+$/, "")}\\${node.name}`,
+        name: node.name,
+      })),
+    );
+  } else {
+    const sourcePath = ctx.vfs.resolvePath(target);
+    const source = sourcePath ? ctx.vfs.resolve(sourcePath) : null;
+    if (!sourcePath || !source) {
+      ctx.print(["Duplicate file name or file not found."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    candidates.push({ path: sourcePath, name: source.name });
+  }
+
+  if (!candidates.length) {
+    ctx.print(["Duplicate file name or file not found."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  const replaceWildcards = (sourcePart: string, targetPart: string) => {
+    let result = "";
+    for (let index = 0; index < targetPart.length; index++) {
+      const character = targetPart[index];
+      if (character === "*") result += sourcePart.slice(index);
+      else if (character === "?") result += sourcePart[index] ?? "";
+      else result += character;
+    }
+    return result;
+  };
+  const destinationNameFor = (sourceName: string) => {
+    const sourceDot = sourceName.lastIndexOf(".");
+    const targetDot = newName.lastIndexOf(".");
+    const sourceBase = sourceDot > 0 ? sourceName.slice(0, sourceDot) : sourceName;
+    const sourceExtension = sourceDot > 0 ? sourceName.slice(sourceDot + 1) : "";
+    const targetBase = targetDot > 0 ? newName.slice(0, targetDot) : newName;
+    const targetExtension = targetDot > 0 ? newName.slice(targetDot + 1) : null;
+    const base = replaceWildcards(sourceBase, targetBase);
+    return targetExtension === null
+      ? base
+      : `${base}.${replaceWildcards(sourceExtension, targetExtension)}`;
+  };
+
+  let renamed = 0;
+  let failed = false;
+  ctx.vfs.transaction(wildcardSource ? "Rename files" : "Rename", () => {
+    for (const candidate of candidates) {
+      const destinationName = destinationNameFor(candidate.name);
+      if (ctx.vfs.rename(candidate.path, destinationName)) {
+        renamed++;
+      } else {
+        failed = true;
+      }
+    }
+  });
+
+  if (failed) {
+    ctx.print(["Duplicate file name or file not found."], "error");
+    ctx.setErrorLevel(1);
+  }
+  if (renamed && cmdName !== "mv") {
+    ctx.print(
+      wildcardSource
+        ? [`        ${renamed} item(s) renamed.`]
+        : [`Renamed to ${destinationNameFor(candidates[0].name)}.`],
+    );
   }
 }
 
@@ -2582,7 +2659,12 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  /Y   Overwrite existing files without asking",
     "  /-Y  Ask before overwriting (the interactive default)",
   ],
-  ren: ["REN <file> <newname>   (RENAME, MV)", "  Renames a file."],
+  ren: [
+    "REN <file-spec> <newname>   (RENAME)",
+    "  Renames files or folders in the same directory.",
+    "  Wildcards may appear in either name; destination wildcards keep",
+    "  the corresponding characters from each source name.",
+  ],
   attrib: [
     "ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [file] [/S [/D]]",
     "  Displays or changes DOS file attributes.",

@@ -151,6 +151,18 @@ assert.equal(
   true,
 );
 
+const renFixture = "C:\\REN wildcard regression";
+assert.equal(state.mkdir(renFixture), true);
+for (const [name, content] of [
+  ["alpha.txt", "alpha"],
+  ["beta.txt", "beta"],
+  ["blocked.txt", "blocked source"],
+  ["blocked.doc", "existing destination"],
+  ["img001.jpg", "image"],
+]) {
+  assert.equal(state.writeFile(`${renFixture}\\${name}`, content), true);
+}
+
 const runTerminalCommand = async (command, options = {}) => {
   const output = [];
   let errorLevel = 0;
@@ -223,6 +235,29 @@ const clearRecursiveAttrib = await runTerminalCommand(
 assert.equal(clearRecursiveAttrib.errorLevel, 0);
 assert.equal(state.resolve(`${attribFixture}\\Alpha`)?.system, false);
 assert.equal(!!state.resolve(`${attribFixture}\\root.txt`)?.hidden, false);
+
+const wildcardRename = await runTerminalCommand(
+  `ren "${renFixture}\\*.txt" "*.doc"`,
+);
+assert.equal(wildcardRename.errorLevel, 1);
+assert.equal(state.read(`${renFixture}\\alpha.doc`), "alpha");
+assert.equal(state.read(`${renFixture}\\beta.doc`), "beta");
+assert.equal(state.read(`${renFixture}\\blocked.txt`), "blocked source");
+assert.equal(state.read(`${renFixture}\\blocked.doc`), "existing destination");
+assert.equal(useVfsStore.getState().undoDescription, "Rename files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(`${renFixture}\\alpha.doc`), false);
+assert.equal(state.exists(`${renFixture}\\beta.doc`), false);
+assert.equal(state.exists(`${renFixture}\\alpha.txt`), true);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.exists(`${renFixture}\\alpha.doc`), true);
+
+const positionalRename = await runTerminalCommand(
+  `ren "${renFixture}\\img*.jpg" "photo*.jpg"`,
+);
+assert.equal(positionalRename.errorLevel, 0);
+assert.equal(state.read(`${renFixture}\\photo1.jpg`), "image");
+assert.equal(state.exists(`${renFixture}\\img001.jpg`), false);
 
 class MemoryTerminal {
   output = "";
