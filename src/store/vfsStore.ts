@@ -864,7 +864,22 @@ const file = (name: string, opts: Partial<VfsNode> = {}): VfsNode => {
 
 function defaultSendToEntries(): VfsNode[] {
   return [
+    file("3½ Floppy (A:).lnk", {
+      content: JSON.stringify({
+        type: "file",
+        target: "A:\\",
+        title: "3½ Floppy (A:)",
+        icon: "/icons/shell32.dll/102.ico",
+      }),
+      system: true,
+      protected: false,
+    }),
     file("Desktop (create shortcut).DeskLink", {
+      hidden: true,
+      system: true,
+      protected: false,
+    }),
+    file("Mail Recipient.MAPIMail", {
       hidden: true,
       system: true,
       protected: false,
@@ -2712,7 +2727,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 20,
+      version: 21,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
@@ -2817,7 +2832,7 @@ export const useVfsStore = create<VfsState>()(
             root = indexedRoot;
           }
         }
-        if (version < 20) root = addMissingSendToEntries(root);
+        if (version < 21) root = addMissingSendToEntries(root);
         return {
           root,
           cwd: canonicalizeExistingPath(

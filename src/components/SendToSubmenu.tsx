@@ -20,7 +20,11 @@ export function SendToSubmenu({
   onComplete: () => void;
 }) {
   const folder = useVfsStore((state) => state.resolve(USER_SEND_TO_PATH));
-  const entries = (folder?.children ?? EMPTY).filter(isSendToMenuEntry);
+  const entries = (folder?.children ?? EMPTY)
+    .filter(isSendToMenuEntry)
+    .sort((left, right) =>
+      sendToMenuLabel(left).localeCompare(sendToMenuLabel(right)),
+    );
 
   return (
     <CtxSubmenu label="Send To">
@@ -35,9 +39,10 @@ export function SendToSubmenu({
               if (result.failed) {
                 void alertError(
                   "Send To",
-                  result.succeeded
-                    ? `Windows could not send ${result.failed} item(s).`
-                    : "Windows could not send the selected item(s).",
+                result.succeeded
+                  ? `Windows could not send ${result.failed} item(s).`
+                    : result.message ??
+                      "Windows could not send the selected item(s).",
                 );
               }
             }}

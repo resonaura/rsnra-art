@@ -70,6 +70,7 @@ const EXT_ICONS: Readonly<Record<string, string>> = {
   // Shortcuts
   lnk: "/icons/shell32.dll/109.ico",
   desklink: "/icons/shell32.dll/109.ico",
+  mapimail: "/icons/w98_outlook_express.ico",
   // Archives
   zip: "/icons/zipfldr.dll/000.ico",
   cab: "/icons/zipfldr.dll/000.ico",
@@ -111,6 +112,7 @@ const EXT_TYPE_LABELS: Readonly<Record<string, string>> = {
   ani: "Animated Cursor",
   lnk: "Shortcut",
   desklink: "Desktop Shortcut",
+  mapimail: "Mail Recipient",
   zip: "Compressed (zipped) Folder",
   cab: "Cabinet File",
   doc: "WordPad Document",

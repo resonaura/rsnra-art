@@ -11,13 +11,16 @@ export interface SendToSource {
 }
 
 interface SendToAction {
-  kind: "desktop-shortcut" | "folder" | "app";
+  kind: "desktop-shortcut" | "folder" | "app" | "floppy" | "mail";
   path?: string;
   appId?: AppId;
 }
 
 function sendToAction(entry: VfsNode): SendToAction | null {
   const name = entry.name.toLowerCase();
+  if (entry.type === "file" && name.endsWith(".mapimail")) {
+    return { kind: "mail" };
+  }
   if (entry.type === "file" && name.endsWith(".desklink")) {
     return { kind: "desktop-shortcut" };
   }
@@ -31,6 +34,13 @@ function sendToAction(entry: VfsNode): SendToAction | null {
   if (entry.name.toLowerCase().endsWith(".lnk")) {
     const shortcut = parseVfsShortcut(entry);
     if (!shortcut) return null;
+
+    if (
+      shortcut.type === "file" &&
+      /^a:\\$/i.test(shortcut.target.replace(/\//g, "\\"))
+    ) {
+      return { kind: "floppy" };
+    }
 
     if (
       shortcut.type === "app" &&
@@ -77,16 +87,36 @@ export function sendToMenuLabel(entry: VfsNode): string {
   if (entry.name.toLowerCase().endsWith(".lnk")) {
     return entry.name.replace(/\.lnk$/i, "");
   }
+  if (entry.name.toLowerCase().endsWith(".mapimail")) {
+    return entry.name.replace(/\.mapimail$/i, "");
+  }
   return entry.name;
 }
 
 export function dispatchSendToEntry(
   entry: VfsNode,
   sources: SendToSource[],
-): { succeeded: number; failed: number } {
+): { succeeded: number; failed: number; message?: string } {
   if (!sources.length) return { succeeded: 0, failed: 0 };
   const action = sendToAction(entry);
   if (!action) return { succeeded: 0, failed: sources.length };
+
+  if (action.kind === "floppy") {
+    return {
+      succeeded: 0,
+      failed: sources.length,
+      message: "There is no disk in drive A:. Insert a disk, then try again.",
+    };
+  }
+
+  if (action.kind === "mail") {
+    return {
+      succeeded: 0,
+      failed: sources.length,
+      message:
+        "No default e-mail program is installed to receive these files.",
+    };
+  }
 
   const vfs = useVfsStore.getState();
   let succeeded = 0;
