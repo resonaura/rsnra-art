@@ -40,6 +40,57 @@ assert.equal(state.moveTo(USER_PROFILE_PATH, USER_DOCUMENTS_PATH), null);
 assert.ok(state.resolve(protectedProfileFile));
 assert.equal(useVfsStore.getState().recycled.length, 0);
 
+// Explorer copies create new file objects but preserve each file's FAT
+// last-write timestamp. Directories get timestamps for the copied tree.
+const originalDateNow = Date.now;
+let copyClock = Date.UTC(2001, 0, 2, 3, 4, 5, 670);
+Date.now = () => copyClock;
+const copyFixturePath = `${USER_DOCUMENTS_PATH}\\Copy Metadata Fixture`;
+const copySourcePath = `${copyFixturePath}\\Source.txt`;
+try {
+  assert.equal(state.mkdir(copyFixturePath), true);
+  assert.equal(state.writeFile(copySourcePath, "copy timestamp fixture"), true);
+  const sourceFolder = state.resolve(copyFixturePath);
+  const sourceFile = state.resolve(copySourcePath);
+  assert.ok(sourceFolder && sourceFile);
+
+  copyClock += 60_000;
+  const copiedFolderName = state.copyTo(copyFixturePath, USER_DOCUMENTS_PATH);
+  assert.ok(copiedFolderName);
+  const copiedFolderPath = `${USER_DOCUMENTS_PATH}\\${copiedFolderName}`;
+  const copiedFilePath = `${copiedFolderPath}\\Source.txt`;
+  const copiedFolder = state.resolve(copiedFolderPath);
+  const copiedFile = state.resolve(copiedFilePath);
+  assert.ok(copiedFolder && copiedFile);
+  assert.notEqual(copiedFolder.created, sourceFolder.created);
+  assert.notEqual(copiedFolder.modified, sourceFolder.modified);
+  assert.notEqual(copiedFile.created, sourceFile.created);
+  assert.equal(copiedFile.modified, sourceFile.modified);
+
+  const explicitCopyPath = `${USER_DOCUMENTS_PATH}\\Explicit Copy.txt`;
+  assert.equal(state.copyAs(copySourcePath, explicitCopyPath), true);
+  assert.equal(
+    state.resolve(explicitCopyPath)?.modified,
+    sourceFile.modified,
+  );
+  const automaticCopyName = state.copyTo(copySourcePath, USER_DOCUMENTS_PATH);
+  assert.ok(automaticCopyName);
+  assert.equal(
+    state.resolve(`${USER_DOCUMENTS_PATH}\\${automaticCopyName}`)?.modified,
+    sourceFile.modified,
+  );
+
+  assert.equal(state.remove(copiedFolderPath), true);
+  assert.equal(state.remove(explicitCopyPath), true);
+  assert.equal(
+    state.remove(`${USER_DOCUMENTS_PATH}\\${automaticCopyName}`),
+    true,
+  );
+  assert.equal(state.remove(copyFixturePath), true);
+} finally {
+  Date.now = originalDateNow;
+}
+
 const temporaryPath = `${USER_DOCUMENTS_PATH}\\migration-check-v19.txt`;
 
 assert.equal(state.writeFile(temporaryPath, "preserve me across migration"), true);
@@ -133,7 +184,7 @@ for (const version of [19, 20]) {
   assert.match(dispatchSendToEntry(mail, [source]).message, /e-mail program/i);
 }
 
-console.log("VFS v19/v20 → v21 migration preserves populated Recycle Bin data and SendTo defaults.");
+console.log("VFS safety, copy timestamps, and v19/v20 → v21 migration checks passed.");
 process.exit(0);
 
 function findNode(root, path) {

@@ -652,6 +652,10 @@ function cloneNode(node: VfsNode): VfsNode {
       // not a DOS attribute. A user copy of an OS file must remain editable.
       protected: false,
       ...timestamps,
+      // Explorer creates a new file on copy but keeps the source file's
+      // last-write time; directory timestamps, by contrast, describe the
+      // newly-created destination tree.
+      modified: fatWriteTime(node.modified ?? timestamps.modified),
     };
   }
   return {
