@@ -12,6 +12,7 @@ import {
 import { FileIcon } from "../../components/FileIcon/FileIcon";
 import { Icon } from "../../components/Icon/Icon";
 import { OpenWithDialog } from "../../components/OpenWithDialog/OpenWithDialog";
+import { SendToSubmenu } from "../../components/SendToSubmenu";
 import { ScrollArea } from "../../components/ScrollArea";
 import { openApp } from "../../data/apps";
 import { displayName, iconForNode } from "../../data/fileIcons";
@@ -32,15 +33,8 @@ import {
   showMissingFileAlert,
 } from "../../lib/systemDialogs";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
-import {
-  ALL_USERS_START_MENU_PATH,
-  USER_DESKTOP_PATH,
-} from "../../lib/windowsPaths";
-import {
-  createFileShortcut,
-  openVfsNode,
-  parseVfsShortcut,
-} from "../../lib/openVfsNode";
+import { ALL_USERS_START_MENU_PATH } from "../../lib/windowsPaths";
+import { openVfsNode, parseVfsShortcut } from "../../lib/openVfsNode";
 import { R95_SCALE, R95_SCALE_COMPENSATION } from "../../react95.conf";
 import { useClipboardStore } from "../../store/clipboardStore";
 import type { FolderViewMode } from "../../store/filePrefsStore";
@@ -1210,28 +1204,6 @@ export function MyComputer({ windowId }: { windowId: string }) {
     action();
   };
 
-  const sendToDesktop = (nodes: VfsNode[]) => {
-    if (!nodes.length) return;
-    let failed = 0;
-    vfs.transaction("Create desktop shortcuts", () => {
-      for (const node of nodes) {
-        const sourcePath = vfs.resolvePath(node.name, path);
-        if (!sourcePath) {
-          failed++;
-          continue;
-        }
-        const icon = parseVfsShortcut(node)?.icon ?? iconForNode(node);
-        if (!createFileShortcut(sourcePath, USER_DESKTOP_PATH, icon)) failed++;
-      }
-    });
-    if (failed) {
-      void alertError(
-        "Create Shortcut",
-        "Windows could not create one or more shortcuts on the Desktop.",
-      );
-    }
-  };
-
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedNodes = sorted.filter((node) => selectedSet.has(node.name));
   const selectedNode = selectedNodes.at(-1) ?? null;
@@ -1247,6 +1219,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
       ? selectedNodes
       : [ctx.node]
     : [];
+  const contextSendToSources = contextNodes.flatMap((node) => {
+    const sourcePath = vfs.resolvePath(node.name, path);
+    return sourcePath
+      ? [
+          {
+            node,
+            path: sourcePath,
+            icon: parseVfsShortcut(node)?.icon ?? iconForNode(node),
+          },
+        ]
+      : [];
+  });
 
   // Explorer keyboard shortcuts. Only active while this window is focused,
   // so they never collide with Notepad, Terminal, etc.
@@ -1929,15 +1913,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
               >
                 Add to Quick Launch
               </CtxItem>
-              <CtxSubmenu label="Send To">
-                <CtxItem
-                  onClick={() =>
-                    runCtx(() => sendToDesktop(contextNodes))
-                  }
-                >
-                  Desktop (create shortcut)
-                </CtxItem>
-              </CtxSubmenu>
+              <SendToSubmenu
+                sources={contextSendToSources}
+                onComplete={closeCtx}
+              />
               <CtxDivider />
               <CtxItem
                 $disabled={

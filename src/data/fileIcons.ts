@@ -69,6 +69,7 @@ const EXT_ICONS: Readonly<Record<string, string>> = {
   ani: "/icons/mouse.cpl/000.ico",
   // Shortcuts
   lnk: "/icons/shell32.dll/109.ico",
+  desklink: "/icons/shell32.dll/109.ico",
   // Archives
   zip: "/icons/zipfldr.dll/000.ico",
   cab: "/icons/zipfldr.dll/000.ico",
@@ -109,6 +110,7 @@ const EXT_TYPE_LABELS: Readonly<Record<string, string>> = {
   cur: "Cursor",
   ani: "Animated Cursor",
   lnk: "Shortcut",
+  desklink: "Desktop Shortcut",
   zip: "Compressed (zipped) Folder",
   cab: "Cabinet File",
   doc: "WordPad Document",

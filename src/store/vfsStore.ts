@@ -18,6 +18,7 @@ import {
   USER_DOCUMENTS_PATH,
   USER_RECENT_PATH,
   USER_PICTURES_PATH,
+  USER_SEND_TO_PATH,
   canonicalizeLegacyPath,
 } from "../lib/windowsPaths";
 import { SCREENSAVERS } from "../screensavers";
@@ -860,6 +861,38 @@ const file = (name: string, opts: Partial<VfsNode> = {}): VfsNode => {
   node.protected = opts.protected ?? !!opts.system;
   return node;
 };
+
+function defaultSendToEntries(): VfsNode[] {
+  return [
+    file("Desktop (create shortcut).DeskLink", {
+      hidden: true,
+      system: true,
+      protected: false,
+    }),
+    file("My Documents.lnk", {
+      content: JSON.stringify({
+        type: "file",
+        target: USER_DOCUMENTS_PATH,
+        title: "My Documents",
+        icon: "/icons/shell32.dll/003.ico",
+      }),
+      system: true,
+      protected: false,
+    }),
+  ];
+}
+
+function addMissingSendToEntries(root: VfsNode): VfsNode {
+  let nextRoot = root;
+  const folder = findNode(nextRoot, USER_SEND_TO_PATH);
+  if (!folder || folder.type !== "dir") return nextRoot;
+
+  for (const entry of defaultSendToEntries()) {
+    if (findNode(nextRoot, `${USER_SEND_TO_PATH}\\${entry.name}`)) continue;
+    nextRoot = insertNode(nextRoot, USER_SEND_TO_PATH, entry) ?? nextRoot;
+  }
+  return nextRoot;
+}
 const exe = (name: string, appId: string): VfsNode => ({
   name,
   type: "file",
@@ -1082,7 +1115,7 @@ function buildInitialTree(): VfsNode {
       dir("Favorites", [], true),
       dir("History", [], true),
       dir("Recent", [], true),
-      dir("SendTo", [], true),
+      dir("SendTo", defaultSendToEntries(), true),
       dir("Spool", [dir("Printers", [], true)], true),
       dir("Profiles", [dir("Default User", [], true)], true),
       dir(
@@ -2679,7 +2712,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 19,
+      version: 20,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,
@@ -2729,6 +2762,11 @@ export const useVfsStore = create<VfsState>()(
             }
             root = indexedRoot;
           }
+        } else if (version >= 19) {
+          // v19 stores RecycledItem metadata alongside the files already
+          // moved into C:\\Recycled. Preserve both as-is; treating these as
+          // the older detached-node format would discard valid bin entries.
+          recycled.push(...(persistedRecycleItems as RecycledItem[]));
         } else {
           for (const [index, legacyItem] of persistedRecycleItems.entries()) {
             const oldItem = legacyItem as LegacyRecycledItem;
@@ -2779,6 +2817,7 @@ export const useVfsStore = create<VfsState>()(
             root = indexedRoot;
           }
         }
+        if (version < 20) root = addMissingSendToEntries(root);
         return {
           root,
           cwd: canonicalizeExistingPath(

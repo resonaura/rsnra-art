@@ -6,7 +6,6 @@ import { getPreferredApp } from "../../data/fileOpen";
 import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
 import {
-  createFileShortcut,
   openVfsNode,
   parseVfsShortcut,
 } from "../../lib/openVfsNode";
@@ -18,7 +17,7 @@ import {
   recycleBinPayloadSizes,
   willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
-import { alertError, confirmDialog } from "../../lib/systemDialogs";
+import { confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
@@ -34,9 +33,9 @@ import {
   ContextMenu,
   CtxDivider,
   CtxItem,
-  CtxSubmenu,
 } from "../ContextMenu";
 import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
+import { SendToSubmenu } from "../SendToSubmenu";
 import { DesktopContextMenu } from "./DesktopContextMenu";
 import { DesktopIcon } from "./DesktopIcon";
 
@@ -654,32 +653,10 @@ export function Desktop() {
               >
                 Add to Quick Launch
               </CtxItem>
-              <CtxSubmenu label="Send To">
-                <CtxItem
-                  onClick={() => {
-                    let shortcutPath: string | null = null;
-                    useVfsStore.getState().transaction(
-                      "Create desktop shortcut",
-                      () => {
-                        shortcutPath = createFileShortcut(
-                          abs,
-                          DESKTOP_PATH,
-                          targetIcon,
-                        );
-                      },
-                    );
-                    if (!shortcutPath) {
-                      void alertError(
-                        "Create Shortcut",
-                        "Windows could not create a shortcut on the Desktop.",
-                      );
-                    }
-                    setIconCtx(null);
-                  }}
-                >
-                  Desktop (create shortcut)
-                </CtxItem>
-              </CtxSubmenu>
+              <SendToSubmenu
+                sources={[{ node, path: abs, icon: targetIcon }]}
+                onComplete={() => setIconCtx(null)}
+              />
               {!isLnk && node.type === "file" && (
                 <CtxItem
                   onClick={() => {

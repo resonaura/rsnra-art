@@ -170,6 +170,10 @@ export function openVfsNode(
     }
   }
 
+  // Windows' Send To folder uses a .DeskLink marker as an Explorer action,
+  // not as a document to be opened by the normal file association fallback.
+  if (extension === "desklink") return;
+
   if (extension === "lnk") {
     const shortcut = parseVfsShortcut(node);
     if (shortcut) openShortcut(node, shortcut, options);
