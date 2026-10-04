@@ -61,13 +61,18 @@ function matchWildcard(pattern: string, name: string): boolean {
 
 /** Expand wildcards against a directory's children. */
 function expandWildcards(pattern: string, entries: VfsNode[]): VfsNode[] {
-  // If no wildcard chars, just do a case-insensitive name match.
-  if (!/[*?]/.test(pattern)) {
-    return entries.filter(
-      (e) => e.name.toLowerCase() === pattern.toLowerCase(),
-    );
-  }
-  return entries.filter((e) => matchWildcard(pattern, e.name));
+  const hasWildcard = /[*?]/.test(pattern);
+  const matchesName = (name: string | undefined) => {
+    if (!name) return false;
+    // In DOS file specifications, *.* also matches names with no extension.
+    if (pattern === "*.*") return true;
+    return hasWildcard
+      ? matchWildcard(pattern, name)
+      : name.toLowerCase() === pattern.toLowerCase();
+  };
+  return entries.filter(
+    (entry) => matchesName(entry.name) || matchesName(entry.shortName),
+  );
 }
 
 interface Redirection {
@@ -184,19 +189,45 @@ function cmdDir(args: string[], ctx: CmdContext) {
   const flags = args.filter((a) => a.startsWith("/"));
   const nonFlag = args.filter((a) => !a.startsWith("/"));
   const target = nonFlag[0] || ctx.vfs.cwd;
-  const abs = ctx.vfs.resolvePath(target);
-  const node = abs ? ctx.vfs.resolve(abs) : null;
-  if (!abs || !node) {
+  const targetAbs = ctx.vfs.resolvePath(target);
+  const targetNode = targetAbs ? ctx.vfs.resolve(targetAbs) : null;
+  const hasWildcard = /[*?]/.test(target);
+  let abs: string | null = null;
+  let node: VfsNode | null = null;
+  let filePattern: string | null = null;
+
+  if (targetNode?.type === "dir" && !hasWildcard) {
+    abs = targetAbs;
+    node = targetNode;
+  } else {
+    const lastSep = Math.max(target.lastIndexOf("\\"), target.lastIndexOf("/"));
+    const trailingSeparator = /[\\/]$/.test(target);
+    if (trailingSeparator) {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    filePattern = lastSep >= 0 ? target.slice(lastSep + 1) : target;
+    const directoryTarget = lastSep >= 0
+      ? target.slice(0, lastSep + 1)
+      : ctx.vfs.cwd;
+    abs = ctx.vfs.resolvePath(directoryTarget);
+    node = abs ? ctx.vfs.resolve(abs) : null;
+    if (!abs || !node || node.type !== "dir") {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+  }
+
+  if (!abs || !node || node.type !== "dir") {
     ctx.print(["The system cannot find the path specified."], "error");
     ctx.setErrorLevel(1);
     return;
   }
-  if (node.type !== "dir") {
-    ctx.print(["Not a directory."], "error");
-    ctx.setErrorLevel(1);
-    return;
-  }
+
   let entries = node.children ?? [];
+  if (filePattern !== null) entries = expandWildcards(filePattern, entries);
   const attributeFlag = flags.find((flag) => /^\/a(?::|[rhsad]+|$)/i.test(flag));
   const attributeSelector = attributeFlag
     ? parseDosAttributeSelector(attributeFlag)
@@ -209,6 +240,11 @@ function cmdDir(args: string[], ctx: CmdContext) {
   entries = entries.filter((entry) =>
     matchesDosAttributeSelector(entry, attributeSelector),
   );
+  if (filePattern !== null && !entries.length) {
+    ctx.print(["File Not Found"], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
   const bare = flags.some((f) => /^\/b/i.test(f));
   const wide = flags.some((f) => /^\/w/i.test(f));
   const showShortNames = flags.some((f) => /^\/x$/i.test(f));
@@ -1863,7 +1899,7 @@ const REGISTRY: Record<string, CmdHandler> = {
 
 const HELP_TOPICS: Record<string, string[]> = {
   dir: [
-    "DIR [path] [/B] [/W] [/A[[:]attributes]] [/X]",
+    "DIR [drive:][path][filename] [/B] [/W] [/A[[:]attributes]] [/X]",
     "  /X  Show short 8.3 names next to long file names.",
     "  Lists directory contents.",
     "  /B  Bare format (names only)",

@@ -103,6 +103,8 @@ for (const name of [
   "hidden-system.txt",
   "system.txt",
   "readonly.txt",
+  "README",
+  "Long regression filename.txt",
 ]) {
   assert.equal(state.writeFile(`${commandFixture}\\${name}`, name), true);
 }
@@ -153,7 +155,13 @@ const runTerminalCommand = async (command) => {
 const defaultDir = await runTerminalCommand(`dir /b "${commandFixture}"`);
 assert.deepEqual(
   defaultDir.text.split("\n").sort(),
-  ["Folder", "plain.txt", "readonly.txt"].sort(),
+  [
+    "Folder",
+    "Long regression filename.txt",
+    "plain.txt",
+    "readonly.txt",
+    "README",
+  ].sort(),
 );
 const allDir = await runTerminalCommand(`dir /b /a "${commandFixture}"`);
 assert.deepEqual(
@@ -162,8 +170,10 @@ assert.deepEqual(
     "Folder",
     "hidden-system.txt",
     "hidden.txt",
+    "Long regression filename.txt",
     "plain.txt",
     "readonly.txt",
+    "README",
     "system.txt",
   ].sort(),
 );
@@ -172,8 +182,49 @@ assert.deepEqual(
   hiddenDir.text.split("\n").sort(),
   ["hidden.txt", "hidden-system.txt"].sort(),
 );
+const hiddenFileWithoutAttributes = await runTerminalCommand(
+  `dir /b "${commandFixture}\\hidden.txt"`,
+);
+assert.equal(hiddenFileWithoutAttributes.text, "File Not Found");
+const hiddenFileWithAttributes = await runTerminalCommand(
+  `dir /b /a:h "${commandFixture}\\hidden.txt"`,
+);
+assert.equal(hiddenFileWithAttributes.text, "hidden.txt");
 const foldersDir = await runTerminalCommand(`dir /b /a:d "${commandFixture}"`);
 assert.equal(foldersDir.text, "Folder");
+const textFilesDir = await runTerminalCommand(`dir /b "${commandFixture}\\*.txt"`);
+assert.deepEqual(
+  textFilesDir.text.split("\n").sort(),
+  ["Long regression filename.txt", "plain.txt", "readonly.txt"].sort(),
+);
+const filteredTextFilesDir = await runTerminalCommand(
+  `dir /b /a:h-s "${commandFixture}\\*.txt"`,
+);
+assert.equal(filteredTextFilesDir.text, "hidden.txt");
+const everyNameDir = await runTerminalCommand(`dir /b /a "${commandFixture}\\*.*"`);
+assert.deepEqual(
+  everyNameDir.text.split("\n").sort(),
+  [
+    "Folder",
+    "Long regression filename.txt",
+    "README",
+    "hidden-system.txt",
+    "hidden.txt",
+    "plain.txt",
+    "readonly.txt",
+    "system.txt",
+  ].sort(),
+);
+const exactFileDir = await runTerminalCommand(`dir /b "${commandFixture}\\plain.txt"`);
+assert.equal(exactFileDir.text, "plain.txt");
+const missingFileDir = await runTerminalCommand(`dir /b "${commandFixture}\\missing.bin"`);
+assert.equal(missingFileDir.errorLevel, 1);
+assert.equal(missingFileDir.text, "File Not Found");
+const longFilePath = `${commandFixture}\\Long regression filename.txt`;
+const longFileAlias = state.getShortName(longFilePath);
+assert.ok(longFileAlias && longFileAlias !== "Long regression filename.txt");
+const shortAliasDir = await runTerminalCommand(`dir /b "${commandFixture}\\${longFileAlias}"`);
+assert.equal(shortAliasDir.text, "Long regression filename.txt");
 
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
 assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);

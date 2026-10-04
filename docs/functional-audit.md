@@ -24,6 +24,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Command Prompt | `SET` started empty and PATH output diverged from the command-search folders. | Implemented: Windows 2000-style environment variables, case-insensitive variable access, and one shared System32/WINNT/Wbem path; visually checked with `set path` |
 | P2 | Command Prompt / filesystem | `MD`/`MKDIR` rejected a nested path unless every parent directory had already been created. | Fixed: Windows directory commands now create missing intermediate folders atomically as one VFS operation; Undo/Redo and invalid-name rollback are covered by memory regressions. |
 | P2 | Command Prompt / DOS attributes | `DIR` did not distinguish normal, Hidden, System, Read-only, Archive, and directory attributes; `DEL` had no attribute selector and could silently treat hidden/system entries inconsistently. | Implemented: default `DIR`/`DEL` omit Hidden and System; `/A` includes all, and attribute selectors support combinations/exclusions (`/A:H-S`). `DIR /A:D`, `DEL /A:R`, and `/F` behavior are covered through the terminal dispatcher. `DEL` keeps system ownership protection separate from the DOS System bit. |
+| P2 | Command Prompt / file specifications | `DIR *.txt` was resolved as a directory path, while `DIR file.txt` rejected an existing file as “Not a directory”; `*.*` also failed to include extensionless names. | Implemented: directory listings accept exact filenames and wildcard specifications, match long and 8.3 names, and use DOS `*.*` behavior. Terminal-dispatcher regressions cover extension filters, one-file listings, short aliases, and extensionless files. |
 | P2 | File metadata | File sizes were calculated differently in Explorer, Find, Properties, File Dialog, and the terminal; stub executable files appeared empty in some views. | Implemented; live checked for application size |
 | P2 | Windows paths | Drive-relative paths such as `C:..` were incorrectly treated as rooted paths on `C:\`, and the VFS accepted paths longer than classic `MAX_PATH`. | Implemented and live checked: `C:..` moved from My Documents to its parent, and `C:My Documents` returned relative to that C: directory; rooted forms remain distinct. A deterministic boundary check accepts 259 visible characters and rejects 260, counting the terminating NUL as part of the 260-character Win32 limit. |
 | P2 | Explorer Copy/Move path length | Copy and Move validated the destination directory but not the final `directory\filename`, so they could create nodes whose full paths exceeded classic `MAX_PATH`. | Fixed: derived destination paths are rejected before mutation using the caller's normalized path (so 8.3 paths are not expanded for the limit check); in-memory checks confirm both Copy and Move leave the source intact. |
@@ -146,6 +147,10 @@ not a claim that every Windows 2000 feature is implemented.
     negative attributes, and directory filtering for `DIR`; terminal-level
     regression checks cover the selectors, read-only `/F`, and the independent
     immutable-system-file safety gate.
+26. Match DOS `DIR` file specifications. **Complete:** exact files and wildcard
+    patterns list from their containing directory, wildcard matching recognizes
+    stored 8.3 aliases, and `*.*` includes extensionless entries. In-memory
+    terminal checks cover each form.
 
 ## Historical checks used
 
