@@ -186,6 +186,110 @@ function cmdHelp(args: string[], ctx: CmdContext) {
   ctx.print(buildHelpText());
 }
 
+type DirSortKey = "N" | "E" | "G" | "S" | "D";
+type DirTimeField = "C" | "A" | "W";
+
+interface DirSortCriterion {
+  key: DirSortKey;
+  reverse: boolean;
+}
+
+function parseDirSortOrder(
+  flag: string | undefined,
+): DirSortCriterion[] | null {
+  if (!flag) return [];
+  const value = flag.replace(/^\/o:?/i, "");
+  if (!value) return [];
+
+  const criteria: DirSortCriterion[] = [];
+  let reverse = false;
+  for (const character of value.toUpperCase()) {
+    if (character === "-") {
+      if (reverse) return null;
+      reverse = true;
+      continue;
+    }
+    if (!("NEGSD".includes(character))) return null;
+    criteria.push({ key: character as DirSortKey, reverse });
+    reverse = false;
+  }
+  return reverse ? null : criteria;
+}
+
+function dirSortExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1) : "";
+}
+
+function parseDirTimeField(flag: string | undefined): DirTimeField | null {
+  if (!flag) return "W";
+  const value = flag.replace(/^\/t:?/i, "").toUpperCase();
+  if (!value) return "W";
+  return value === "C" || value === "A" || value === "W" ? value : null;
+}
+
+function dirTimestamp(node: VfsNode, field: DirTimeField): number {
+  if (field === "C") return node.created;
+  if (field === "A") return node.accessed ?? node.created;
+  return node.modified ?? node.created;
+}
+
+function sortDirEntries(
+  entries: VfsNode[],
+  criteria: DirSortCriterion[],
+  timeField: DirTimeField,
+): VfsNode[] {
+  const order = criteria.length
+    ? criteria
+    : [
+        { key: "G" as const, reverse: false },
+        { key: "N" as const, reverse: false },
+      ];
+
+  return [...entries].sort((left, right) => {
+    for (const { key, reverse } of order) {
+      let result = 0;
+      switch (key) {
+        case "G":
+          result = Number(right.type === "dir") - Number(left.type === "dir");
+          break;
+        case "N":
+          result = left.name.localeCompare(right.name, undefined, {
+            sensitivity: "base",
+          });
+          break;
+        case "E": {
+          const extensionOrder = (node: VfsNode) =>
+            node.type === "dir"
+              ? 1
+              : dirSortExtension(node.name)
+                ? 2
+                : 0;
+          result = extensionOrder(left) - extensionOrder(right);
+          if (!result && left.type === "file" && right.type === "file") {
+            result = dirSortExtension(left.name).localeCompare(
+              dirSortExtension(right.name),
+              undefined,
+              { sensitivity: "base" },
+            );
+          }
+          break;
+        }
+        case "S":
+          result = fileSize(left) - fileSize(right);
+          break;
+        case "D":
+          result = dirTimestamp(left, timeField) - dirTimestamp(right, timeField);
+          break;
+      }
+      if (result) return reverse ? -result : result;
+    }
+    return left.name.localeCompare(right.name, undefined, {
+      sensitivity: "base",
+    });
+  });
+}
+
 function cmdDir(args: string[], ctx: CmdContext) {
   const flags = args.filter((a) => a.startsWith("/"));
   const nonFlag = args.filter((a) => !a.startsWith("/"));
@@ -238,6 +342,20 @@ function cmdDir(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
+  const sortFlag = flags.find((flag) => /^\/o(?=$|:|[-negsd])/i.test(flag));
+  const sortOrder = parseDirSortOrder(sortFlag);
+  if (!sortOrder) {
+    ctx.print(["Invalid sort order specification."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const timeFlag = flags.find((flag) => /^\/t(?=$|:|[acw])/i.test(flag));
+  const timeField = parseDirTimeField(timeFlag);
+  if (!timeField) {
+    ctx.print(["Invalid time field specification."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
   entries = entries.filter((entry) =>
     matchesDosAttributeSelector(entry, attributeSelector),
   );
@@ -255,7 +373,11 @@ function cmdDir(args: string[], ctx: CmdContext) {
     const folders: Array<{ path: string; node: VfsNode }> = [];
     const visit = (path: string, folder: VfsNode) => {
       folders.push({ path, node: folder });
-      for (const child of folder.children ?? []) {
+      for (const child of sortDirEntries(
+        folder.children ?? [],
+        sortOrder,
+        timeField,
+      )) {
         if (child.type !== "dir") continue;
         visit(`${path.replace(/\\+$/, "")}\\${child.name}`, child);
       }
@@ -271,13 +393,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
         children = children.filter((entry) =>
           matchesDosAttributeSelector(entry, attributeSelector),
         );
-        return {
-          path,
-          entries: children.sort((a, b) => {
-            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-            return a.name.localeCompare(b.name);
-          }),
-        };
+        return { path, entries: sortDirEntries(children, sortOrder, timeField) };
       })
       .filter((section) => filePattern === null || section.entries.length > 0);
     const allEntries = sections.flatMap((section) =>
@@ -323,7 +439,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
         }
       } else {
         for (const entry of section.entries) {
-          const stamp = dirStamp(new Date(entry.modified ?? entry.created));
+          const stamp = dirStamp(new Date(dirTimestamp(entry, timeField)));
           const shortName = showShortNames
             ? ctx.vfs.getShortName(`${section.path.replace(/\\+$/, "")}\\${entry.name}`)
             : null;
@@ -359,10 +475,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
     return;
   }
 
-  const sorted = [...entries].sort((a, b) => {
-    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  const sorted = sortDirEntries(entries, sortOrder, timeField);
 
   if (bare) {
     ctx.print(sorted.map((e) => e.name));
@@ -399,7 +512,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
   let dirCount = 0;
   let totalBytes = 0;
   for (const e of sorted) {
-    const stamp = dirStamp(new Date(e.modified ?? e.created));
+    const stamp = dirStamp(new Date(dirTimestamp(e, timeField)));
     const shortName = showShortNames
       ? ctx.vfs.getShortName(`${abs.replace(/\\+$/, "")}\\${e.name}`)
       : null;

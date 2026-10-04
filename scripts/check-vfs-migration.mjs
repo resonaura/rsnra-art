@@ -321,6 +321,136 @@ const recursiveMiss = await runTerminalCommand(
 );
 assert.equal(recursiveMiss.text, "File Not Found");
 
+const sortFixture = `${commandFixture}\\Sort fixture`;
+assert.equal(state.mkdir(sortFixture), true);
+assert.equal(state.mkdir(`${sortFixture}\\Alpha`), true);
+assert.equal(state.mkdir(`${sortFixture}\\Zulu`), true);
+assert.equal(state.writeFile(`${sortFixture}\\Alpha\\inner-a.txt`, "a"), true);
+assert.equal(state.writeFile(`${sortFixture}\\Zulu\\inner-z.txt`, "z"), true);
+assert.equal(state.writeFile(`${sortFixture}\\zeta.txt`, "123456789"), true);
+assert.equal(state.writeFile(`${sortFixture}\\alpha.bin`, "1"), true);
+assert.equal(state.writeFile(`${sortFixture}\\beta.txt`, "22"), true);
+for (const [name, timestamp] of [
+  ["Alpha", 40],
+  ["Zulu", 10],
+  ["zeta.txt", 50],
+  ["alpha.bin", 20],
+  ["beta.txt", 30],
+]) {
+  const node = state.resolve(`${sortFixture}\\${name}`);
+  assert.ok(node);
+  node.modified = timestamp;
+  node.created = timestamp;
+  node.accessed = 60 - timestamp;
+}
+const sortAll = (options) =>
+  runTerminalCommand(`dir /b /a ${options} "${sortFixture}"`);
+assert.equal(
+  (await sortAll("/o:n")).text,
+  "Alpha\nalpha.bin\nbeta.txt\nzeta.txt\nZulu",
+);
+assert.equal(
+  (await sortAll("/o")).text,
+  "Alpha\nZulu\nalpha.bin\nbeta.txt\nzeta.txt",
+);
+assert.equal(
+  (await sortAll("/o:gn")).text,
+  "Alpha\nZulu\nalpha.bin\nbeta.txt\nzeta.txt",
+);
+assert.equal(
+  (await sortAll("/oe")).text,
+  "Alpha\nZulu\nalpha.bin\nbeta.txt\nzeta.txt",
+);
+assert.equal(
+  (await sortAll("/o:s")).text,
+  "Alpha\nZulu\nalpha.bin\nbeta.txt\nzeta.txt",
+);
+assert.equal(
+  (await sortAll("/o:-s")).text,
+  "zeta.txt\nbeta.txt\nalpha.bin\nAlpha\nZulu",
+);
+assert.equal(
+  (await sortAll("/o:d")).text,
+  "Zulu\nalpha.bin\nbeta.txt\nAlpha\nzeta.txt",
+);
+assert.equal(
+  (await runTerminalCommand(
+    `dir /b /a /o:d /t:c "${sortFixture}"`,
+  )).text,
+  "Zulu\nalpha.bin\nbeta.txt\nAlpha\nzeta.txt",
+);
+assert.equal(
+  (await runTerminalCommand(
+    `dir /b /a /o:d /t:w "${sortFixture}"`,
+  )).text,
+  "Zulu\nalpha.bin\nbeta.txt\nAlpha\nzeta.txt",
+);
+assert.equal(
+  (await runTerminalCommand(
+    `dir /b /a /o:d /t:a "${sortFixture}"`,
+  )).text,
+  "zeta.txt\nAlpha\nbeta.txt\nalpha.bin\nZulu",
+);
+assert.deepEqual(
+  (
+    await runTerminalCommand(
+      `dir /b /s /a /o:d /t:a "${sortFixture}"`,
+    )
+  ).text.split("\n"),
+  [
+    `${sortFixture}\\zeta.txt`,
+    `${sortFixture}\\Alpha`,
+    `${sortFixture}\\beta.txt`,
+    `${sortFixture}\\alpha.bin`,
+    `${sortFixture}\\Zulu`,
+    `${sortFixture}\\Alpha\\inner-a.txt`,
+    `${sortFixture}\\Zulu\\inner-z.txt`,
+  ],
+);
+assert.equal(
+  (await sortAll("/o:-d")).text,
+  "zeta.txt\nAlpha\nbeta.txt\nalpha.bin\nZulu",
+);
+const creationListing = await runTerminalCommand(
+  `dir /t:c "${sortFixture}\\alpha.bin"`,
+);
+const creationLine = creationListing.text
+  .split("\n")
+  .find((line) => line.endsWith("alpha.bin"));
+assert.ok(creationLine);
+const creationDate = new Date(20);
+const creationStamp = [
+  String(creationDate.getMonth() + 1).padStart(2, "0"),
+  String(creationDate.getDate()).padStart(2, "0"),
+  String(creationDate.getFullYear()).slice(-2),
+].join("/") +
+  `  ${String(creationDate.getHours() % 12 || 12).padStart(2, "0")}:${String(creationDate.getMinutes()).padStart(2, "0")} ${creationDate.getHours() >= 12 ? "PM" : "AM"}`;
+assert.equal(creationLine.slice(0, creationStamp.length), creationStamp);
+assert.equal(
+  (await sortAll("/o:e-s")).text,
+  "Alpha\nZulu\nalpha.bin\nzeta.txt\nbeta.txt",
+);
+const recursiveSorted = await runTerminalCommand(
+  `dir /b /s /a /o:-n "${sortFixture}"`,
+);
+assert.deepEqual(recursiveSorted.text.split("\n"), [
+  `${sortFixture}\\Zulu`,
+  `${sortFixture}\\zeta.txt`,
+  `${sortFixture}\\beta.txt`,
+  `${sortFixture}\\alpha.bin`,
+  `${sortFixture}\\Alpha`,
+  `${sortFixture}\\Zulu\\inner-z.txt`,
+  `${sortFixture}\\Alpha\\inner-a.txt`,
+]);
+const invalidDirSort = await sortAll("/o:n-z");
+assert.equal(invalidDirSort.errorLevel, 1);
+assert.equal(invalidDirSort.text, "Invalid sort order specification.");
+const invalidDirTime = await runTerminalCommand(
+  `dir /t:z "${sortFixture}"`,
+);
+assert.equal(invalidDirTime.errorLevel, 1);
+assert.equal(invalidDirTime.text, "Invalid time field specification.");
+
 const copyTarget = `${commandFixture}\\CopyTarget`;
 assert.equal(state.mkdir(copyTarget), true);
 assert.equal(state.writeFile(`${commandFixture}\\copy-one.dat`, "one"), true);
