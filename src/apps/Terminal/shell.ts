@@ -35,6 +35,7 @@ export class Shell {
   private errorLevel = 0;
   private escapeBuffer = "";
   private confirmationResolver: ((confirmed: boolean) => void) | null = null;
+  private lineInputResolver: ((value: string | null) => void) | null = null;
   private promptOverride: string | null = null;
   private confirmationCancelled = false;
 
@@ -85,6 +86,8 @@ export class Shell {
     this.resizeDisposable.dispose();
     this.confirmationResolver?.(false);
     this.confirmationResolver = null;
+    this.lineInputResolver?.(null);
+    this.lineInputResolver = null;
     this.promptOverride = null;
     this.confirmationCancelled = true;
     this.nano?.destroy?.();
@@ -134,6 +137,11 @@ export class Shell {
 
     // Nano mode delegates to nano
     if (this.nano) return;
+
+    if (this.lineInputResolver) {
+      this.handleLineInputData(data);
+      return;
+    }
 
     if (this.confirmationResolver) {
       this.handleConfirmationData(data);
@@ -226,6 +234,74 @@ export class Shell {
       this.confirmationResolver = resolve;
       this.term.write(this.promptOverride);
     });
+  }
+
+  private requestLineInput(question: string): Promise<string | null> {
+    if (!this.active || this.confirmationCancelled) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      if (this.lineInputResolver || this.confirmationResolver) {
+        resolve(null);
+        return;
+      }
+      this.buffer = "";
+      this.cursorPos = 0;
+      this.promptOverride = `${question} `;
+      this.lineInputResolver = resolve;
+      this.term.write(this.promptOverride);
+    });
+  }
+
+  private finishLineInput(value: string | null) {
+    const resolve = this.lineInputResolver;
+    if (!resolve) return;
+    this.lineInputResolver = null;
+    this.promptOverride = null;
+    this.buffer = "";
+    this.cursorPos = 0;
+    resolve(value);
+  }
+
+  private handleLineInputData(data: string) {
+    if (this.escapeBuffer || data === "\x1b" || data.startsWith("\x1b[")) {
+      this.escapeBuffer += data;
+      if (this.escapeBuffer.length >= 3 && this.escapeBuffer[1] === "[") {
+        const sequence = this.escapeBuffer;
+        this.escapeBuffer = "";
+        this.handleEscape(sequence);
+        return;
+      }
+      if (this.escapeBuffer.length > 8) this.escapeBuffer = "";
+      return;
+    }
+    if (data === "\r") {
+      this.term.write("\r\n");
+      this.finishLineInput(this.buffer);
+      return;
+    }
+    if (data === "\x03") {
+      this.term.write("^C\r\n");
+      this.confirmationCancelled = true;
+      this.finishLineInput(null);
+      return;
+    }
+    if (data === "\x7f") {
+      if (this.cursorPos > 0) {
+        this.buffer =
+          this.buffer.slice(0, this.cursorPos - 1) +
+          this.buffer.slice(this.cursorPos);
+        this.cursorPos--;
+        this.redrawInput();
+      }
+      return;
+    }
+    if (data.charCodeAt(0) >= 0x20) {
+      this.buffer =
+        this.buffer.slice(0, this.cursorPos) +
+        data +
+        this.buffer.slice(this.cursorPos);
+      this.cursorPos += data.length;
+      this.redrawInput();
+    }
   }
 
   private finishConfirmation(confirmed: boolean) {
@@ -407,6 +483,7 @@ export class Shell {
       promptStr: this.promptStr,
       errorLevel: this.errorLevel,
       confirm: (question: string) => this.requestConfirmation(question),
+      prompt: (question: string) => this.requestLineInput(question),
       setErrorLevel: (n: number) => {
         this.errorLevel = n;
       },

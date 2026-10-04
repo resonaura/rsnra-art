@@ -28,6 +28,7 @@ export type VfsNodeType = "dir" | "file";
 
 export interface VfsNode {
   name: string; // filesystem name (case-insensitive lookups, preserves case)
+  volumeLabel?: string; // root volume label (FAT16 supports 11 characters)
   shortName?: string; // stable FAT/VFAT 8.3 alias stored with the directory entry
   type: VfsNodeType;
   children?: VfsNode[]; // dir
@@ -129,6 +130,8 @@ export interface VfsState {
   moveTo: (src: string, destDir: string) => string | null;
   rename: (path: string, newName: string) => boolean;
   setCwd: (path: string) => boolean;
+  /** Change the FAT volume label without changing its serial number or files. */
+  setVolumeLabel: (label: string) => boolean;
   // Toggle DOS file/folder attributes. Refuses on immutable OS-owned objects;
   // that protection is separate from the DOS System attribute. Partial update.
   setAttributes: (
@@ -1676,7 +1679,7 @@ v4.2000
   );
   recycled.hidden = true;
 
-  return dir(
+  const root = dir(
     "C:\\",
     [
       file("boot.ini", {
@@ -1697,6 +1700,7 @@ v4.2000
     ],
     true,
   );
+  return { ...root, volumeLabel: "SYSTEM" };
 }
 
 /**
@@ -1733,7 +1737,13 @@ function mergeCanonicalTree(
       (child) => !canonicalNames.has(child.name.toLowerCase()),
     ),
   );
-  return { ...canonical, children };
+  return {
+    ...canonical,
+    ...(persisted.volumeLabel !== undefined && {
+      volumeLabel: persisted.volumeLabel,
+    }),
+    children,
+  };
 }
 
 function takeChild(
@@ -2874,6 +2884,29 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
+      setVolumeLabel: (label) => {
+        const volumeLabel = label.toUpperCase();
+        const hasControlCharacter = Array.from(label).some((character) => {
+          const codePoint = character.codePointAt(0) ?? 0;
+          return codePoint < 0x20 || codePoint === 0x7f;
+        });
+        if (
+          volumeLabel.length > 11 ||
+          label.trim() !== label ||
+          hasControlCharacter ||
+          Array.from(label).some((character) => '<>:"/\\|?*'.includes(character)) ||
+          /[ .]$/.test(label)
+        )
+          return false;
+        const root = get().root;
+        if ((root.volumeLabel ?? "") === volumeLabel) return true;
+        commitFilesystemChange(
+          { root: { ...root, volumeLabel } },
+          "Set volume label",
+        );
+        return true;
+      },
+
       setAttributes: (path, attrs) => {
         const abs = resolveInputPath(path);
         if (!abs) return false;
@@ -2957,7 +2990,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 21,
+      version: 22,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,

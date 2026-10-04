@@ -600,6 +600,18 @@ export function MyComputer({ windowId }: { windowId: string }) {
       clear: s.clear,
     })),
   );
+  const driveEntries = useMemo(
+    () =>
+      DRIVES.map((drive) =>
+        drive.target === "C:\\"
+          ? {
+              ...drive,
+              label: `${vfs.root.volumeLabel || "Local Disk"} (C:)`,
+            }
+          : drive,
+      ),
+    [vfs.root.volumeLabel],
+  );
   const winData = useWindowData(windowId);
   const initialPath = (winData.path as string) ?? MY_COMPUTER;
   const [path, setPath] = useState<string>(initialPath);
@@ -1198,7 +1210,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const objectCount = isRoot
-    ? DRIVES.length
+    ? driveEntries.length
     : path === "Control Panel"
       ? APPLETS.length
       : path === "Games"
@@ -1229,10 +1241,10 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const selectedNode = selectedNodes.at(-1) ?? null;
   const selectedDrive =
     isRoot && selected.length === 1
-      ? DRIVES.find((drive) => drive.label === selected[0]) ?? null
+      ? driveEntries.find((drive) => drive.label === selected[0]) ?? null
       : null;
   const navigableNames = isRoot
-    ? DRIVES.map((drive) => drive.label)
+    ? driveEntries.map((drive) => drive.label)
     : sorted.map((node) => node.name);
   const contextNodes = ctx?.node
     ? selectedSet.has(ctx.node.name)
@@ -1746,7 +1758,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         }
       >
         {isRoot ? (
-          DRIVES.map((d) => (
+          driveEntries.map((d) => (
             <IconItem
               key={d.label}
               $selected={selectedSet.has(d.label)}

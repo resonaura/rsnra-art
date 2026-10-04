@@ -168,7 +168,7 @@ const runTerminalCommand = async (command, options = {}) => {
   let errorLevel = 0;
   const vars = options.vars ?? {};
   await executeLine(command, {
-    vfs: state,
+    vfs: useVfsStore.getState(),
     print: (lines, kind = "output") => output.push({ lines, kind }),
     clear: () => {},
     closeWindow: () => {},
@@ -184,12 +184,77 @@ const runTerminalCommand = async (command, options = {}) => {
     promptStr: "$P$G",
     errorLevel,
     confirm: options.confirm,
+    prompt: options.prompt,
     setErrorLevel: (value) => {
       errorLevel = value;
     },
   });
   return { text: output.flatMap((entry) => entry.lines).join("\n"), errorLevel };
 };
+
+const volumeLabel = () => useVfsStore.getState().root.volumeLabel;
+assert.equal(volumeLabel(), "SYSTEM");
+const defaultVolume = await runTerminalCommand("vol");
+assert.equal(
+  defaultVolume.text,
+  " Volume in drive C is SYSTEM\n Volume Serial Number is 4A2B-2000\n",
+);
+const changedVolume = await runTerminalCommand('label "test disk"');
+assert.equal(changedVolume.errorLevel, 0);
+assert.equal(volumeLabel(), "TEST DISK");
+assert.equal(useVfsStore.getState().undoDescription, "Set volume label");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(volumeLabel(), "SYSTEM");
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(volumeLabel(), "TEST DISK");
+assert.equal((await runTerminalCommand("label C: Data Disk")).errorLevel, 0);
+assert.equal(volumeLabel(), "DATA DISK");
+assert.equal((await runTerminalCommand("label C:WORK")).errorLevel, 0);
+assert.equal(volumeLabel(), "WORK");
+assert.equal((await runTerminalCommand("label C:TEST DISK")).errorLevel, 0);
+assert.equal(volumeLabel(), "TEST DISK");
+const labeledRootListing = await runTerminalCommand("dir C:\\");
+assert.ok(labeledRootListing.text.startsWith(
+  " Volume in drive C is TEST DISK\n Volume Serial Number is 4A2B-2000\n\n Directory of C:\\",
+));
+const bareRootListing = await runTerminalCommand("dir /b C:\\");
+assert.equal(bareRootListing.text.includes("Volume in drive"), false);
+assert.equal(bareRootListing.text.includes("Volume Serial Number"), false);
+const invalidVolumeLabel = await runTerminalCommand("label TOO-LONG-LABEL");
+assert.equal(invalidVolumeLabel.errorLevel, 1);
+assert.equal(volumeLabel(), "TEST DISK");
+assert.equal(useVfsStore.getState().setVolumeLabel("BAD/NAME"), false);
+assert.equal(useVfsStore.getState().setVolumeLabel("12345678901"), true);
+assert.equal(volumeLabel(), "12345678901");
+assert.equal(useVfsStore.getState().setVolumeLabel("123456789012"), false);
+assert.equal(useVfsStore.getState().setVolumeLabel("TEST DISK"), true);
+const interactiveVolumeQuestions = [];
+const interactiveVolume = await runTerminalCommand("label", {
+  prompt: async (question) => {
+    interactiveVolumeQuestions.push(question);
+    return "Data Disk";
+  },
+});
+assert.equal(interactiveVolume.errorLevel, 0);
+assert.deepEqual(interactiveVolumeQuestions, [
+  "Volume label (11 characters, ENTER for none)?",
+]);
+assert.equal(volumeLabel(), "DATA DISK");
+const deleteVolumeQuestions = [];
+const deletedVolume = await runTerminalCommand("label", {
+  prompt: async () => "",
+  confirm: async (question) => {
+    deleteVolumeQuestions.push(question);
+    return true;
+  },
+});
+assert.equal(deletedVolume.errorLevel, 0);
+assert.deepEqual(deleteVolumeQuestions, ["Delete current volume label (Y/N)?"]);
+assert.equal(volumeLabel(), "");
+assert.match((await runTerminalCommand("vol C:")).text, /has no label/);
+assert.equal((await runTerminalCommand("vol D:")).errorLevel, 1);
+assert.equal((await runTerminalCommand("label SYSTEM")).errorLevel, 0);
+assert.equal(volumeLabel(), "SYSTEM");
 
 const recursiveAttrib = await runTerminalCommand(
   `attrib +h /s "${attribFixture}\\*"`,
@@ -1118,6 +1183,24 @@ memoryTerminal.send("Y\r");
 await tick();
 assert.equal(state.read(copiedOnePath), "shell-copy");
 
+memoryTerminal.send("label\r");
+await tick();
+assert.ok(memoryTerminal.output.includes("Volume label (11 characters, ENTER for none)?"));
+memoryTerminal.send("SHELL DISX");
+memoryTerminal.send("\x7f");
+memoryTerminal.send("K\r");
+await tick();
+assert.equal(volumeLabel(), "SHELL DISK");
+memoryTerminal.send("label\r");
+await tick();
+memoryTerminal.send("\r");
+await tick();
+assert.ok(memoryTerminal.output.includes("Delete current volume label (Y/N)?"));
+memoryTerminal.send("N\r");
+await tick();
+assert.equal(volumeLabel(), "SHELL DISK");
+assert.equal(state.setVolumeLabel("SYSTEM"), true);
+
 const cancelledPromptA = `${commandFixture}\\shell-cancel-a.tmp`;
 const cancelledPromptB = `${commandFixture}\\shell-cancel-b.tmp`;
 assert.equal(state.writeFile(cancelledPromptA, "keep"), true);
@@ -1361,15 +1444,20 @@ const withV19SendTo = replaceNodeAtPath(
 
 const migrate = useVfsStore.persist.getOptions().migrate;
 assert.equal(typeof migrate, "function");
-for (const version of [19, 20]) {
+for (const [version, persistedRoot] of [
+  [19, withV19SendTo],
+  [20, withV19SendTo],
+  [21, before.root],
+]) {
   const migrated = await migrate(
     {
-      root: withV19SendTo,
+      root: { ...persistedRoot, volumeLabel: "CUSTOM" },
       cwd: USER_DOCUMENTS_PATH,
       recycled: before.recycled,
     },
     version,
   );
+  assert.equal(migrated.root.volumeLabel, "CUSTOM", `v${version} lost the volume label`);
 
   const afterPayload = findNode(migrated.root, recycledPath);
   const afterIndex = findNode(migrated.root, indexPath);
@@ -1382,13 +1470,14 @@ for (const version of [19, 20]) {
   const names = new Set(
     (migratedSendTo?.children ?? []).map((entry) => entry.name.toLowerCase()),
   );
-  for (const required of [
+  const requiredSendToEntries = [
     "3½ floppy (a:).lnk",
     "desktop (create shortcut).desklink",
     "mail recipient.mapimail",
     "my documents.lnk",
-    "archive",
-  ]) {
+  ];
+  if (version < 21) requiredSendToEntries.push("archive");
+  for (const required of requiredSendToEntries) {
     assert.ok(names.has(required), `migration lost SendTo entry: ${required}`);
   }
 
@@ -1406,6 +1495,18 @@ for (const version of [19, 20]) {
   assert.match(dispatchSendToEntry(floppy, [source]).message, /drive A:/);
   assert.match(dispatchSendToEntry(mail, [source]).message, /e-mail program/i);
 }
+
+const rootWithoutLabel = { ...before.root };
+delete rootWithoutLabel.volumeLabel;
+const defaultLabelMigration = await migrate(
+  {
+    root: rootWithoutLabel,
+    cwd: USER_DOCUMENTS_PATH,
+    recycled: before.recycled,
+  },
+  21,
+);
+assert.equal(defaultLabelMigration.root.volumeLabel, "SYSTEM");
 
 const nestedDirectoryPath = `${USER_DOCUMENTS_PATH}\\md-tree-regression\\level-one\\level-two`;
 assert.equal(state.mkdirs(nestedDirectoryPath), true);

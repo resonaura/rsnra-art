@@ -47,6 +47,7 @@ export interface CmdContext {
   inBatch?: boolean;
   setErrorLevel: (n: number) => void;
   confirm?: (question: string) => Promise<boolean>;
+  prompt?: (question: string) => Promise<string | null>;
   setColor?: (bg: string, fg: string) => void;
 }
 
@@ -337,6 +338,9 @@ function cmdDir(args: string[], ctx: CmdContext) {
     ctx.setErrorLevel(1);
     return;
   }
+  const volumeLines = abs.toUpperCase() === "C:\\"
+    ? volumeInfoLines(ctx.vfs.root)
+    : [];
 
   let entries = node.children ?? [];
   if (filePattern !== null) entries = expandWildcards(filePattern, entries);
@@ -420,7 +424,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
       return;
     }
 
-    const lines: string[] = [];
+    const lines: string[] = [...volumeLines];
     let totalFiles = 0;
     let totalDirs = 0;
     let totalBytes = 0;
@@ -490,7 +494,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
   }
 
   if (wide) {
-    ctx.print([` Directory of ${abs}`, ""]);
+    ctx.print([...volumeLines, ` Directory of ${abs}`, ""]);
     const names: string[] = [];
     for (const e of sorted) {
       names.push(e.type === "dir" ? `[${e.name}]` : e.name);
@@ -512,7 +516,7 @@ function cmdDir(args: string[], ctx: CmdContext) {
   }
 
   // Standard DOS dir format
-  const lines: string[] = [];
+  const lines: string[] = [...volumeLines];
   lines.push(` Directory of ${abs}`);
   lines.push("");
   let fileCount = 0;
@@ -2068,10 +2072,73 @@ function cmdVer(_args: string[], ctx: CmdContext) {
 }
 
 function cmdVol(_args: string[], ctx: CmdContext) {
-  ctx.print([
-    " Volume in drive C is SYSTEM",
-    " Volume Serial Number is 4A2B-2000",
+  const drive = _args[0]?.toUpperCase() ?? "C:";
+  if (_args.length > 1 || drive !== "C:") {
+    ctx.print(["The system cannot find the drive specified."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  ctx.print(volumeInfoLines(ctx.vfs.root));
+}
+
+const VIRTUAL_VOLUME_SERIAL = "4A2B-2000";
+
+function volumeInfoLines(root: VfsNode): string[] {
+  return [
+    root.volumeLabel
+      ? ` Volume in drive C is ${root.volumeLabel}`
+      : " Volume in drive C has no label.",
+    ` Volume Serial Number is ${VIRTUAL_VOLUME_SERIAL}`,
     "",
+  ];
+}
+
+async function cmdLabel(args: string[], ctx: CmdContext) {
+  const attachedDrive = args[0]?.match(/^([a-z]):(.*)$/i);
+  const separateDrive = !!args[0] && /^[a-z]:$/i.test(args[0]);
+  const driveLetter = attachedDrive?.[1] ?? (separateDrive ? args[0]?.[0] : "C");
+  const drive = `${driveLetter?.toUpperCase()}:`;
+  if (drive !== "C:") {
+    ctx.print(["The system cannot find the drive specified."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  const labelParts = attachedDrive
+    ? [attachedDrive[2], ...args.slice(1)].filter(Boolean)
+    : separateDrive
+      ? args.slice(1)
+      : args;
+  let nextLabel = labelParts.length ? labelParts.join(" ") : undefined;
+  if (nextLabel === undefined) {
+    ctx.print(volumeInfoLines(ctx.vfs.root));
+    if (!ctx.prompt) {
+      ctx.print(["Supply a label, or use LABEL from the interactive Command Prompt."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    nextLabel = (await ctx.prompt("Volume label (11 characters, ENTER for none)?")) ?? undefined;
+    if (nextLabel === undefined) return;
+    if (!nextLabel && ctx.vfs.root.volumeLabel) {
+      const confirmed = ctx.confirm
+        ? await ctx.confirm("Delete current volume label (Y/N)?")
+        : false;
+      if (!confirmed) {
+        ctx.print(["The volume label was not changed."]);
+        return;
+      }
+    }
+  }
+
+  if (!ctx.vfs.setVolumeLabel(nextLabel)) {
+    ctx.print(["The volume label is invalid. FAT volume labels may contain up to 11 characters."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  ctx.print([
+    nextLabel
+      ? `Volume label is ${ctx.vfs.root.volumeLabel}.`
+      : "Volume label deleted.",
   ]);
 }
 
@@ -2960,6 +3027,7 @@ const REGISTRY: Record<string, CmdHandler> = {
   quit: cmdExit,
   ver: cmdVer,
   vol: cmdVol,
+  label: cmdLabel,
   path: cmdPath,
   set: cmdSet,
   start: cmdStart,
@@ -3108,7 +3176,13 @@ const HELP_TOPICS: Record<string, string[]> = {
   ],
   cls: ["CLS / CLEAR", "  Clears the screen."],
   ver: ["VER", "  Shows the Windows version."],
-  vol: ["VOL", "  Shows the volume label."],
+  vol: ["VOL [drive:]", "  Shows the volume label and serial number."],
+  label: [
+    "LABEL [drive:][label]",
+    "  Creates, changes, or deletes the FAT volume label (up to 11 characters).",
+    "  A label may follow the drive directly (LABEL C:DATA) or after a space.",
+    "  LABEL with no label prompts; press ENTER, then Y, to delete an existing label.",
+  ],
   path: ["PATH", "  Shows the executable search path."],
   pwd: ["PWD", "  Prints the working directory."],
   which: ["WHICH <command>", "  Shows the full path of a command."],
@@ -3149,7 +3223,8 @@ export function buildHelpText(): string[] {
     "",
     "System:",
     "  echo <text>          set <var=value>    start <program>",
-    "  cls / clear          ver                vol",
+    "  cls / clear          ver                vol [drive:]",
+    "  label [drive:] [label]",
     "  path                 pwd                which <cmd>",
     "  title <text>         prompt <text>      color <code>",
     "  date                 time               exit",
