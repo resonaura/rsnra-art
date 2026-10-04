@@ -8,6 +8,10 @@ import {
 import { buildProcessRows, isProtectedPid } from "../../data/processList";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
 import {
+  matchesDosAttributeSelector,
+  parseDosAttributeSelector,
+} from "../../lib/dosAttributes";
+import {
   ALL_USERS_PROFILE_PATH,
   DEFAULT_SYSTEM_PATH,
   SYSTEM32_PATH,
@@ -193,10 +197,18 @@ function cmdDir(args: string[], ctx: CmdContext) {
     return;
   }
   let entries = node.children ?? [];
-  // /a or /ah — show hidden files (we show them all anyway, but respect the flag)
-  if (!flags.some((f) => /^\/a/i.test(f))) {
-    entries = entries.filter((e) => !e.hidden);
+  const attributeFlag = flags.find((flag) => /^\/a(?::|[rhsad]+|$)/i.test(flag));
+  const attributeSelector = attributeFlag
+    ? parseDosAttributeSelector(attributeFlag)
+    : null;
+  if (attributeFlag && !attributeSelector) {
+    ctx.print(["Invalid attribute specification."], "error");
+    ctx.setErrorLevel(1);
+    return;
   }
+  entries = entries.filter((entry) =>
+    matchesDosAttributeSelector(entry, attributeSelector),
+  );
   const bare = flags.some((f) => /^\/b/i.test(f));
   const wide = flags.some((f) => /^\/w/i.test(f));
   const showShortNames = flags.some((f) => /^\/x$/i.test(f));
@@ -558,10 +570,23 @@ function cmdDel(
   _raw: string,
   cmdName: string,
 ) {
-  const force = args.includes("-f") || args.includes("/q");
-  const forceReadOnly = args.some((arg) => arg.toLowerCase() === "/f") ||
-    args.includes("-f");
-  const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
+  const hasFlag = (flag: string) =>
+    args.some((argument) => argument.toLowerCase() === flag.toLowerCase());
+  const forceReadOnly = hasFlag("/f") || hasFlag("-f");
+  const quiet = cmdName === "rm" && hasFlag("-f");
+  const attributeFlag = args.find((argument) => /^\/a(?::|[rhsad]+|$)/i.test(argument));
+  const attributeSelector = attributeFlag
+    ? parseDosAttributeSelector(attributeFlag, { allowDirectories: false })
+    : null;
+  if (attributeFlag && !attributeSelector) {
+    ctx.print(["Invalid attribute specification."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const optionArgs = args.filter((argument) =>
+    /^\/(?:[fqsp]|a(?::.*|[rhsad]+)?)$/i.test(argument) || /^-[fq]$/i.test(argument),
+  );
+  const targets = args.filter((argument) => !optionArgs.includes(argument));
   if (!targets.length) {
     ctx.print(["The syntax of the command is incorrect."], "error");
     ctx.setErrorLevel(1);
@@ -576,41 +601,57 @@ function cmdDel(
       const abs = ctx.vfs.resolvePath(dir);
       const node = abs ? ctx.vfs.resolve(abs) : null;
       if (!node || node.type !== "dir") {
-        if (!force)
+        if (!quiet)
           ctx.print(["The system cannot find the path specified."], "error");
         ctx.setErrorLevel(1);
         continue;
       }
       const matches = expandWildcards(pattern, node.children ?? []);
+      let matched = false;
+      let failed = false;
       for (const m of matches) {
-        if (m.type === "file" && !m.system) {
-          ctx.vfs.remove(abs + "\\" + m.name, {
+        if (
+          m.type === "file" &&
+          matchesDosAttributeSelector(m, attributeSelector)
+        ) {
+          matched = true;
+          if (!ctx.vfs.remove(abs + "\\" + m.name, {
             allowReadOnly: forceReadOnly,
-          });
+          })) {
+            failed = true;
+            if (!quiet) {
+              ctx.print([`Access is denied - ${m.name}.`], "error");
+            }
+          }
         }
       }
+      if (!matched) {
+        failed = true;
+        if (!quiet) ctx.print([`Could not find ${t}.`], "error");
+      }
+      if (failed) ctx.setErrorLevel(1);
       continue;
     }
     const abs = ctx.vfs.resolvePath(t);
     const node = abs ? ctx.vfs.resolve(abs) : null;
-    if (!node) {
+    if (!node || !matchesDosAttributeSelector(node, attributeSelector)) {
       const msg =
         cmdName === "rm"
           ? `rm: cannot remove '${t}': No such file or directory`
           : `Could not find ${t}.`;
-      if (!force) ctx.print([msg], "error");
+      if (!quiet) ctx.print([msg], "error");
       ctx.setErrorLevel(1);
     } else if (node.type === "dir") {
       const msg =
         cmdName === "rm"
           ? `rm: cannot remove '${t}': Is a directory`
           : `Access is denied.`;
-      ctx.print([msg], "error");
+      if (!quiet) ctx.print([msg], "error");
       ctx.setErrorLevel(1);
     } else if (
       !ctx.vfs.remove(t, { allowReadOnly: forceReadOnly })
     ) {
-      if (!force) ctx.print(["Access is denied — system file."], "error");
+      if (!quiet) ctx.print(["Access is denied — system file."], "error");
       ctx.setErrorLevel(1);
     } else {
       // success — silent unless verbose
@@ -1822,12 +1863,12 @@ const REGISTRY: Record<string, CmdHandler> = {
 
 const HELP_TOPICS: Record<string, string[]> = {
   dir: [
-    "DIR [path][/B][/W][/A][/X]",
+    "DIR [path] [/B] [/W] [/A[[:]attributes]] [/X]",
     "  /X  Show short 8.3 names next to long file names.",
     "  Lists directory contents.",
     "  /B  Bare format (names only)",
     "  /W  Wide format",
-    "  /A  Show hidden files",
+    "  /A  Show all files; add D/R/H/S/A to filter by attributes",
   ],
   ls: [
     "LS [options] [path]",
@@ -1858,10 +1899,10 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  -f  Force (no error if not found)",
   ],
   del: [
-    "DEL <file>   (ERASE, RM)",
+    "DEL [/F] [/A[[:]attributes]] <file>   (ERASE)",
     "  Deletes a file.",
     "  /F  Force deletion of read-only files",
-    "  /Q  Quiet mode",
+    "  /A  Select by attributes (R/H/S/A); hidden/system files are skipped by default",
     "  Supports wildcards: del *.txt",
   ],
   copy: ["COPY <src> <dst>   (CP)", "  Copies a file."],

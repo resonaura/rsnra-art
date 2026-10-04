@@ -23,6 +23,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Recycle Bin quota warning | Delete confirmation warned about purging older items whenever the quota was below 100%, even if the new object could not exceed the current bin usage limit. | Implemented and live checked: the prompt forecasts FAT-cluster allocation and FIFO eviction using existing payloads and the current selection; deleting an empty test file from an empty bin no longer shows the stale warning. |
 | P2 | Command Prompt | `SET` started empty and PATH output diverged from the command-search folders. | Implemented: Windows 2000-style environment variables, case-insensitive variable access, and one shared System32/WINNT/Wbem path; visually checked with `set path` |
 | P2 | Command Prompt / filesystem | `MD`/`MKDIR` rejected a nested path unless every parent directory had already been created. | Fixed: Windows directory commands now create missing intermediate folders atomically as one VFS operation; Undo/Redo and invalid-name rollback are covered by memory regressions. |
+| P2 | Command Prompt / DOS attributes | `DIR` did not distinguish normal, Hidden, System, Read-only, Archive, and directory attributes; `DEL` had no attribute selector and could silently treat hidden/system entries inconsistently. | Implemented: default `DIR`/`DEL` omit Hidden and System; `/A` includes all, and attribute selectors support combinations/exclusions (`/A:H-S`). `DIR /A:D`, `DEL /A:R`, and `/F` behavior are covered through the terminal dispatcher. `DEL` keeps system ownership protection separate from the DOS System bit. |
 | P2 | File metadata | File sizes were calculated differently in Explorer, Find, Properties, File Dialog, and the terminal; stub executable files appeared empty in some views. | Implemented; live checked for application size |
 | P2 | Windows paths | Drive-relative paths such as `C:..` were incorrectly treated as rooted paths on `C:\`, and the VFS accepted paths longer than classic `MAX_PATH`. | Implemented and live checked: `C:..` moved from My Documents to its parent, and `C:My Documents` returned relative to that C: directory; rooted forms remain distinct. A deterministic boundary check accepts 259 visible characters and rejects 260, counting the terminating NUL as part of the 260-character Win32 limit. |
 | P2 | Explorer Copy/Move path length | Copy and Move validated the destination directory but not the final `directory\filename`, so they could create nodes whose full paths exceeded classic `MAX_PATH`. | Fixed: derived destination paths are rejected before mutation using the caller's normalized path (so 8.3 paths are not expanded for the limit check); in-memory checks confirm both Copy and Move leave the source intact. |
@@ -140,6 +141,11 @@ not a claim that every Windows 2000 feature is implemented.
 24. Match Windows `MD`/`MKDIR` nested-path behavior.
     **Complete:** one command creates every missing parent and the target as
     one atomic, single-Undo operation; `-p` remains an idempotent convenience.
+25. Match Windows 2000 `DIR`/`DEL` file-attribute filters. **Complete:** the
+    shared selector implements Hidden/System defaults, combined positive and
+    negative attributes, and directory filtering for `DIR`; terminal-level
+    regression checks cover the selectors, read-only `/F`, and the independent
+    immutable-system-file safety gate.
 
 ## Historical checks used
 
@@ -157,6 +163,9 @@ not a claim that every Windows 2000 feature is implemented.
 - [Microsoft Learn: File Types](https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types): extension-to-application association model and Open With conventions.
 - [Microsoft Learn: Naming Files, Paths, and Namespaces](https://learn.microsoft.com/en-us/windows/desktop/fileio/naming-a-file): distinguishes `C:\file` (rooted) from `C:file` (relative to the current directory on C:) and documents the classic 260-character `MAX_PATH` limit before Windows 10's opt-in long-path behavior.
 - [Windows 2000 command-line administration reference](https://hlevkin.com/hlevkin/92usefulBooks/Windows/Mueller%20-%20Windows%20Administration%20at%20the%20Command%20Line%20for%20Windows%202003%20Windows%20XP%20and%20Windows%202000%20I.pdf): documents `MKDIR`/`MD` creating intermediate directories with a single command.
+- [Windows 2000 Commands Pocket Reference](https://elhacker.info/manuales/OReilly%204%20GB%20Collection/O%27Reilly%20-%20Windows%202000%20Commands%20Pocket%20Reference.pdf): period reference for `DEL`/`DIR` options, `/A` attribute selection, the `D` directory code for `DIR`, and distinct `/Q` (no confirmations) versus `/P` (confirm each deletion).
+- [Microsoft Learn: DEL](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc771049%28v%3Dws.11%29): corroborates DEL's `/A` filters, including the `-` exclusion prefix, and `/Q`/`/P` semantics; Windows 2000-specific option codes are taken from the period reference above.
+- [Microsoft Learn: DIR](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/dir): corroborates that `DIR` omits Hidden/System by default, `/A` alone shows all, and `/A` combines and negates attributes; current documentation is used as corroboration for the Windows 2000 command reference.
 - [Microsoft Learn: MS-FSCC 8.3 Filename](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/18e63b13-ba43-4f5f-a5b7-11e871b71f14): defines the character and length constraints for an 8.3/DOS filename.
 - [Microsoft Learn: File Times](https://learn.microsoft.com/en-us/windows/win32/sysinfo/file-times): FAT creation time resolves to 10 ms, write time to 2 seconds, and access time to one day (the access date).
 - [Microsoft Learn: GetFileTime](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime): defines last-access time as including the last time a file or directory was read or written.

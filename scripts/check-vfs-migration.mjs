@@ -18,6 +18,8 @@ const [
   { mergeCommonAndUserEntries },
   { isVfsNodeVisible },
   { useFilePrefsStore },
+  { matchesDosAttributeSelector, parseDosAttributeSelector },
+  { executeLine },
 ] =
   await Promise.all([
     import("../src/store/vfsStore.ts"),
@@ -26,6 +28,8 @@ const [
     import("../src/lib/shellFolders.ts"),
     import("../src/lib/fileVisibility.ts"),
     import("../src/store/filePrefsStore.ts"),
+    import("../src/lib/dosAttributes.ts"),
+    import("../src/apps/Terminal/commands.ts"),
   ]);
 
 const {
@@ -44,6 +48,162 @@ assert.equal(isVfsNodeVisible({ hidden: true, system: true }, true, true), false
 assert.equal(isVfsNodeVisible({ hidden: true }, true, true), true);
 assert.equal(isVfsNodeVisible({ hidden: true }, false, false), false);
 assert.equal(isVfsNodeVisible({ system: true }, true, true), true);
+
+const dosAttributes = [
+  { name: "plain.txt", type: "file", archive: true },
+  { name: "hidden.txt", type: "file", hidden: true, archive: true },
+  { name: "system.txt", type: "file", system: true, archive: true },
+  { name: "readonly.txt", type: "file", readonly: true, archive: true },
+  { name: "System Folder", type: "dir", system: true },
+];
+const parseDos = (value) => parseDosAttributeSelector(value);
+assert.equal(parseDos("/A-Z"), null);
+assert.equal(parseDos("/A:H-"), null);
+assert.deepEqual(parseDos("/A"), { include: [], exclude: [] });
+assert.deepEqual(parseDos("/a:sh"), { include: ["S", "H"], exclude: [] });
+assert.deepEqual(parseDos("/A:H-S"), { include: ["H"], exclude: ["S"] });
+assert.deepEqual(parseDos("/A:-H-S"), { include: [], exclude: ["H", "S"] });
+assert.deepEqual(parseDos("/A:D"), { include: ["D"], exclude: [] });
+assert.equal(parseDos("/A:H--S"), null);
+assert.equal(
+  parseDosAttributeSelector("/A:D", { allowDirectories: false }),
+  null,
+);
+assert.deepEqual(
+  dosAttributes
+    .filter((node) => matchesDosAttributeSelector(node, null))
+    .map((node) => node.name),
+  ["plain.txt", "readonly.txt"],
+);
+assert.deepEqual(
+  dosAttributes
+    .filter((node) => matchesDosAttributeSelector(node, parseDos("/A")))
+    .map((node) => node.name),
+  dosAttributes.map((node) => node.name),
+);
+assert.deepEqual(
+  dosAttributes
+    .filter((node) => matchesDosAttributeSelector(node, parseDos("/A:H-S")))
+    .map((node) => node.name),
+  ["hidden.txt"],
+);
+assert.deepEqual(
+  dosAttributes
+    .filter((node) => matchesDosAttributeSelector(node, parseDos("/A:D")))
+    .map((node) => node.name),
+  ["System Folder"],
+);
+
+// Exercise the selectors through the same Terminal dispatcher used by the UI.
+const commandFixture = "C:\\DOS Attribute Regression";
+assert.equal(state.mkdir(commandFixture), true);
+for (const name of [
+  "plain.txt",
+  "hidden.txt",
+  "hidden-system.txt",
+  "system.txt",
+  "readonly.txt",
+]) {
+  assert.equal(state.writeFile(`${commandFixture}\\${name}`, name), true);
+}
+assert.equal(state.mkdir(`${commandFixture}\\Folder`), true);
+assert.equal(
+  state.setAttributes(`${commandFixture}\\hidden.txt`, { hidden: true }),
+  true,
+);
+assert.equal(
+  state.setAttributes(`${commandFixture}\\system.txt`, { system: true }),
+  true,
+);
+assert.equal(
+  state.setAttributes(`${commandFixture}\\hidden-system.txt`, {
+    hidden: true,
+    system: true,
+  }),
+  true,
+);
+assert.equal(
+  state.setAttributes(`${commandFixture}\\readonly.txt`, { readonly: true }),
+  true,
+);
+
+const runTerminalCommand = async (command) => {
+  const output = [];
+  let errorLevel = 0;
+  await executeLine(command, {
+    vfs: state,
+    print: (lines, kind = "output") => output.push({ lines, kind }),
+    clear: () => {},
+    closeWindow: () => {},
+    windowId: "vfs-regression",
+    enterNano: () => {},
+    vars: {},
+    setVar: () => {},
+    setTitle: () => {},
+    setPromptStr: () => {},
+    promptStr: "$P$G",
+    errorLevel,
+    setErrorLevel: (value) => {
+      errorLevel = value;
+    },
+  });
+  return { text: output.flatMap((entry) => entry.lines).join("\n"), errorLevel };
+};
+
+const defaultDir = await runTerminalCommand(`dir /b "${commandFixture}"`);
+assert.deepEqual(
+  defaultDir.text.split("\n").sort(),
+  ["Folder", "plain.txt", "readonly.txt"].sort(),
+);
+const allDir = await runTerminalCommand(`dir /b /a "${commandFixture}"`);
+assert.deepEqual(
+  allDir.text.split("\n").sort(),
+  [
+    "Folder",
+    "hidden-system.txt",
+    "hidden.txt",
+    "plain.txt",
+    "readonly.txt",
+    "system.txt",
+  ].sort(),
+);
+const hiddenDir = await runTerminalCommand(`dir /b /a:h "${commandFixture}"`);
+assert.deepEqual(
+  hiddenDir.text.split("\n").sort(),
+  ["hidden.txt", "hidden-system.txt"].sort(),
+);
+const foldersDir = await runTerminalCommand(`dir /b /a:d "${commandFixture}"`);
+assert.equal(foldersDir.text, "Folder");
+
+assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
+assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);
+assert.equal((await runTerminalCommand(`del "${commandFixture}\\system.txt"`)).errorLevel, 1);
+assert.equal(state.exists(`${commandFixture}\\system.txt`), true);
+assert.equal(
+  (await runTerminalCommand(`del /a:h-s "${commandFixture}\\*.txt"`)).errorLevel,
+  0,
+);
+assert.equal(state.exists(`${commandFixture}\\hidden.txt`), false);
+assert.equal(state.exists(`${commandFixture}\\hidden-system.txt`), true);
+assert.equal(
+  (await runTerminalCommand(`del /a:hs "${commandFixture}\\hidden-system.txt"`)).errorLevel,
+  0,
+);
+assert.equal(state.exists(`${commandFixture}\\hidden-system.txt`), false);
+assert.equal((await runTerminalCommand(`del /a:s "${commandFixture}\\system.txt"`)).errorLevel, 0);
+assert.equal(state.exists(`${commandFixture}\\system.txt`), false);
+assert.equal((await runTerminalCommand(`del /a:d "${commandFixture}\\Folder"`)).errorLevel, 1);
+assert.equal(state.exists(`${commandFixture}\\Folder`), true);
+assert.equal((await runTerminalCommand(`del "${commandFixture}\\readonly.txt"`)).errorLevel, 1);
+assert.equal(state.exists(`${commandFixture}\\readonly.txt`), true);
+assert.equal((await runTerminalCommand(`del /f /a:r "${commandFixture}\\readonly.txt"`)).errorLevel, 0);
+assert.equal(state.exists(`${commandFixture}\\readonly.txt`), false);
+assert.equal(state.remove(commandFixture), true);
+
+const protectedCommandPath = "C:\\WINNT\\System32\\cmd.exe";
+assert.equal(state.resolve(protectedCommandPath)?.protected, true);
+assert.equal((await runTerminalCommand(`del /a:s "${protectedCommandPath}"`)).errorLevel, 1);
+assert.equal(state.resolve(protectedCommandPath)?.type, "file");
 
 assert.equal(state.resolve(COMMON_DESKTOP_PATH)?.type, "dir");
 assert.deepEqual(
@@ -309,7 +469,9 @@ const invalidTreePath = `${USER_DOCUMENTS_PATH}\\md-tree-invalid\\CON\\leaf`;
 assert.equal(state.mkdirs(invalidTreePath), false);
 assert.equal(state.resolve(`${USER_DOCUMENTS_PATH}\\md-tree-invalid`), null);
 
-console.log("VFS safety, copy timestamps, and v19/v20 → v21 migration checks passed.");
+console.log(
+  "VFS, shell visibility, DOS attributes, copy timestamps, and migration checks passed.",
+);
 process.exit(0);
 
 function findNode(root, path) {
