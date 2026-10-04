@@ -39,6 +39,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Start Menu / user profiles | Programs read only `All Users\Start Menu\Programs`, so per-user shortcuts and groups were missing; identical groups had no merge behavior. | Implemented and live checked: `Administrator\Start Menu\Programs` now merges with `All Users\Start Menu\Programs`; matching groups merge recursively and a same-name per-user shortcut takes precedence. A unique per-user test group appeared immediately; a same-named `Games` group retained the four shared game entries. Both test folders were removed through Explorer Undo. |
 | P1 | Start Menu / Recent documents | Documents listed every item under My Documents instead of the Shell's profile-local Recent shortcuts; opening, saving, and clearing did not maintain Windows-style MRU history. | Implemented and live checked: opening a document from Explorer or Notepad creates/refreshes a per-profile `.lnk` in `C:\Documents and Settings\Administrator\Recent`; Start → Documents reopens the target through normal file associations and shows the newest 15. Advanced → Clear empties unprotected entries in Recent but leaves their target documents untouched. Recent is empty after the live test. |
 | P2 | Taskbar properties | Taskbar context-menu Properties was disabled, so the documented General/Advanced property sheet and its shell options were unavailable. | Implemented and live checked: General/Advanced tabs, staged Apply/OK/Cancel, taskbar topmost/auto-hide, small Start-menu icons, clock, and personalized menus persist and affect the shell. Show Clock, auto-hide, small icons, and restoration to the user's prior settings were verified live. |
+| P2 | Shell shortcuts / context menus | Explorer and Desktop could open `.lnk` files but offered no normal Send To action for creating a file/folder shortcut; clicking a nested context menu also bubbled to the owning Explorer window and closed the menu. | Implemented and live checked: `Send To → Desktop (create shortcut)` creates a collision-safe, icon-preserving virtual `.lnk` for files or folders; the target opens through the shared Shell dispatcher, and Explorer multi-selection is grouped into one Undo. ContextMenu now stops portal click bubbling. Verified item visibility, target launch, and Undo; confirmed Recent tracking still works from the shortcut. |
 | P3 | App menus | Several Help/About entries and secondary modes remain disabled; these are lower impact than core file and window operations. | Pending |
 
 ## Work sequence
@@ -74,6 +75,11 @@ not a claim that every Windows 2000 feature is implemented.
     the profile's Recent/Documents behavior. **Complete:** the Advanced tab's
     Clear command empties Recent entries without deleting their target files;
     General settings are persisted and wired to taskbar/menu behavior.
+12. Restore the common shell shortcut action. **Complete:** the Explorer/Desktop
+    Send To submenu creates `.lnk` nodes targeting the original VFS path; the
+    action uses collision-safe names, keeps the target icon, and Explorer groups
+    multi-selection in one Undo. The shared ContextMenu also stops portal clicks
+    from reaching the owning window's close handler.
 
 ## Historical checks used
 
@@ -101,3 +107,5 @@ not a claim that every Windows 2000 feature is implemented.
 - [Running Microsoft Windows 2000 Professional: Removing Items from the Documents Menu](https://flylib.com/books/en/3.229.1.22/1/): the Documents menu reflects the profile's Recent folder, displays its newest 15 shortcuts, and the Advanced-tab Clear command empties Recent (including unrecognized entries).
 - [Windows 2000 Exercises (PDF)](https://knowware.dk/down/windows_2000_exercises.pdf): period screenshots and walkthroughs for the General/Advanced Taskbar properties tabs, Auto hide, Always on top, Show clock, and Recent-folder clearing.
 - [Sams Teach Yourself Microsoft Windows 2000 Professional: Customizing the Taskbar](https://www.informit.com/articles/article.aspx?p=411736&seqNum=161): documents the taskbar property-sheet controls and their visible effects, including personalized menus and small Start-menu icons.
+- [Windows 2000 Quick Fixes: Add a new option to the Send To menu](https://www.oreilly.com/library/view/windows-2000-quick/0596000170/ch04s13.html): contemporary source identifies Send To on Windows 2000's common context menu and its Desktop action as placing a shortcut on the desktop.
+- [University of Wisconsin KB: Windows — Creating Shortcuts](https://kb.wisc.edu/helpdesk/page.php?id=198): period-era walkthrough gives the exact right-click → Send to → Desktop (create shortcut) sequence.

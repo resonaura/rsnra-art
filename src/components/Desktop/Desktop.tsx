@@ -5,7 +5,11 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { wallpaperUrl } from "../../data/wallpapers";
 import { playSound } from "../../lib/audio";
-import { openVfsNode, parseVfsShortcut } from "../../lib/openVfsNode";
+import {
+  createFileShortcut,
+  openVfsNode,
+  parseVfsShortcut,
+} from "../../lib/openVfsNode";
 import { patternDataUri } from "../../lib/patterns";
 import {
   containsReadOnlyFile,
@@ -14,7 +18,7 @@ import {
   recycleBinPayloadSizes,
   willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
-import { confirmDialog } from "../../lib/systemDialogs";
+import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
@@ -26,7 +30,12 @@ import {
   type VfsNode,
 } from "../../store/vfsStore";
 import { useWindowStore } from "../../store/windowStore";
-import { ContextMenu, CtxDivider, CtxItem } from "../ContextMenu";
+import {
+  ContextMenu,
+  CtxDivider,
+  CtxItem,
+  CtxSubmenu,
+} from "../ContextMenu";
 import { OpenWithDialog } from "../OpenWithDialog/OpenWithDialog";
 import { DesktopContextMenu } from "./DesktopContextMenu";
 import { DesktopIcon } from "./DesktopIcon";
@@ -589,6 +598,7 @@ export function Desktop() {
           const isLnk = node.name.toLowerCase().endsWith(".lnk");
           const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
           const abs = `${DESKTOP_PATH}\\${node.name}`;
+          const targetIcon = lnk?.icon ?? iconForNode(node, extensionIcons);
           return (
             <ContextMenu
               x={iconCtx.x}
@@ -605,7 +615,6 @@ export function Desktop() {
               </CtxItem>
               <CtxItem
                 onClick={() => {
-                  const targetIcon = lnk?.icon ?? iconForNode(node, extensionIcons);
                   if (isLnk && lnk) {
                     if (lnk.type === "url") {
                       useWindowStore.getState().addToQuickLaunch({
@@ -645,6 +654,32 @@ export function Desktop() {
               >
                 Add to Quick Launch
               </CtxItem>
+              <CtxSubmenu label="Send To">
+                <CtxItem
+                  onClick={() => {
+                    let shortcutPath: string | null = null;
+                    useVfsStore.getState().transaction(
+                      "Create desktop shortcut",
+                      () => {
+                        shortcutPath = createFileShortcut(
+                          abs,
+                          DESKTOP_PATH,
+                          targetIcon,
+                        );
+                      },
+                    );
+                    if (!shortcutPath) {
+                      void alertError(
+                        "Create Shortcut",
+                        "Windows could not create a shortcut on the Desktop.",
+                      );
+                    }
+                    setIconCtx(null);
+                  }}
+                >
+                  Desktop (create shortcut)
+                </CtxItem>
+              </CtxSubmenu>
               {!isLnk && node.type === "file" && (
                 <CtxItem
                   onClick={() => {

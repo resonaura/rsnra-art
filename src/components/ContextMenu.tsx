@@ -99,6 +99,7 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
       $visible={visible}
       style={{ left: pos.left, top: pos.top }}
       onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
       {children}

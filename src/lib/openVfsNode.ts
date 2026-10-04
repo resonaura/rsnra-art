@@ -52,6 +52,47 @@ export function parseVfsShortcut(node: Pick<VfsNode, "content">): VfsShortcut | 
   }
 }
 
+/** Create a normal Shell link to a VFS object, with the familiar Desktop name. */
+export function createFileShortcut(
+  sourcePath: string,
+  destinationFolderPath: string,
+  icon?: string,
+): string | null {
+  const vfs = useVfsStore.getState();
+  const targetPath = vfs.resolvePath(sourcePath);
+  const target = targetPath ? vfs.resolve(targetPath) : null;
+  const destinationPath = vfs.resolvePath(destinationFolderPath);
+  const destination = destinationPath ? vfs.resolve(destinationPath) : null;
+  if (
+    !targetPath ||
+    !target ||
+    !destinationPath ||
+    !destination ||
+    destination.type !== "dir"
+  ) {
+    return null;
+  }
+
+  const prefix = "Shortcut to ";
+  for (let ordinal = 1; ordinal < 10000; ordinal++) {
+    const suffix = ordinal === 1 ? "" : ` (${ordinal})`;
+    const targetNameLimit = 255 - prefix.length - suffix.length - 4;
+    const name = `${prefix}${target.name.slice(0, targetNameLimit)}${suffix}.lnk`;
+    const shortcutPath = `${destinationPath.replace(/\\+$/, "")}\\${name}`;
+    if (vfs.exists(shortcutPath)) continue;
+
+    const content = JSON.stringify({
+      type: "file",
+      target: targetPath,
+      title: target.name,
+      ...(icon ? { icon } : {}),
+      shortcut: true,
+    });
+    return vfs.writeFile(shortcutPath, content) ? shortcutPath : null;
+  }
+  return null;
+}
+
 function openShortcut(
   node: VfsNode,
   shortcut: VfsShortcut,
