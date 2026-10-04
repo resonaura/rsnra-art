@@ -141,6 +141,16 @@ assert.equal(
   true,
 );
 
+const attribFixture = "C:\\ATTRIB recursion regression";
+assert.equal(state.mkdir(attribFixture), true);
+assert.equal(state.mkdir(`${attribFixture}\\Alpha`), true);
+assert.equal(state.mkdir(`${attribFixture}\\Alpha\\Nested`), true);
+assert.equal(state.writeFile(`${attribFixture}\\root.txt`, "root"), true);
+assert.equal(
+  state.writeFile(`${attribFixture}\\Alpha\\Nested\\deep.txt`, "deep"),
+  true,
+);
+
 const runTerminalCommand = async (command, options = {}) => {
   const output = [];
   let errorLevel = 0;
@@ -168,6 +178,51 @@ const runTerminalCommand = async (command, options = {}) => {
   });
   return { text: output.flatMap((entry) => entry.lines).join("\n"), errorLevel };
 };
+
+const recursiveAttrib = await runTerminalCommand(
+  `attrib +h /s "${attribFixture}\\*"`,
+);
+assert.equal(recursiveAttrib.errorLevel, 0);
+assert.equal(state.resolve(`${attribFixture}\\root.txt`)?.hidden, true);
+assert.equal(
+  state.resolve(`${attribFixture}\\Alpha\\Nested\\deep.txt`)?.hidden,
+  true,
+);
+assert.equal(!!state.resolve(`${attribFixture}\\Alpha`)?.hidden, false);
+assert.equal(useVfsStore.getState().undoDescription, "Change file attributes");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(!!state.resolve(`${attribFixture}\\root.txt`)?.hidden, false);
+assert.equal(
+  !!state.resolve(`${attribFixture}\\Alpha\\Nested\\deep.txt`)?.hidden,
+  false,
+);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.resolve(`${attribFixture}\\root.txt`)?.hidden, true);
+
+const recursiveAttribDirectories = await runTerminalCommand(
+  `attrib +s /s /d "${attribFixture}\\*"`,
+);
+assert.equal(recursiveAttribDirectories.errorLevel, 0);
+assert.equal(state.resolve(`${attribFixture}\\Alpha`)?.system, true);
+assert.equal(state.resolve(`${attribFixture}\\Alpha\\Nested`)?.system, true);
+assert.equal(
+  state.resolve(`${attribFixture}\\Alpha\\Nested\\deep.txt`)?.system,
+  true,
+);
+assert.equal(useVfsStore.getState().undoDescription, "Change file attributes");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.resolve(`${attribFixture}\\Alpha`)?.system, false);
+assert.equal(
+  state.resolve(`${attribFixture}\\Alpha\\Nested\\deep.txt`)?.system,
+  false,
+);
+assert.equal(useVfsStore.getState().redo(), true);
+const clearRecursiveAttrib = await runTerminalCommand(
+  `attrib -h -s /s /d "${attribFixture}\\*"`,
+);
+assert.equal(clearRecursiveAttrib.errorLevel, 0);
+assert.equal(state.resolve(`${attribFixture}\\Alpha`)?.system, false);
+assert.equal(!!state.resolve(`${attribFixture}\\root.txt`)?.hidden, false);
 
 class MemoryTerminal {
   output = "";

@@ -1455,7 +1455,15 @@ function cmdTouch(args: string[], ctx: CmdContext) {
 
 function cmdAttrib(args: string[], ctx: CmdContext) {
   const switches = args.filter((arg) => /^[+-][RHSA]+$/i.test(arg));
-  const targetArg = args.find((arg) => !/^[+-][RHSA]+$/i.test(arg)) ?? "*";
+  const recursive = args.some((arg) => arg.toLowerCase() === "/s");
+  const includeDirectories = args.some((arg) => arg.toLowerCase() === "/d");
+  const targetArg =
+    args.find(
+      (arg) =>
+        !/^[+-][RHSA]+$/i.test(arg) &&
+        arg.toLowerCase() !== "/s" &&
+        arg.toLowerCase() !== "/d",
+    ) ?? "*";
   const lastSep = Math.max(
     targetArg.lastIndexOf("\\"),
     targetArg.lastIndexOf("/"),
@@ -1473,21 +1481,43 @@ function cmdAttrib(args: string[], ctx: CmdContext) {
     : null;
 
   let matches: Array<{ node: VfsNode; path: string }> = [];
+
+  const collectFromDirectory = (
+    directoryPath: string,
+    directory: VfsNode,
+    filePattern: string,
+  ) => {
+    const children = directory.children ?? [];
+    for (const node of expandWildcards(filePattern, children)) {
+      if (node.type === "dir" && !includeDirectories) continue;
+      matches.push({
+        node,
+        path: `${directoryPath.replace(/[\\/]+$/, "")}\\${node.name}`,
+      });
+    }
+    if (!recursive) return;
+    for (const node of children) {
+      if (node.type !== "dir") continue;
+      const childPath = `${directoryPath.replace(/[\\/]+$/, "")}\\${node.name}`;
+      collectFromDirectory(childPath, node, filePattern);
+    }
+  };
+
   if (hasWildcard) {
     const dirPath = ctx.vfs.resolvePath(dirArg!);
     const dirNode = dirPath ? ctx.vfs.resolve(dirPath) : null;
     if (dirPath && dirNode?.type === "dir") {
-      matches = expandWildcards(pattern!, dirNode.children ?? []).map(
-        (node) => ({
-          node,
-          path: `${dirPath.replace(/\\+$/, "")}\\${node.name}`,
-        }),
-      );
+      collectFromDirectory(dirPath, dirNode, pattern!);
     }
   } else {
     const path = ctx.vfs.resolvePath(targetArg);
     const node = path ? ctx.vfs.resolve(path) : null;
-    if (path && node) matches = [{ node, path }];
+    if (path && node) {
+      matches = [{ node, path }];
+      if (recursive && node.type === "dir") {
+        collectFromDirectory(path, node, "*");
+      }
+    }
   }
 
   if (!matches.length) {
@@ -1528,9 +1558,11 @@ function cmdAttrib(args: string[], ctx: CmdContext) {
   }
 
   let failures = 0;
-  for (const { path } of matches) {
-    if (!ctx.vfs.setAttributes(path, changes)) failures++;
-  }
+  ctx.vfs.transaction("Change file attributes", () => {
+    for (const { path } of matches) {
+      if (!ctx.vfs.setAttributes(path, changes)) failures++;
+    }
+  });
   if (failures) {
     ctx.print(["Access denied - protected system object."], "error");
     ctx.setErrorLevel(1);
@@ -2552,8 +2584,10 @@ const HELP_TOPICS: Record<string, string[]> = {
   ],
   ren: ["REN <file> <newname>   (RENAME, MV)", "  Renames a file."],
   attrib: [
-    "ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [file]",
+    "ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [file] [/S [/D]]",
     "  Displays or changes DOS file attributes.",
+    "  /S   Process matching files in this folder and subfolders",
+    "  /D   Include matching directories (with or without /S)",
   ],
   tree: ["TREE [path]", "  Displays the directory tree."],
   echo: [
