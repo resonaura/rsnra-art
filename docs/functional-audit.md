@@ -29,6 +29,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Command Prompt / recursive deletion | `DEL /S` was ignored, so a wildcard that should span subdirectories only removed matching files from the current directory; each successful file deletion also created its own Undo entry. | Implemented: `/S` searches the selected virtual subtree with the same wildcard and DOS attribute rules, leaves directories in place, reports full paths, and groups the batch into one Undo/Redo transaction. |
 | P2 | Command Prompt / wildcard copy | `COPY` accepted only one literal source, so normal patterns such as `COPY *.TXT destination` failed even though the DOS wildcard resolver already existed for listing/deletion. | Implemented: wildcard sources resolve both long names and their stored 8.3 aliases, copy only matching files into an existing destination folder, report the count, and form one Undo/Redo step. |
 | P2 | Command Prompt / wildcard move | `MOVE` accepted one literal source, so a batch of matching files could not be moved into another directory as a unit. | Implemented: wildcard matches are resolved by long/short name, moved into an existing directory, and grouped into one Undo/Redo transaction with per-file failures preserved. |
+| P2 | Command Prompt / delete confirmations | `DEL /P` and `/Q` were silently discarded, so the command could not ask before each deletion and `/Q` could not override an interactive request. | Implemented: the terminal supports per-file Y/N input for `/P`; `/Q` suppresses those prompts, and the command remains busy without swallowing the confirmation keystrokes. |
 | P2 | File metadata | File sizes were calculated differently in Explorer, Find, Properties, File Dialog, and the terminal; stub executable files appeared empty in some views. | Implemented; live checked for application size |
 | P2 | Windows paths | Drive-relative paths such as `C:..` were incorrectly treated as rooted paths on `C:\`, and the VFS accepted paths longer than classic `MAX_PATH`. | Implemented and live checked: `C:..` moved from My Documents to its parent, and `C:My Documents` returned relative to that C: directory; rooted forms remain distinct. A deterministic boundary check accepts 259 visible characters and rejects 260, counting the terminating NUL as part of the 260-character Win32 limit. |
 | P2 | Explorer Copy/Move path length | Copy and Move validated the destination directory but not the final `directory\filename`, so they could create nodes whose full paths exceeded classic `MAX_PATH`. | Fixed: derived destination paths are rejected before mutation using the caller's normalized path (so 8.3 paths are not expanded for the limit check); in-memory checks confirm both Copy and Move leave the source intact. |
@@ -169,6 +170,10 @@ not a claim that every Windows 2000 feature is implemented.
 30. Support `MOVE` wildcard sources. **Complete:** expand long/short matches,
     move them to an existing folder, and make the batch a single reversible
     transaction.
+31. Restore `DEL /P` and `/Q` confirmation behavior. **Complete:** each
+    matching file can be accepted or declined; `/Q` takes precedence, and
+    terminal-input regression checks exercise both the command and interactive
+    shell route.
 
 ## Historical checks used
 

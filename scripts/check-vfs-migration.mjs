@@ -20,6 +20,7 @@ const [
   { useFilePrefsStore },
   { matchesDosAttributeSelector, parseDosAttributeSelector },
   { executeLine },
+  { Shell },
 ] =
   await Promise.all([
     import("../src/store/vfsStore.ts"),
@@ -30,6 +31,7 @@ const [
     import("../src/store/filePrefsStore.ts"),
     import("../src/lib/dosAttributes.ts"),
     import("../src/apps/Terminal/commands.ts"),
+    import("../src/apps/Terminal/shell.ts"),
   ]);
 
 const {
@@ -139,7 +141,7 @@ assert.equal(
   true,
 );
 
-const runTerminalCommand = async (command) => {
+const runTerminalCommand = async (command, options = {}) => {
   const output = [];
   let errorLevel = 0;
   await executeLine(command, {
@@ -155,12 +157,48 @@ const runTerminalCommand = async (command) => {
     setPromptStr: () => {},
     promptStr: "$P$G",
     errorLevel,
+    confirm: options.confirm,
     setErrorLevel: (value) => {
       errorLevel = value;
     },
   });
   return { text: output.flatMap((entry) => entry.lines).join("\n"), errorLevel };
 };
+
+class MemoryTerminal {
+  output = "";
+  listeners = new Set();
+  options = { theme: {} };
+
+  onData(listener) {
+    this.listeners.add(listener);
+    return { dispose: () => this.listeners.delete(listener) };
+  }
+
+  onResize() {
+    return { dispose: () => {} };
+  }
+
+  write(value) {
+    this.output += value;
+  }
+
+  writeln(value) {
+    this.write(`${value}\r\n`);
+  }
+
+  clear() {
+    this.output = "";
+  }
+
+  send(value) {
+    for (const character of value) {
+      for (const listener of this.listeners) listener(character);
+    }
+  }
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const defaultDir = await runTerminalCommand(`dir /b "${commandFixture}"`);
 assert.deepEqual(
@@ -366,6 +404,84 @@ assert.equal(state.exists(`${commandFixture}\\Folder\\Nested\\deep.tmp`), true);
 assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.exists(`${commandFixture}\\root.tmp`), false);
 assert.equal(state.exists(`${commandFixture}\\Folder\\Nested\\deep.tmp`), false);
+
+const declinedPath = `${commandFixture}\\confirm-decline.tmp`;
+assert.equal(state.writeFile(declinedPath, "keep"), true);
+const declinedQuestions = [];
+const declinedDelete = await runTerminalCommand(`del /p "${declinedPath}"`, {
+  confirm: async (question) => {
+    declinedQuestions.push(question);
+    return false;
+  },
+});
+assert.equal(declinedDelete.errorLevel, 0);
+assert.equal(state.exists(declinedPath), true);
+assert.deepEqual(declinedQuestions, [`${declinedPath}, Delete (Y/N)?`]);
+
+const acceptedPath = `${commandFixture}\\confirm-accept.tmp`;
+assert.equal(state.writeFile(acceptedPath, "delete"), true);
+const acceptedDelete = await runTerminalCommand(`del /p "${acceptedPath}"`, {
+  confirm: async () => true,
+});
+assert.equal(acceptedDelete.errorLevel, 0);
+assert.equal(state.exists(acceptedPath), false);
+
+const noPromptPath = `${commandFixture}\\confirm-quiet.tmp`;
+assert.equal(state.writeFile(noPromptPath, "delete"), true);
+let quietPromptCount = 0;
+await runTerminalCommand(`del /p /q "${noPromptPath}"`, {
+  confirm: async () => {
+    quietPromptCount++;
+    return false;
+  },
+});
+assert.equal(quietPromptCount, 0);
+assert.equal(state.exists(noPromptPath), false);
+
+const wildcardPromptA = `${commandFixture}\\confirm-wild-a.tmp`;
+const wildcardPromptB = `${commandFixture}\\confirm-wild-b.tmp`;
+assert.equal(state.writeFile(wildcardPromptA, "delete"), true);
+assert.equal(state.writeFile(wildcardPromptB, "keep"), true);
+const wildcardAnswers = [true, false];
+const wildcardPrompt = await runTerminalCommand(
+  `del /p "${commandFixture}\\confirm-wild-*.tmp"`,
+  { confirm: async () => wildcardAnswers.shift() },
+);
+assert.equal(wildcardPrompt.errorLevel, 0);
+assert.equal(state.exists(wildcardPromptA), false);
+assert.equal(state.exists(wildcardPromptB), true);
+
+const shellPromptPath = `${commandFixture}\\shell-confirm.tmp`;
+assert.equal(state.writeFile(shellPromptPath, "delete"), true);
+const memoryTerminal = new MemoryTerminal();
+const testShell = new Shell(memoryTerminal, "confirm-test", () => {}, () => {});
+testShell.start();
+memoryTerminal.send(`del /p "${shellPromptPath}"\r`);
+await tick();
+assert.ok(memoryTerminal.output.includes(`${shellPromptPath}, Delete (Y/N)?`));
+assert.equal(state.exists(shellPromptPath), true);
+memoryTerminal.send("Y\r");
+await tick();
+assert.equal(state.exists(shellPromptPath), false);
+
+const cancelledPromptA = `${commandFixture}\\shell-cancel-a.tmp`;
+const cancelledPromptB = `${commandFixture}\\shell-cancel-b.tmp`;
+assert.equal(state.writeFile(cancelledPromptA, "keep"), true);
+assert.equal(state.writeFile(cancelledPromptB, "keep"), true);
+memoryTerminal.send(`del /p "${commandFixture}\\shell-cancel-*.tmp"\r`);
+await tick();
+assert.ok(memoryTerminal.output.includes(`${cancelledPromptA}, Delete (Y/N)?`));
+memoryTerminal.send("\x03");
+await tick();
+await tick();
+assert.equal(state.exists(cancelledPromptA), true);
+assert.equal(state.exists(cancelledPromptB), true);
+assert.equal(
+  memoryTerminal.output.includes(`${cancelledPromptB}, Delete (Y/N)?`),
+  false,
+);
+testShell.destroy();
+
 assert.equal(state.remove(commandFixture), true);
 
 const protectedCommandPath = "C:\\WINNT\\System32\\cmd.exe";

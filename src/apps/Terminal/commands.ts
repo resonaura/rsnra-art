@@ -45,6 +45,7 @@ export interface CmdContext {
   promptStr: string;
   errorLevel: number;
   setErrorLevel: (n: number) => void;
+  confirm?: (question: string) => Promise<boolean>;
   setColor?: (bg: string, fg: string) => void;
 }
 
@@ -710,7 +711,7 @@ function cmdRmdir(
   }
 }
 
-function cmdDel(
+async function cmdDel(
   args: string[],
   ctx: CmdContext,
   _raw: string,
@@ -721,6 +722,12 @@ function cmdDel(
   const forceReadOnly = hasFlag("/f") || hasFlag("-f");
   const recursive = hasFlag("/s");
   const quiet = cmdName === "rm" && hasFlag("-f");
+  const promptEach = cmdName !== "rm" && hasFlag("/p") && !hasFlag("/q");
+  const confirmDelete = async (path: string) => {
+    if (!promptEach) return true;
+    if (!ctx.confirm) return false;
+    return ctx.confirm(`${path}, Delete (Y/N)?`);
+  };
   const attributeFlag = args.find((argument) => /^\/a(?::|[rhsad]+|$)/i.test(argument));
   const attributeSelector = attributeFlag
     ? parseDosAttributeSelector(attributeFlag, { allowDirectories: false })
@@ -801,10 +808,15 @@ function cmdDel(
       }
     }
 
-    if (candidates.size) {
+    const approved: Array<{ path: string; node: VfsNode }> = [];
+    for (const candidate of candidates.values()) {
+      if (await confirmDelete(candidate.path)) approved.push(candidate);
+    }
+
+    if (approved.length) {
       let denied = false;
       ctx.vfs.transaction("Delete files", () => {
-        for (const candidate of candidates.values()) {
+        for (const candidate of approved) {
           if (
             !ctx.vfs.remove(candidate.path, {
               allowReadOnly: forceReadOnly,
@@ -848,6 +860,8 @@ function cmdDel(
           matchesDosAttributeSelector(m, attributeSelector)
         ) {
           matched = true;
+          const path = abs + "\\" + m.name;
+          if (!(await confirmDelete(path))) continue;
           if (!ctx.vfs.remove(abs + "\\" + m.name, {
             allowReadOnly: forceReadOnly,
           })) {
@@ -881,6 +895,8 @@ function cmdDel(
           : `Access is denied.`;
       if (!quiet) ctx.print([msg], "error");
       ctx.setErrorLevel(1);
+    } else if (!(await confirmDelete(abs ?? t))) {
+      continue;
     } else if (
       !ctx.vfs.remove(t, { allowReadOnly: forceReadOnly })
     ) {
@@ -2235,8 +2251,10 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  -f  Force (no error if not found)",
   ],
   del: [
-    "DEL [/S] [/F] [/A[[:]attributes]] <file>   (ERASE)",
+    "DEL [/P] [/Q] [/S] [/F] [/A[[:]attributes]] <file>   (ERASE)",
     "  Deletes a file.",
+    "  /P  Prompts before each file is deleted",
+    "  /Q  Suppresses delete confirmations",
     "  /S  Deletes matching files in the current directory and subdirectories",
     "  /F  Force deletion of read-only files",
     "  /A  Select by attributes (R/H/S/A); hidden/system files are skipped by default",

@@ -34,6 +34,9 @@ export class Shell {
   private promptStr = "$P$G";
   private errorLevel = 0;
   private escapeBuffer = "";
+  private confirmationResolver: ((confirmed: boolean) => void) | null = null;
+  private promptOverride: string | null = null;
+  private confirmationCancelled = false;
 
   private disposable: { dispose: () => void };
   private resizeDisposable: { dispose: () => void };
@@ -80,11 +83,16 @@ export class Shell {
     this.active = false;
     this.disposable.dispose();
     this.resizeDisposable.dispose();
+    this.confirmationResolver?.(false);
+    this.confirmationResolver = null;
+    this.promptOverride = null;
+    this.confirmationCancelled = true;
     this.nano?.destroy?.();
   }
 
   /** The literal prompt text as displayed, no ANSI codes. */
   private get promptText(): string {
+    if (this.promptOverride !== null) return this.promptOverride;
     const cwd = useVfsStore.getState().cwd;
     const formatted = this.promptStr
       .replace(/\$P/g, cwd)
@@ -126,6 +134,11 @@ export class Shell {
 
     // Nano mode delegates to nano
     if (this.nano) return;
+
+    if (this.confirmationResolver) {
+      this.handleConfirmationData(data);
+      return;
+    }
 
     // An async command (e.g. `ping`) is still running — ignore input until
     // it settles and the next prompt is shown.
@@ -197,6 +210,63 @@ export class Shell {
           this.redrawInput();
         }
         break;
+    }
+  }
+
+  private requestConfirmation(question: string): Promise<boolean> {
+    if (!this.active || this.confirmationCancelled) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      if (this.confirmationResolver) {
+        resolve(false);
+        return;
+      }
+      this.buffer = "";
+      this.cursorPos = 0;
+      this.promptOverride = `${question} `;
+      this.confirmationResolver = resolve;
+      this.term.write(this.promptOverride);
+    });
+  }
+
+  private finishConfirmation(confirmed: boolean) {
+    const resolve = this.confirmationResolver;
+    if (!resolve) return;
+    this.confirmationResolver = null;
+    this.promptOverride = null;
+    this.buffer = "";
+    this.cursorPos = 0;
+    resolve(confirmed);
+  }
+
+  private handleConfirmationData(data: string) {
+    if (data === "\r") {
+      this.term.write("\r\n");
+      this.finishConfirmation(/^y(?:es)?$/i.test(this.buffer.trim()));
+      return;
+    }
+    if (data === "\x03") {
+      this.term.write("^C\r\n");
+      this.confirmationCancelled = true;
+      this.finishConfirmation(false);
+      return;
+    }
+    if (data === "\x7f") {
+      if (this.cursorPos > 0) {
+        this.buffer =
+          this.buffer.slice(0, this.cursorPos - 1) +
+          this.buffer.slice(this.cursorPos);
+        this.cursorPos--;
+        this.redrawInput();
+      }
+      return;
+    }
+    if (data.charCodeAt(0) >= 0x20) {
+      this.buffer =
+        this.buffer.slice(0, this.cursorPos) +
+        data +
+        this.buffer.slice(this.cursorPos);
+      this.cursorPos += data.length;
+      this.redrawInput();
     }
   }
 
@@ -284,6 +354,7 @@ export class Shell {
   }
 
   private async executeLine() {
+    this.confirmationCancelled = false;
     const line = this.buffer;
     this.term.write("\r\n");
 
@@ -335,6 +406,7 @@ export class Shell {
       },
       promptStr: this.promptStr,
       errorLevel: this.errorLevel,
+      confirm: (question: string) => this.requestConfirmation(question),
       setErrorLevel: (n: number) => {
         this.errorLevel = n;
       },
