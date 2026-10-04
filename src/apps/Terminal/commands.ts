@@ -1194,12 +1194,14 @@ async function cmdCopy(
   if (failed) ctx.setErrorLevel(1);
 }
 
-function cmdMove(
+async function cmdMove(
   args: string[],
   ctx: CmdContext,
   _raw: string,
   cmdName: string,
 ) {
+  const hasFlag = (flag: string) =>
+    args.some((argument) => argument.toLowerCase() === flag.toLowerCase());
   const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
   const [src, dst] = targets;
   if (!src || !dst) {
@@ -1208,7 +1210,15 @@ function cmdMove(
     return;
   }
 
-  if (/[*?]/.test(src)) {
+  const wildcard = /[*?]/.test(src);
+  const candidates: Array<{
+    sourcePath: string;
+    destinationPath: string;
+    sourceName: string;
+    sourceType: VfsNode["type"];
+  }> = [];
+
+  if (wildcard) {
     const lastSep = Math.max(src.lastIndexOf("\\"), src.lastIndexOf("/"));
     const sourceDirArg = lastSep >= 0
       ? src.slice(0, lastSep + 1)
@@ -1231,50 +1241,24 @@ function cmdMove(
     }
     const destinationAbs = ctx.vfs.resolvePath(dst);
     const destination = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
-    if (destination?.type !== "dir") {
+    if (!destinationAbs || destination?.type !== "dir") {
       ctx.print(["The destination must be a directory for multiple files."], "error");
       ctx.setErrorLevel(1);
       return;
     }
 
-    let moved = 0;
-    let failed = false;
-    ctx.vfs.transaction("Move files", () => {
-      for (const source of sources) {
-        const sourcePath = `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`;
-        if (ctx.vfs.move(sourcePath, dst)) {
-          moved++;
-        } else {
-          failed = true;
-          ctx.print(
-            [`The system cannot move ${sourcePath}; the file exists or is protected.`],
-            "error",
-          );
-        }
-      }
-    });
-    if (moved) ctx.print([`        ${moved} file(s) moved.`]);
-    if (failed) ctx.setErrorLevel(1);
-    return;
-  }
-
-  const dstAbs = ctx.vfs.resolvePath(dst);
-  const dstNode = dstAbs ? ctx.vfs.resolve(dstAbs) : null;
-  if (dstNode && dstNode.type === "dir") {
-    if (ctx.vfs.move(src, dst)) {
-      ctx.print(["        1 file(s) moved."]);
-    } else {
-      ctx.print(
-        ["The system cannot find the file specified, or it already exists."],
-        "error",
-      );
-      ctx.setErrorLevel(1);
+    for (const source of sources) {
+      candidates.push({
+        sourcePath: `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
+        destinationPath: `${destinationAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
+        sourceName: source.name,
+        sourceType: source.type,
+      });
     }
   } else {
-    // It's a rename — move to a new path
     const srcAbs = ctx.vfs.resolvePath(src);
     const srcNode = srcAbs ? ctx.vfs.resolve(srcAbs) : null;
-    if (!srcNode) {
+    if (!srcAbs || !srcNode) {
       const msg =
         cmdName === "mv"
           ? `mv: ${src}: No such file or directory`
@@ -1283,20 +1267,117 @@ function cmdMove(
       ctx.setErrorLevel(1);
       return;
     }
-    if (ctx.vfs.moveAs(src, dst)) {
-      ctx.print([
-        srcNode.type === "dir"
-          ? "        1 dir(s) moved."
-          : "        1 file(s) moved.",
-      ]);
-    } else {
+    const dstAbs = ctx.vfs.resolvePath(dst);
+    if (!dstAbs) {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const dstNode = ctx.vfs.resolve(dstAbs);
+    candidates.push({
+      sourcePath: srcAbs,
+      destinationPath:
+        dstNode?.type === "dir"
+          ? `${dstAbs.replace(/[\\/]+$/, "")}\\${srcNode.name}`
+          : dstAbs,
+      sourceName: srcNode.name,
+      sourceType: srcNode.type,
+    });
+  }
+
+  const forcePrompt = hasFlag("/-y");
+  const forceOverwrite = hasFlag("/y");
+  const copyCmd = getEnvVar(ctx.vars, "COPYCMD") ?? "";
+  const environmentOverwrite = /(?:^|\s)\/y(?:$|\s)/i.test(copyCmd);
+  const promptOverwrites = forcePrompt
+    ? true
+    : forceOverwrite || environmentOverwrite
+      ? false
+      : !ctx.inBatch;
+
+  let failed = false;
+  const approved: Array<{
+    sourcePath: string;
+    destinationPath: string;
+    sourceType: VfsNode["type"];
+    overwrite: boolean;
+  }> = [];
+  for (const candidate of candidates) {
+    const sourceAbs = ctx.vfs.resolvePath(candidate.sourcePath);
+    const destinationAbs = ctx.vfs.resolvePath(candidate.destinationPath);
+    const existing = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
+    const samePath = sourceAbs?.toLowerCase() === destinationAbs?.toLowerCase();
+    if (
+      wildcard &&
+      existing &&
+      existing.name.toLowerCase() !== candidate.sourceName.toLowerCase()
+    ) {
+      failed = true;
       ctx.print(
-        ["The system cannot find the path, or the name is in use."],
+        [`The destination name is already in use: ${candidate.destinationPath}.`],
         "error",
       );
-      ctx.setErrorLevel(1);
+      continue;
     }
+    if (
+      existing &&
+      !samePath &&
+      (existing.type !== "file" ||
+        candidate.sourceType !== "file" ||
+        existing.protected ||
+        isReadOnlyFile(existing))
+    ) {
+      failed = true;
+      ctx.print([`Access is denied - ${candidate.destinationPath}.`], "error");
+      continue;
+    }
+    if (
+      existing &&
+      !samePath &&
+      promptOverwrites &&
+      (!ctx.confirm ||
+        !(await ctx.confirm(`Overwrite ${candidate.destinationPath}? (Y/N)`)))
+    ) {
+      continue;
+    }
+    approved.push({
+      ...candidate,
+      overwrite: !!existing && !samePath,
+    });
   }
+
+  let moved = 0;
+  if (approved.length) {
+    ctx.vfs.transaction(wildcard ? "Move files" : "Move", () => {
+      for (const candidate of approved) {
+        if (
+          ctx.vfs.moveAs(candidate.sourcePath, candidate.destinationPath, {
+            overwrite: candidate.overwrite,
+          })
+        ) {
+          moved++;
+        } else {
+          failed = true;
+          ctx.print(
+            [
+              `The system cannot move ${candidate.sourcePath}; the destination is protected or in use.`,
+            ],
+            "error",
+          );
+        }
+      }
+    });
+  }
+  if (moved) {
+    const directories =
+      approved.length === 1 && approved[0].sourceType === "dir";
+    ctx.print([
+      directories
+        ? "        1 dir(s) moved."
+        : `        ${moved} file(s) moved.`,
+    ]);
+  }
+  if (failed) ctx.setErrorLevel(1);
 }
 
 function cmdRen(
@@ -2449,7 +2530,12 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  /Y   Overwrite existing files without asking",
     "  /-Y  Ask before overwriting (the interactive default)",
   ],
-  move: ["MOVE <src> <dst>   (MV)", "  Moves a file or directory."],
+  move: [
+    "MOVE [/Y | /-Y] <src> <dst>   (MV)",
+    "  Moves files or directories.",
+    "  /Y   Overwrite existing files without asking",
+    "  /-Y  Ask before overwriting (the interactive default)",
+  ],
   ren: ["REN <file> <newname>   (RENAME, MV)", "  Renames a file."],
   attrib: [
     "ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [file]",

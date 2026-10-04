@@ -113,7 +113,11 @@ export interface VfsState {
     destPath: string,
     options?: { overwrite?: boolean },
   ) => boolean;
-  moveAs: (src: string, destPath: string) => boolean;
+  moveAs: (
+    src: string,
+    destPath: string,
+    options?: { overwrite?: boolean },
+  ) => boolean;
   // Copy/move `src` into directory `destDir`, auto-renaming on collision with
   // the Win95 "Copy of <name>" scheme. Returns the resulting node name, or
   // null on failure. Refuses to copy a folder into itself/a descendant.
@@ -2702,15 +2706,24 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
-      moveAs: (src, destPath) => {
+      moveAs: (src, destPath, options) => {
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destPath);
         if (!srcAbs || !destAbs) return false;
         if (srcAbs.toLowerCase() === destAbs.toLowerCase()) return true;
-        if (findNode(get().root, destAbs)) return false;
+        const existing = findNode(get().root, destAbs);
+        if (
+          existing &&
+          (!options?.overwrite ||
+            existing.type !== "file" ||
+            existing.protected ||
+            isReadOnlyFile(existing))
+        )
+          return false;
         const ref = findParent(get().root, srcAbs);
         if (
           !ref ||
+          (existing && ref.node.type !== "file") ||
           containsProtectedNode(ref.node) ||
           isReadOnlyFile(ref.node)
         )
@@ -2718,7 +2731,7 @@ export const useVfsStore = create<VfsState>()(
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         const parts = splitAbs(destAbs);
-        const name = parts.at(-1);
+        const name = existing?.name ?? parts.at(-1);
         if (!name || !isValidWindowsName(name)) return false;
         const parentPath =
           parts.length === 1
@@ -2728,6 +2741,7 @@ export const useVfsStore = create<VfsState>()(
         if (!parent || parent.type !== "dir") return false;
         const movedNode = { ...ref.node, name };
         let newRoot = removeNode(get().root, srcAbs);
+        if (newRoot && existing) newRoot = removeNode(newRoot, destAbs);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         newRoot = insertNode(newRoot, parentPath, movedNode);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;

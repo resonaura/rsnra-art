@@ -597,6 +597,110 @@ assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.read(`${moveTarget}\\move-one.dat`), "one");
 assert.equal(state.read(`${moveTarget}\\move-two.dat`), "two");
 
+const moveOnePath = `${commandFixture}\\move-one.dat`;
+const movedOnePath = `${moveTarget}\\move-one.dat`;
+assert.equal(state.writeFile(moveOnePath, "replacement-one"), true);
+const declinedMovePrompts = [];
+const declinedMove = await runTerminalCommand(
+  `move "${moveOnePath}" "${moveTarget}"`,
+  {
+    confirm: async (question) => {
+      declinedMovePrompts.push(question);
+      return false;
+    },
+  },
+);
+assert.equal(declinedMove.errorLevel, 0);
+assert.equal(state.exists(moveOnePath), true);
+assert.equal(state.read(movedOnePath), "one");
+assert.deepEqual(declinedMovePrompts, [`Overwrite ${movedOnePath}? (Y/N)`]);
+const acceptedMove = await runTerminalCommand(
+  `move "${moveOnePath}" "${moveTarget}"`,
+  { confirm: async () => true },
+);
+assert.equal(acceptedMove.errorLevel, 0);
+assert.equal(acceptedMove.text, "        1 file(s) moved.");
+assert.equal(state.exists(moveOnePath), false);
+assert.equal(state.read(movedOnePath), "replacement-one");
+assert.equal(useVfsStore.getState().undoDescription, "Move");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.read(moveOnePath), "replacement-one");
+assert.equal(state.read(movedOnePath), "one");
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.read(movedOnePath), "replacement-one");
+
+assert.equal(state.writeFile(moveOnePath, "move-y"), true);
+let moveYPromptCount = 0;
+const quietMove = await runTerminalCommand(
+  `move /y "${moveOnePath}" "${moveTarget}"`,
+  {
+    confirm: async () => {
+      moveYPromptCount++;
+      return false;
+    },
+  },
+);
+assert.equal(quietMove.errorLevel, 0);
+assert.equal(moveYPromptCount, 0);
+assert.equal(state.exists(moveOnePath), false);
+assert.equal(state.read(movedOnePath), "move-y");
+
+assert.equal(state.writeFile(moveOnePath, "move-copycmd"), true);
+let moveCopyCmdPromptCount = 0;
+await runTerminalCommand(`move "${moveOnePath}" "${moveTarget}"`, {
+  vars: { copycmd: "/Y" },
+  confirm: async () => {
+    moveCopyCmdPromptCount++;
+    return false;
+  },
+});
+assert.equal(moveCopyCmdPromptCount, 0);
+assert.equal(state.exists(moveOnePath), false);
+assert.equal(state.read(movedOnePath), "move-copycmd");
+
+assert.equal(state.writeFile(moveOnePath, "wild-move-one"), true);
+assert.equal(state.writeFile(`${commandFixture}\\move-two.dat`, "wild-move-two"), true);
+const wildcardMoveAnswers = [true, false];
+const wildcardOverwriteMove = await runTerminalCommand(
+  `move /-y "${commandFixture}\\move-*.dat" "${moveTarget}"`,
+  {
+    vars: { COPYCMD: "/Y" },
+    confirm: async () => wildcardMoveAnswers.shift(),
+  },
+);
+assert.equal(wildcardOverwriteMove.errorLevel, 0);
+assert.equal(wildcardOverwriteMove.text, "        1 file(s) moved.");
+assert.equal(state.exists(moveOnePath), false);
+assert.equal(state.read(movedOnePath), "wild-move-one");
+assert.equal(state.read(`${commandFixture}\\move-two.dat`), "wild-move-two");
+assert.equal(state.read(`${moveTarget}\\move-two.dat`), "two");
+assert.equal(useVfsStore.getState().undoDescription, "Move files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.read(moveOnePath), "wild-move-one");
+assert.equal(state.read(movedOnePath), "move-copycmd");
+assert.equal(state.read(`${commandFixture}\\move-two.dat`), "wild-move-two");
+assert.equal(useVfsStore.getState().redo(), true);
+
+assert.equal(state.writeFile(moveOnePath, "batch-move"), true);
+const batchMovePath = `${commandFixture}\\move-overwrite.bat`;
+assert.equal(
+  state.writeFile(
+    batchMovePath,
+    `@echo off\nmove "${moveOnePath}" "${moveTarget}"`,
+  ),
+  true,
+);
+let batchMovePromptCount = 0;
+await runTerminalCommand(`"${batchMovePath}"`, {
+  confirm: async () => {
+    batchMovePromptCount++;
+    return false;
+  },
+});
+assert.equal(batchMovePromptCount, 0);
+assert.equal(state.exists(moveOnePath), false);
+assert.equal(state.read(movedOnePath), "batch-move");
+
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
 assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\system.txt"`)).errorLevel, 1);
