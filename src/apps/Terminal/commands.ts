@@ -1030,6 +1030,13 @@ async function cmdCopy(
 ) {
   const hasFlag = (flag: string) =>
     args.some((argument) => argument.toLowerCase() === flag.toLowerCase());
+  const useShortNames = hasFlag("/n");
+  const destinationNameFor = (sourcePath: string, longName: string) => {
+    const shortName = useShortNames ? ctx.vfs.getShortName(sourcePath) : null;
+    return shortName && shortName.toLowerCase() !== longName.toLowerCase()
+      ? shortName
+      : longName;
+  };
   const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
   const [src, dst] = targets;
   if (!src || !dst) {
@@ -1042,7 +1049,7 @@ async function cmdCopy(
   const candidates: Array<{
     sourcePath: string;
     destinationPath: string;
-    sourceName: string;
+    destinationName: string;
   }> = [];
 
   if (wildcard) {
@@ -1075,10 +1082,12 @@ async function cmdCopy(
     }
 
     for (const source of sources) {
+      const sourcePath = `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`;
+      const destinationName = destinationNameFor(sourcePath, source.name);
       candidates.push({
-        sourcePath: `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
-        destinationPath: `${destinationAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
-        sourceName: source.name,
+        sourcePath,
+        destinationPath: `${destinationAbs.replace(/[\\/]+$/, "")}\\${destinationName}`,
+        destinationName,
       });
     }
   } else {
@@ -1101,13 +1110,17 @@ async function cmdCopy(
       return;
     }
     const dstNode = ctx.vfs.resolve(dstAbs);
+    const destinationName =
+      dstNode?.type === "dir"
+        ? destinationNameFor(srcAbs, srcNode.name)
+        : dstAbs.split("\\").at(-1) ?? srcNode.name;
     candidates.push({
       sourcePath: srcAbs,
       destinationPath:
         dstNode?.type === "dir"
-          ? `${dstAbs.replace(/[\\/]+$/, "")}\\${srcNode.name}`
+          ? `${dstAbs.replace(/[\\/]+$/, "")}\\${destinationName}`
           : dstAbs,
-      sourceName: srcNode.name,
+      destinationName,
     });
   }
 
@@ -1134,7 +1147,7 @@ async function cmdCopy(
     if (
       wildcard &&
       existing &&
-      existing.name.toLowerCase() !== candidate.sourceName.toLowerCase()
+      existing.name.toLowerCase() !== candidate.destinationName.toLowerCase()
     ) {
       failed = true;
       ctx.print(
@@ -2525,8 +2538,9 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  Supports wildcards: del *.txt",
   ],
   copy: [
-    "COPY [/Y | /-Y] <src> <dst>   (CP)",
+    "COPY [/N] [/Y | /-Y] <src> <dst>   (CP)",
     "  Copies a file or wildcard set.",
+    "  /N   Use a source file's short 8.3 name at the destination",
     "  /Y   Overwrite existing files without asking",
     "  /-Y  Ask before overwriting (the interactive default)",
   ],

@@ -473,6 +473,53 @@ assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
 assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
 
+const longCopySource = `${commandFixture}\\Long regression filename.txt`;
+const shortCopyName = state.getShortName(longCopySource);
+assert.ok(shortCopyName && shortCopyName !== "Long regression filename.txt");
+const shortCopyPath = `${copyTarget}\\${shortCopyName}`;
+const shortNameCopy = await runTerminalCommand(
+  `copy /n "${longCopySource}" "${copyTarget}"`,
+);
+assert.equal(shortNameCopy.errorLevel, 0);
+assert.equal(shortNameCopy.text, "        1 file(s) copied.");
+assert.equal(state.resolve(shortCopyPath)?.name, shortCopyName);
+assert.equal(state.read(shortCopyPath), state.read(longCopySource));
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(shortCopyPath), false);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.exists(shortCopyPath), true);
+const explicitCopyNamePath = `${copyTarget}\\chosen-name.txt`;
+const explicitShortCopy = await runTerminalCommand(
+  `copy /n "${longCopySource}" "${explicitCopyNamePath}"`,
+);
+assert.equal(explicitShortCopy.errorLevel, 0);
+assert.equal(state.resolve(explicitCopyNamePath)?.name, "chosen-name.txt");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(explicitCopyNamePath), false);
+const plainCopyPath = `${copyTarget}\\plain.txt`;
+const plainShortCopy = await runTerminalCommand(
+  `copy /n "${commandFixture}\\plain.txt" "${copyTarget}"`,
+);
+assert.equal(plainShortCopy.errorLevel, 0);
+assert.equal(state.resolve(plainCopyPath)?.name, "plain.txt");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(plainCopyPath), false);
+assert.equal(useVfsStore.getState().redo(), true);
+const declinedShortOverwriteQuestions = [];
+const declinedShortOverwrite = await runTerminalCommand(
+  `copy /n "${longCopySource}" "${copyTarget}"`,
+  {
+    confirm: async (question) => {
+      declinedShortOverwriteQuestions.push(question);
+      return false;
+    },
+  },
+);
+assert.equal(declinedShortOverwrite.errorLevel, 0);
+assert.deepEqual(declinedShortOverwriteQuestions, [
+  `Overwrite ${shortCopyPath}? (Y/N)`,
+]);
+
 const copyOnePath = `${commandFixture}\\copy-one.dat`;
 const copiedOnePath = `${copyTarget}\\copy-one.dat`;
 assert.equal(state.writeFile(copyOnePath, "updated-one"), true);
