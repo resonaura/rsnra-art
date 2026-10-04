@@ -93,6 +93,8 @@ export interface VfsState {
 
   // mutations
   mkdir: (path: string) => boolean;
+  /** Create a directory tree atomically; allowExisting permits an existing leaf. */
+  mkdirs: (path: string, options?: { allowExisting?: boolean }) => boolean;
   writeFile: (path: string, content: string) => boolean;
   remove: (path: string, options?: { allowReadOnly?: boolean }) => boolean;
   moveToRecycleBin: (
@@ -2313,6 +2315,47 @@ export const useVfsStore = create<VfsState>()(
         );
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         commitFilesystemChange({ root: newRoot }, "Create folder");
+        return true;
+      },
+
+      mkdirs: (path, options) => {
+        const abs = resolveInputPath(path);
+        if (!abs) return false;
+        const parts = splitAbs(abs);
+        if (!parts.length) return options?.allowExisting ?? false;
+
+        const originalRoot = get().root;
+        let nextRoot = originalRoot;
+        const completedParts: string[] = [];
+        for (const [index, part] of parts.entries()) {
+          completedParts.push(part);
+          const targetPath = `C:${SEP}${completedParts.join(SEP)}`;
+          const existing = findNode(nextRoot, targetPath);
+          if (existing) {
+            if (
+              existing.type !== "dir" ||
+              (index === parts.length - 1 && !options?.allowExisting)
+            )
+              return false;
+            continue;
+          }
+          if (!isValidWindowsName(part)) return false;
+
+          const parentParts = completedParts.slice(0, -1);
+          const parentPath = parentParts.length
+            ? `C:${SEP}${parentParts.join(SEP)}`
+            : "C:\\";
+          const updatedRoot = insertNode(
+            nextRoot,
+            parentPath,
+            dir(part, [], false),
+          );
+          if (!updatedRoot || !fitsOnDisk(updatedRoot)) return false;
+          nextRoot = updatedRoot;
+        }
+
+        if (nextRoot === originalRoot) return options?.allowExisting ?? false;
+        commitFilesystemChange({ root: nextRoot }, "Create folder tree");
         return true;
       },
 

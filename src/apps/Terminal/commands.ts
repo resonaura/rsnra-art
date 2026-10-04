@@ -406,7 +406,8 @@ function cmdMkdir(
     ctx.setErrorLevel(1);
     return;
   }
-  // Support mkdir -p (create parent dirs)
+  // Windows MD/MKDIR creates every missing intermediate directory. The
+  // optional -p spelling remains accepted for shell users who expect it.
   const recursive = args[0] === "-p";
   const paths = recursive ? args.slice(1) : args;
   if (!paths.length) {
@@ -415,26 +416,7 @@ function cmdMkdir(
     return;
   }
   for (const p of paths) {
-    let created = false;
-    if (recursive) {
-      const abs = ctx.vfs.resolvePath(p);
-      if (abs) {
-        const parts = abs.slice(3).split("\\").filter(Boolean);
-        let current = "C:\\";
-        created = true;
-        for (const part of parts) {
-          current = current.replace(/\\+$/, "") + "\\" + part;
-          const existing = ctx.vfs.resolve(current);
-          if (existing?.type === "dir") continue;
-          if (existing || !ctx.vfs.mkdir(current)) {
-            created = false;
-            break;
-          }
-        }
-      }
-    } else {
-      created = ctx.vfs.mkdir(p);
-    }
+    const created = ctx.vfs.mkdirs(p, { allowExisting: recursive });
     if (!created) {
       const exists = ctx.vfs.resolvePath(p);
       if (exists && ctx.vfs.resolve(exists)) {

@@ -291,6 +291,24 @@ for (const version of [19, 20]) {
   assert.match(dispatchSendToEntry(mail, [source]).message, /e-mail program/i);
 }
 
+const nestedDirectoryPath = `${USER_DOCUMENTS_PATH}\\md-tree-regression\\level-one\\level-two`;
+assert.equal(state.mkdirs(nestedDirectoryPath), true);
+assert.equal(state.resolve(nestedDirectoryPath)?.type, "dir");
+assert.equal(state.mkdirs(nestedDirectoryPath), false);
+assert.equal(state.mkdirs(nestedDirectoryPath, { allowExisting: true }), true);
+assert.equal(
+  state.resolve(`${USER_DOCUMENTS_PATH}\\md-tree-regression`)?.type,
+  "dir",
+);
+assert.equal(state.undo(), true, "directory tree should use one Undo step");
+assert.equal(state.resolve(`${USER_DOCUMENTS_PATH}\\md-tree-regression`), null);
+assert.equal(state.redo(), true, "directory tree should redo as one step");
+assert.equal(state.resolve(nestedDirectoryPath)?.type, "dir");
+
+const invalidTreePath = `${USER_DOCUMENTS_PATH}\\md-tree-invalid\\CON\\leaf`;
+assert.equal(state.mkdirs(invalidTreePath), false);
+assert.equal(state.resolve(`${USER_DOCUMENTS_PATH}\\md-tree-invalid`), null);
+
 console.log("VFS safety, copy timestamps, and v19/v20 → v21 migration checks passed.");
 process.exit(0);
 
