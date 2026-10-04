@@ -1052,6 +1052,24 @@ assert.equal(state.moveTo(shortPathSource, maxPathDestination), null);
 assert.equal(state.resolve(shortPathSource)?.type, "file");
 assert.deepEqual(state.list(maxPathDestination), []);
 
+const maxRenameDirectory = `C:\\${"r".repeat(245)}`;
+const renameBoundarySource = `${maxRenameDirectory}\\x`;
+const overlongRenameName = "n".repeat(11);
+const boundaryRenameName = "m".repeat(10);
+assert.equal(maxRenameDirectory.length, 248);
+assert.equal(state.mkdir(maxRenameDirectory), true);
+assert.equal(state.writeFile(renameBoundarySource, "rename boundary"), true);
+assert.equal(
+  `${maxRenameDirectory}\\${overlongRenameName}`.length,
+  260,
+);
+assert.equal(state.rename(renameBoundarySource, overlongRenameName), false);
+assert.equal(state.resolve(renameBoundarySource)?.content, "rename boundary");
+const boundaryRenamePath = `${maxRenameDirectory}\\${boundaryRenameName}`;
+assert.equal(boundaryRenamePath.length, 259);
+assert.equal(state.rename(renameBoundarySource, boundaryRenameName), true);
+assert.equal(state.resolve(boundaryRenamePath)?.content, "rename boundary");
+
 // Profile-level operations must not carry away the protected NTUSER.DAT or
 // leave the rest of the profile partially altered.
 const protectedProfileFile = `${USER_PROFILE_PATH}\\NTUSER.DAT`;

@@ -37,7 +37,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Command Prompt / delete confirmations | `DEL /P` and `/Q` were silently discarded, so the command could not ask before each deletion and `/Q` could not override an interactive request. | Implemented: the terminal supports per-file Y/N input for `/P`; `/Q` suppresses those prompts, and the command remains busy without swallowing the confirmation keystrokes. |
 | P2 | File metadata | File sizes were calculated differently in Explorer, Find, Properties, File Dialog, and the terminal; stub executable files appeared empty in some views. | Implemented; live checked for application size |
 | P2 | Windows paths | Drive-relative paths such as `C:..` were incorrectly treated as rooted paths on `C:\`, and the VFS accepted paths longer than classic `MAX_PATH`. | Implemented and live checked: `C:..` moved from My Documents to its parent, and `C:My Documents` returned relative to that C: directory; rooted forms remain distinct. A deterministic boundary check accepts 259 visible characters and rejects 260, counting the terminating NUL as part of the 260-character Win32 limit. |
-| P2 | Explorer Copy/Move path length | Copy and Move validated the destination directory but not the final `directory\filename`, so they could create nodes whose full paths exceeded classic `MAX_PATH`. | Fixed: derived destination paths are rejected before mutation using the caller's normalized path (so 8.3 paths are not expanded for the limit check); in-memory checks confirm both Copy and Move leave the source intact. |
+| P2 | File-operation path length | Copy and Move validated the destination directory but not the final `directory\filename`, and Rename could lengthen an existing path beyond classic `MAX_PATH`. | Fixed: derived child paths are rejected before mutation using the caller's normalized path (so 8.3 paths are not expanded for the limit check); boundary regressions cover Copy, Move, and Rename, including Rename's 259/260-character boundary. |
 | P2 | VFAT short names | Properties fabricated a first-name `~1` alias, while Explorer and Command Prompt could not resolve short paths. | Implemented and live checked: `press-kit.txt` reports `PRESS-~1.TXT`; `C:\DOCUME~1\ADMINI~1\MYDOCU~1` resolves to the profile path, and `dir /x` lists aliases. Collision-safe per-directory aliases are migrated and stored on nodes; Properties and paths share the same alias. The exact FAT alias-assignment algorithm is an approximation. |
 | P2 | VFAT filename limits | Copy/move collision handling prefixed a full 255-character filename with `Copy of `, creating an invalid component that exceeded the volume limit. | Fixed: generated collision names preserve the extension where possible and stay within 255 characters; an in-memory regression creates, copies, and resolves a maximum-length root file. |
 | P2 | FAT16 storage | Disk free-space accounting used logical byte counts while file Properties rounded “Size on disk” to 4 KB, inconsistent with the modeled 2 GB FAT16 volume. | Implemented and live checked: 600-byte `bio.txt` reports 32 KB on disk and the folder status bar shows the cluster-aware free-space total. File data and subdirectory records consume 32 KB clusters across free-space, copy/write checks, and Size on disk; the fixed root-directory table and FAT metadata remain outside this approximation. |
@@ -140,10 +140,11 @@ not a claim that every Windows 2000 feature is implemented.
     component boundary. **Complete:** `Copy of`/numbered names truncate only
     the base portion needed to stay within 255 characters; a memory regression
     confirms the maximum-length copy can be resolved afterward.
-22. Apply `MAX_PATH` to paths derived by Copy/Move as well as typed paths.
-    **Complete:** the destination directory's caller-visible normalized form
-    and final filename are checked before editing the tree; regression checks
-    verify an overlong Copy/Move is rejected atomically.
+22. Apply `MAX_PATH` to paths derived by Copy/Move/Rename as well as typed
+    paths. **Complete:** the destination directory's caller-visible
+    normalized form and final filename are checked before editing the tree;
+    regression checks verify overlong Copy/Move/Rename is rejected atomically
+    while a 259-character Rename target remains addressable.
 23. Apply shared Folder Options visibility consistently to the Desktop.
     **Complete:** Desktop, Explorer, Find, and file dialogs share one visibility
     predicate; tests verify that protected hidden system files are shown by
@@ -201,6 +202,9 @@ not a claim that every Windows 2000 feature is implemented.
     destination masks work in the same directory, destination wildcards retain
     the corresponding original characters, collisions are protected, and a
     partially successful set of renames is reversible as one operation.
+38. Enforce the classic Win32 path boundary after Rename. **Complete:** the
+    target's caller-visible parent path plus the new name must remain below
+    260 characters, and an in-memory check covers both sides of the boundary.
 
 ## Historical checks used
 

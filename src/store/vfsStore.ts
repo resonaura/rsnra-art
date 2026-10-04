@@ -2826,6 +2826,11 @@ export const useVfsStore = create<VfsState>()(
       },
 
       rename: (path, newName) => {
+        const inputPath = normalizePath(path, get().cwd);
+        if (!inputPath || inputPath.length >= WINDOWS_MAX_PATH) return false;
+        const inputParentPath = inputPath.slice(0, inputPath.lastIndexOf(SEP));
+        if (childPath(inputParentPath, newName).length >= WINDOWS_MAX_PATH)
+          return false;
         const abs = resolveInputPath(path);
         if (!abs) return false;
         if (!isValidWindowsName(newName)) return false;
