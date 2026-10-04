@@ -137,6 +137,9 @@ export interface VfsState {
 
 // ─── Path helpers ──────────────────────────────────────────────────────────
 const SEP = "\\";
+// Win32 shell/file APIs in Windows 2000 use MAX_PATH (260 characters
+// including the terminating NUL) unless the caller opts into an extended path.
+const WINDOWS_MAX_PATH = 260;
 const DISK_CAPACITY = VFS_DISK_CAPACITY; // period-correct 2 GB FAT volume
 const RECYCLED_PATH = "C:\\Recycled";
 const RECYCLED_INDEX_PATH = `${RECYCLED_PATH}\\INFO2`;
@@ -199,7 +202,7 @@ function normalizePath(path: string, base = "C:\\"): string | null {
     }
     stack.push(part);
   }
-  return canonicalizeLegacyPath(drive + SEP + stack.join(SEP));
+  return drive + SEP + stack.join(SEP);
 }
 
 // FAT/VFAT long names still reject the DOS device names and these characters.
@@ -1988,9 +1991,11 @@ export const useVfsStore = create<VfsState>()(
       };
       const resolveInputPath = (path: string, base = get().cwd) => {
         const normalized = normalizePath(path, base);
-        return normalized
-          ? canonicalizeExistingPath(get().root, normalized)
-          : null;
+        if (!normalized || normalized.length >= WINDOWS_MAX_PATH) return null;
+        return canonicalizeExistingPath(
+          get().root,
+          canonicalizeLegacyPath(normalized),
+        );
       };
 
       return ({

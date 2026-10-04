@@ -21,6 +21,19 @@ const [{ useVfsStore }, { dispatchSendToEntry, isSendToMenuEntry, sendToMenuLabe
 const { USER_DOCUMENTS_PATH, USER_PROFILE_PATH, USER_SEND_TO_PATH } = paths;
 const state = useVfsStore.getState();
 
+// MAX_PATH is 260 characters including the terminating NUL, so 259 visible
+// characters work and a 260-character input path does not.
+const maxPath = `C:\\${"a".repeat(127)}\\${"b".repeat(128)}`;
+const overlongPath = `C:\\${"a".repeat(128)}\\${"b".repeat(128)}`;
+assert.equal(maxPath.length, 259);
+assert.equal(overlongPath.length, 260);
+assert.equal(state.resolvePath(maxPath), maxPath);
+assert.equal(state.resolvePath(overlongPath), null);
+assert.equal(
+  state.resolvePath("C:\\DOCUME~1\\ADMINI~1\\MYDOCU~1"),
+  USER_DOCUMENTS_PATH,
+);
+
 // Profile-level operations must not carry away the protected NTUSER.DAT or
 // leave the rest of the profile partially altered.
 const protectedProfileFile = `${USER_PROFILE_PATH}\\NTUSER.DAT`;
