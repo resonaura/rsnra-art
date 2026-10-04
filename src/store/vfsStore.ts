@@ -614,6 +614,10 @@ function splitAbs(absPath: string): string[] {
     .filter(Boolean);
 }
 
+function childPath(parentPath: string, name: string): string {
+  return `${parentPath.replace(/[\\/]+$/, "")}\\${name}`;
+}
+
 // ─── Tree helpers (pure) ───────────────────────────────────────────────────
 function findNode(root: VfsNode, absPath: string): VfsNode | null {
   const parts = splitAbs(absPath);
@@ -2528,6 +2532,8 @@ export const useVfsStore = create<VfsState>()(
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return false;
+        const destinationInputPath = normalizePath(destDir, get().cwd);
+        if (!destinationInputPath) return false;
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
@@ -2535,6 +2541,11 @@ export const useVfsStore = create<VfsState>()(
           !ref ||
           containsProtectedNode(ref.node) ||
           isReadOnlyFile(ref.node)
+        )
+          return false;
+        if (
+          childPath(destinationInputPath, ref.node.name).length >=
+          WINDOWS_MAX_PATH
         )
           return false;
         if (findChildByLongOrShortName(dest, ref.node.name)) return false;
@@ -2551,6 +2562,8 @@ export const useVfsStore = create<VfsState>()(
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return false;
+        const destinationInputPath = normalizePath(destDir, get().cwd);
+        if (!destinationInputPath) return false;
         const root = get().root;
         const dest = findNode(root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
@@ -2559,6 +2572,11 @@ export const useVfsStore = create<VfsState>()(
         if (vfsNodeAllocatedByteSize(node) > get().diskUsage().free)
           return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
+          return false;
+        if (
+          childPath(destinationInputPath, node.name).length >=
+          WINDOWS_MAX_PATH
+        )
           return false;
         if (findChildByLongOrShortName(dest, node.name)) return false;
         const sourceAccessRoot = updateReadAccessDate(
@@ -2654,6 +2672,8 @@ export const useVfsStore = create<VfsState>()(
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return null;
+        const destinationInputPath = normalizePath(destDir, get().cwd);
+        if (!destinationInputPath) return null;
         const root = get().root;
         const dest = findNode(root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
@@ -2664,6 +2684,10 @@ export const useVfsStore = create<VfsState>()(
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         const newName = uniqueCopyName(dest, node.name);
+        if (
+          childPath(destinationInputPath, newName).length >= WINDOWS_MAX_PATH
+        )
+          return null;
         const sourceAccessRoot = updateReadAccessDate(
           root,
           srcAbs,
@@ -2705,6 +2729,12 @@ export const useVfsStore = create<VfsState>()(
           return ref.node.name;
         }
         const newName = uniqueCopyName(dest, ref.node.name);
+        const destinationInputPath = normalizePath(destDir, get().cwd);
+        if (
+          !destinationInputPath ||
+          childPath(destinationInputPath, newName).length >= WINDOWS_MAX_PATH
+        )
+          return null;
         const movedNode = { ...ref.node, name: newName };
         let newRoot = removeNode(get().root, srcAbs);
         if (!newRoot || !fitsOnDisk(newRoot)) return null;

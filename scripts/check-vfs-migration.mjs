@@ -97,6 +97,19 @@ assert.ok(copiedMaxComponentName);
 assert.ok(copiedMaxComponentName.length <= 255);
 assert.equal(state.resolve(`C:\\${copiedMaxComponentName}`)?.type, "file");
 
+// Copy/Move must validate the resulting child path, not just its directory.
+const maxPathDestination = `C:\\${"d".repeat(247)}`;
+const shortPathSource = "C:\\short-path-check.txt";
+assert.equal(maxPathDestination.length, 250);
+assert.equal(state.mkdir(maxPathDestination), true);
+assert.equal(state.writeFile(shortPathSource, "must remain in place"), true);
+assert.equal(state.copy(shortPathSource, maxPathDestination), false);
+assert.equal(state.move(shortPathSource, maxPathDestination), false);
+assert.equal(state.copyTo(shortPathSource, maxPathDestination), null);
+assert.equal(state.moveTo(shortPathSource, maxPathDestination), null);
+assert.equal(state.resolve(shortPathSource)?.type, "file");
+assert.deepEqual(state.list(maxPathDestination), []);
+
 // Profile-level operations must not carry away the protected NTUSER.DAT or
 // leave the rest of the profile partially altered.
 const protectedProfileFile = `${USER_PROFILE_PATH}\\NTUSER.DAT`;
