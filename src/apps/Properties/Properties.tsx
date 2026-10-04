@@ -74,6 +74,15 @@ const Val = styled.div`
   word-break: break-all;
 `;
 
+const VolumeLabelInput = styled.input`
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 120px;
+  height: 22px;
+  padding: 2px 4px;
+  font: inherit;
+`;
+
 const AttrRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -149,7 +158,9 @@ function countContents(node: VfsNode): { files: number; folders: number } {
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} bytes`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function formatDate(ts: number): string {
@@ -167,6 +178,8 @@ export function Properties({ windowId }: { windowId: string }) {
       root: s.root,
       resolve: s.resolve,
       getShortName: s.getShortName,
+      diskUsage: s.diskUsage,
+      setVolumeLabel: s.setVolumeLabel,
       setAttributes: s.setAttributes,
       setFolderFilesReadOnly: s.setFolderFilesReadOnly,
     })),
@@ -183,6 +196,8 @@ export function Properties({ windowId }: { windowId: string }) {
   const [readOnlyState, setReadOnlyState] = useState(readOnlyPropertyState(node));
   const [archive, setArchive] = useState(node?.archive ?? true);
   const [system, setSystem] = useState(!!node?.system);
+  const [volumeLabel, setVolumeLabelState] = useState(node?.volumeLabel ?? "");
+  const [volumeLabelError, setVolumeLabelError] = useState("");
 
   useEffect(() => {
     if (!node) return;
@@ -190,6 +205,8 @@ export function Properties({ windowId }: { windowId: string }) {
     setReadOnlyState(readOnlyPropertyState(node));
     setArchive(node.archive ?? true);
     setSystem(!!node.system);
+    setVolumeLabelState(node.volumeLabel ?? "");
+    setVolumeLabelError("");
   }, [node]);
 
   const parent = path.includes(SEP)
@@ -212,11 +229,15 @@ export function Properties({ windowId }: { windowId: string }) {
 
   const name = node.name;
   const dosName = vfs.getShortName(path) ?? name.toUpperCase();
-  const type = describeType(node);
-  const size = fileSize(node);
   const isVolumeRoot =
     node.type === "dir" && path.replace(/[\\/]+$/, "").toUpperCase() === "C:";
+  const type = isVolumeRoot ? "Local Disk" : describeType(node);
+  const size = fileSize(node);
   const sizeOnDisk = vfsNodeAllocatedByteSize(node, isVolumeRoot);
+  const volumeUsage = isVolumeRoot ? vfs.diskUsage() : null;
+  const volumeUsedPercent = volumeUsage
+    ? Math.min(100, (volumeUsage.used / volumeUsage.total) * 100)
+    : 0;
   const contents = node.type === "dir" ? countContents(node) : null;
   const hasVersionInfo =
     node.type === "file" &&
@@ -240,6 +261,18 @@ export function Properties({ windowId }: { windowId: string }) {
           (child) => child.type === "file" && !child.protected,
         );
 
+  const commitVolumeLabel = () => {
+    const nextLabel = volumeLabel.trim();
+    if (vfs.setVolumeLabel(nextLabel)) {
+      setVolumeLabelState(nextLabel.toUpperCase());
+      setVolumeLabelError("");
+    } else {
+      setVolumeLabelError(
+        "Use up to 11 characters and avoid FAT volume-label symbols.",
+      );
+    }
+  };
+
   return (
     <Layout>
       <Tabs
@@ -255,9 +288,18 @@ export function Properties({ windowId }: { windowId: string }) {
           <>
             <Header style={{ zoom: 0.9 }}>
               <IconBox variant="field">
-                <Icon src={iconForNode(node)} size={32} />
+                <Icon
+                  src={
+                    isVolumeRoot ? "/icons/shell32.dll/105.ico" : iconForNode(node)
+                  }
+                  size={32}
+                />
               </IconBox>
-              <Title>{name}</Title>
+              <Title>
+                {isVolumeRoot
+                  ? `${node.volumeLabel || "Local Disk"} (C:)`
+                  : name}
+              </Title>
             </Header>
             <GroupBox
               style={{ zoom: 0.8 }}
@@ -267,121 +309,196 @@ export function Properties({ windowId }: { windowId: string }) {
                 <Key>Type:</Key>
                 <Val>{type}</Val>
               </Field>
-              {opener && (
-                <Field>
-                  <Key>Opens with:</Key>
-                  <Val style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Icon src={opener.icon} size={16} isInReact95 />
-                    <span style={{ flex: 1 }}>{opener.label}</span>
-                    <Button onClick={() => setShowOpenWith(true)}>
-                      Change...
-                    </Button>
-                  </Val>
-                </Field>
+              {isVolumeRoot ? (
+                <>
+                  <Field>
+                    <Key>File system:</Key>
+                    <Val>FAT</Val>
+                  </Field>
+                  <Field>
+                    <Key>Volume label:</Key>
+                    <Val>
+                      <VolumeLabelInput
+                        aria-label="Volume label"
+                        value={volumeLabel}
+                        onChange={(event) => {
+                          setVolumeLabelState(event.target.value);
+                          setVolumeLabelError("");
+                        }}
+                        onBlur={commitVolumeLabel}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                      />
+                      {volumeLabelError && (
+                        <div role="alert" style={{ color: "#8b0000" }}>
+                          {volumeLabelError}
+                        </div>
+                      )}
+                    </Val>
+                  </Field>
+                </>
+              ) : (
+                <>
+                  {opener && (
+                    <Field>
+                      <Key>Opens with:</Key>
+                      <Val style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Icon src={opener.icon} size={16} isInReact95 />
+                        <span style={{ flex: 1 }}>{opener.label}</span>
+                        <Button onClick={() => setShowOpenWith(true)}>
+                          Change...
+                        </Button>
+                      </Val>
+                    </Field>
+                  )}
+                  <Field>
+                    <Key>Location:</Key>
+                    <Val>{parentDir}</Val>
+                  </Field>
+                  <Field>
+                    <Key>Size:</Key>
+                    <Val>
+                      {node.type === "dir"
+                        ? formatSize(size)
+                        : `${formatSize(size)}  (${size} bytes)`}
+                    </Val>
+                  </Field>
+                  <Field>
+                    <Key>Size on disk:</Key>
+                    <Val>
+                      {formatSize(sizeOnDisk)}  ({sizeOnDisk} bytes)
+                    </Val>
+                  </Field>
+                  {contents && (
+                    <Field>
+                      <Key>Contains:</Key>
+                      <Val>
+                        {contents.files} Files, {contents.folders} Folders
+                      </Val>
+                    </Field>
+                  )}
+                  <Field>
+                    <Key>MS-DOS name:</Key>
+                    <Val>{dosName}</Val>
+                  </Field>
+                </>
               )}
-              <Field>
-                <Key>Location:</Key>
-                <Val>{parentDir}</Val>
-              </Field>
-              <Field>
-                <Key>Size:</Key>
-                <Val>
-                  {node.type === "dir"
-                    ? formatSize(size)
-                    : `${formatSize(size)}  (${size} bytes)`}
-                </Val>
-              </Field>
-              <Field>
-                <Key>Size on disk:</Key>
-                <Val>
-                  {formatSize(sizeOnDisk)}  ({sizeOnDisk} bytes)
-                </Val>
-              </Field>
-              {contents && (
-                <Field>
-                  <Key>Contains:</Key>
-                  <Val>
-                    {contents.files} Files, {contents.folders} Folders
-                  </Val>
-                </Field>
-              )}
-              <Field>
-                <Key>MS-DOS name:</Key>
-                <Val>{dosName}</Val>
-              </Field>
             </GroupBox>
-            <GroupBox style={{ zoom: 0.8 }} label="Date">
-              <Field>
-                <Key>Created:</Key>
-                <Val>{formatDate(node.created)}</Val>
-              </Field>
-              <Field>
-                <Key>Modified:</Key>
-                <Val>{formatDate(node.modified ?? node.created)}</Val>
-              </Field>
-              <Field>
-                <Key>Accessed:</Key>
-                <Val>{formatDate(node.accessed ?? node.created)}</Val>
-              </Field>
-            </GroupBox>
-            <GroupBox style={{ zoom: 0.8 }} label="Attributes">
-              <AttrRow style={{ zoom: 0.8 }}>
-                <Checkbox
-                  label={
-                    node.type === "dir"
-                      ? "Read-only (Only applies to files in folder)"
-                      : "Read-only"
-                  }
-                  checked={readOnlyState.checked}
-                  indeterminate={readOnlyState.indeterminate}
-                  disabled={!canChangeReadOnly}
-                  onChange={() => {
-                    const v = !readOnlyState.checked;
-                    const changed =
-                      node.type === "dir"
-                        ? vfs.setFolderFilesReadOnly(path, v)
-                        : vfs.setAttributes(path, { readonly: v });
-                    if (changed) {
-                      setReadOnlyState({ checked: v, indeterminate: false });
-                    }
+            {isVolumeRoot && volumeUsage ? (
+              <GroupBox style={{ zoom: 0.8 }} label="Capacity">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    padding: 4,
                   }}
-                />
-                <Checkbox
-                  label="Hidden"
-                  checked={hidden}
-                  disabled={!!node.protected}
-                  onChange={() => {
-                    const v = !hidden;
-                    setHidden(v);
-                    vfs.setAttributes(path, { hidden: v });
-                  }}
-                />
-                {node.type === "file" && (
-                  <>
+                >
+                  <div
+                    role="img"
+                    aria-label={`${volumeUsedPercent.toFixed(1)}% of disk used`}
+                    style={{
+                      width: 76,
+                      height: 76,
+                      borderRadius: "50%",
+                      border: "2px solid #808080",
+                      background: `conic-gradient(#315f91 ${volumeUsedPercent}%, #efefef ${volumeUsedPercent}% 100%)`,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <Field>
+                      <Key>Used space:</Key>
+                      <Val>{formatSize(volumeUsage.used)}</Val>
+                    </Field>
+                    <Field>
+                      <Key>Free space:</Key>
+                      <Val>{formatSize(volumeUsage.free)}</Val>
+                    </Field>
+                    <Field>
+                      <Key>Capacity:</Key>
+                      <Val>{formatSize(volumeUsage.total)}</Val>
+                    </Field>
+                  </div>
+                </div>
+              </GroupBox>
+            ) : (
+              <>
+                <GroupBox style={{ zoom: 0.8 }} label="Date">
+                  <Field>
+                    <Key>Created:</Key>
+                    <Val>{formatDate(node.created)}</Val>
+                  </Field>
+                  <Field>
+                    <Key>Modified:</Key>
+                    <Val>{formatDate(node.modified ?? node.created)}</Val>
+                  </Field>
+                  <Field>
+                    <Key>Accessed:</Key>
+                    <Val>{formatDate(node.accessed ?? node.created)}</Val>
+                  </Field>
+                </GroupBox>
+                <GroupBox style={{ zoom: 0.8 }} label="Attributes">
+                  <AttrRow style={{ zoom: 0.8 }}>
                     <Checkbox
-                      label="Archive"
-                      checked={archive}
-                      disabled={!!node.protected}
+                      label={
+                        node.type === "dir"
+                          ? "Read-only (Only applies to files in folder)"
+                          : "Read-only"
+                      }
+                      checked={readOnlyState.checked}
+                      indeterminate={readOnlyState.indeterminate}
+                      disabled={!canChangeReadOnly}
                       onChange={() => {
-                        const v = !archive;
-                        setArchive(v);
-                        vfs.setAttributes(path, { archive: v });
+                        const v = !readOnlyState.checked;
+                        const changed =
+                          node.type === "dir"
+                            ? vfs.setFolderFilesReadOnly(path, v)
+                            : vfs.setAttributes(path, { readonly: v });
+                        if (changed) {
+                          setReadOnlyState({ checked: v, indeterminate: false });
+                        }
                       }}
                     />
                     <Checkbox
-                      label="System"
-                      checked={system}
+                      label="Hidden"
+                      checked={hidden}
                       disabled={!!node.protected}
                       onChange={() => {
-                        const v = !system;
-                        setSystem(v);
-                        vfs.setAttributes(path, { system: v });
+                        const v = !hidden;
+                        setHidden(v);
+                        vfs.setAttributes(path, { hidden: v });
                       }}
                     />
-                  </>
-                )}
-              </AttrRow>
-            </GroupBox>
+                    {node.type === "file" && (
+                      <>
+                        <Checkbox
+                          label="Archive"
+                          checked={archive}
+                          disabled={!!node.protected}
+                          onChange={() => {
+                            const v = !archive;
+                            setArchive(v);
+                            vfs.setAttributes(path, { archive: v });
+                          }}
+                        />
+                        <Checkbox
+                          label="System"
+                          checked={system}
+                          disabled={!!node.protected}
+                          onChange={() => {
+                            const v = !system;
+                            setSystem(v);
+                            vfs.setAttributes(path, { system: v });
+                          }}
+                        />
+                      </>
+                    )}
+                  </AttrRow>
+                </GroupBox>
+              </>
+            )}
           </>
         ) : (
           <GroupBox style={{ zoom: 0.8 }} label="Version information">

@@ -555,6 +555,7 @@ interface CtxState {
   x: number;
   y: number;
   node: VfsNode | null; // null = background
+  drive?: Drive;
 }
 
 export function MyComputer({ windowId }: { windowId: string }) {
@@ -1184,6 +1185,14 @@ export function MyComputer({ windowId }: { windowId: string }) {
       });
   };
 
+  const propertiesOfDrive = (drive: Drive) => {
+    if (drive.target !== "C:\\") return;
+    openApp("properties", {
+      title: `${drive.label} Properties`,
+      data: { path: drive.target },
+    });
+  };
+
   // ── drag & drop ────────────────────────────────────────────────────────
   // System items and any folder containing them are protected:
   // not draggable, and vfs.move()/rename()/remove() already refuse to touch
@@ -1254,15 +1263,22 @@ export function MyComputer({ windowId }: { windowId: string }) {
         : sorted.length;
 
   // ── context menu ───────────────────────────────────────────────────────
-  const openCtx = (e: React.MouseEvent, node: VfsNode | null) => {
+  const openCtx = (
+    e: React.MouseEvent,
+    node: VfsNode | null,
+    drive?: Drive,
+  ) => {
     if (path === "Control Panel" || path === "Games") return;
     e.preventDefault();
     e.stopPropagation();
-    if (node && !selected.includes(node.name)) {
+    if (drive) {
+      setSelected([drive.label]);
+      setSelectionAnchor(drive.label);
+    } else if (node && !selected.includes(node.name)) {
       setSelected([node.name]);
       setSelectionAnchor(node.name);
     }
-    setCtx({ x: e.clientX, y: e.clientY, node });
+    setCtx({ x: e.clientX, y: e.clientY, node, drive });
   };
 
   const closeCtx = () => setCtx(null);
@@ -1473,11 +1489,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
         },
         {
           label: "Properties",
-          action: () => selectedNode && propertiesOf(selectedNode),
+          action: () => {
+            if (selectedDrive) propertiesOfDrive(selectedDrive);
+            else if (selectedNode) propertiesOf(selectedNode);
+          },
           disabled:
-            selectedNodes.length !== 1 ||
-            path === "Control Panel" ||
-            path === "Games",
+            selectedDrive
+              ? selectedDrive.target !== "C:\\"
+              : selectedNodes.length !== 1 ||
+                path === "Control Panel" ||
+                path === "Games",
         },
         { label: "", divider: true },
         { label: "Close", action: () => closeWindow(windowId) },
@@ -1833,7 +1854,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               onDoubleClick={() => {
                 if (!singleClickOpen) enter(d);
               }}
-              onContextMenu={(e) => openCtx(e, null)}
+              onContextMenu={(e) => openCtx(e, null, d)}
               onDragOver={
                 d.kind === "drive" && !d.notReady
                   ? handleDragOverDir(d.label)
@@ -2059,6 +2080,28 @@ export function MyComputer({ windowId }: { windowId: string }) {
               >
                 Properties
               </CtxItem>
+            </>
+          ) : ctx.drive ? (
+            <>
+              <CtxItem onClick={() => runCtx(() => enter(ctx.drive!))}>
+                Open
+              </CtxItem>
+              {ctx.drive.target === "C:\\" && (
+                <>
+                  <CtxItem
+                    onClick={() => runCtx(() => beginDriveRename(ctx.drive!))}
+                  >
+                    Rename
+                  </CtxItem>
+                  <CtxItem
+                    onClick={() =>
+                      runCtx(() => propertiesOfDrive(ctx.drive!))
+                    }
+                  >
+                    Properties
+                  </CtxItem>
+                </>
+              )}
             </>
           ) : (
             <>
