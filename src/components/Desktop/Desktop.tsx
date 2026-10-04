@@ -17,13 +17,14 @@ import {
   recycleBinPayloadSizes,
   willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
-import { confirmDialog } from "../../lib/systemDialogs";
+import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useRecycleBinStore } from "../../store/recycleBinStore";
 import {
+  containsProtectedNode,
   isReadOnlyFile,
   useVfsStore,
   type VfsNode,
@@ -402,6 +403,11 @@ export function Desktop() {
   };
 
   const handleIconDragStart = (key: string, e: React.DragEvent) => {
+    const sourceNode = desktopNodes.find((node) => node.name === key);
+    if (sourceNode && containsProtectedNode(sourceNode)) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData("desktop-icon-name", key);
     if (key !== "__recycle__" && key !== "__mydocs__") {
       const abs = `${DESKTOP_PATH}\\${key}`;
@@ -442,7 +448,11 @@ export function Desktop() {
                 top: `${item.pos.y}px`,
               }}
             >
-              {renderLnk(item.node, true, (e) => handleIconDragStart(item.key, e))}
+              {renderLnk(
+                item.node,
+                !containsProtectedNode(item.node),
+                (e) => handleIconDragStart(item.key, e),
+              )}
             </div>
           );
         }
@@ -530,7 +540,11 @@ export function Desktop() {
               opacity: item.node.hidden ? 0.5 : 1,
             }}
           >
-            {renderNode(item.node, true, (e) => handleIconDragStart(item.key, e))}
+            {renderNode(
+              item.node,
+              !containsProtectedNode(item.node),
+              (e) => handleIconDragStart(item.key, e),
+            )}
           </div>
         );
       })}
@@ -667,7 +681,7 @@ export function Desktop() {
                   Open With...
                 </CtxItem>
               )}
-              {!node.protected && (
+              {!containsProtectedNode(node) && (
                 <>
                   <CtxDivider />
                   {!isReadOnlyFile(node) && (
@@ -710,9 +724,16 @@ export function Desktop() {
                         );
                         if (result !== "yes") return;
                       }
-                      useVfsStore
+                      const movedToRecycleBin = useVfsStore
                         .getState()
                         .moveToRecycleBin(abs, { allowReadOnly: true });
+                      if (!movedToRecycleBin) {
+                        void alertError(
+                          "Could Not Delete",
+                          "This item could not be moved to the Recycle Bin. It may contain protected Windows files or the disk may be full.",
+                        );
+                        return;
+                      }
                       if (selected === node.name) setSelected(null);
                       setIconCtx(null);
                     }}

@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -27,7 +28,7 @@ const Menu = styled.div<{ $visible: boolean }>`
   font-style: var(--rsnra-font-menu-style, normal);
 `;
 
-export const CtxItem = styled.button<{ $disabled?: boolean }>`
+const CtxItemButton = styled.button<{ $disabled?: boolean }>`
   display: block;
   width: 100%;
   text-align: left;
@@ -47,6 +48,24 @@ export const CtxItem = styled.button<{ $disabled?: boolean }>`
       $disabled ? theme.materialTextDisabled : theme.headerText};
   }
 `;
+
+type CtxItemProps = ComponentProps<typeof CtxItemButton>;
+
+export function CtxItem({
+  $disabled,
+  disabled,
+  ...props
+}: CtxItemProps) {
+  const isDisabled = $disabled ?? disabled ?? false;
+  return (
+    <CtxItemButton
+      {...props}
+      $disabled={isDisabled}
+      disabled={isDisabled}
+      aria-disabled={isDisabled || undefined}
+    />
+  );
+}
 
 export const CtxDivider = styled.div`
   height: 1px;

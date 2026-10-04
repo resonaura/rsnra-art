@@ -18,8 +18,28 @@ const [{ useVfsStore }, { dispatchSendToEntry, isSendToMenuEntry, sendToMenuLabe
     import("../src/lib/windowsPaths.ts"),
   ]);
 
-const { USER_DOCUMENTS_PATH, USER_SEND_TO_PATH } = paths;
+const { USER_DOCUMENTS_PATH, USER_PROFILE_PATH, USER_SEND_TO_PATH } = paths;
 const state = useVfsStore.getState();
+
+// Profile-level operations must not carry away the protected NTUSER.DAT or
+// leave the rest of the profile partially altered.
+const protectedProfileFile = `${USER_PROFILE_PATH}\\NTUSER.DAT`;
+assert.equal(state.resolve(protectedProfileFile)?.protected, true);
+assert.equal(state.remove(USER_PROFILE_PATH), false);
+assert.equal(state.moveToRecycleBin(USER_PROFILE_PATH), false);
+assert.equal(state.rename(USER_PROFILE_PATH, "Administrator Backup"), false);
+assert.equal(state.move(USER_PROFILE_PATH, USER_DOCUMENTS_PATH), false);
+assert.equal(
+  state.moveAs(
+    USER_PROFILE_PATH,
+    `${USER_DOCUMENTS_PATH}\\Administrator Backup`,
+  ),
+  false,
+);
+assert.equal(state.moveTo(USER_PROFILE_PATH, USER_DOCUMENTS_PATH), null);
+assert.ok(state.resolve(protectedProfileFile));
+assert.equal(useVfsStore.getState().recycled.length, 0);
+
 const temporaryPath = `${USER_DOCUMENTS_PATH}\\migration-check-v19.txt`;
 
 assert.equal(state.writeFile(temporaryPath, "preserve me across migration"), true);

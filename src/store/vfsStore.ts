@@ -678,6 +678,15 @@ export function isReadOnlyFile(
   return node.type === "file" && !!node.readonly;
 }
 
+/** A directory cannot carry immutable Windows-owned objects through an edit. */
+export function containsProtectedNode(node: VfsNode): boolean {
+  return (
+    !!node.protected ||
+    (node.type === "dir" &&
+      (node.children ?? []).some(containsProtectedNode))
+  );
+}
+
 // Generate a non-colliding name inside `parent` based on `name`, using the
 // classic Win95 "Copy of <name>", "Copy (2) of <name>", ... scheme.
 function uniqueCopyName(parent: VfsNode, name: string): string {
@@ -2313,7 +2322,7 @@ export const useVfsStore = create<VfsState>()(
         const ref = findParent(get().root, abs);
         if (
           !ref ||
-          ref.node.protected ||
+          containsProtectedNode(ref.node) ||
           (isReadOnlyFile(ref.node) && !options?.allowReadOnly)
         )
           return false;
@@ -2329,7 +2338,7 @@ export const useVfsStore = create<VfsState>()(
         const ref = findParent(get().root, abs);
         if (
           !ref ||
-          ref.node.protected ||
+          containsProtectedNode(ref.node) ||
           (isReadOnlyFile(ref.node) && !options?.allowReadOnly)
         )
           return false;
@@ -2478,7 +2487,12 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
+        if (
+          !ref ||
+          containsProtectedNode(ref.node) ||
+          isReadOnlyFile(ref.node)
+        )
+          return false;
         if (findChildByLongOrShortName(dest, ref.node.name)) return false;
         // Remove from source then insert at dest
         let newRoot = removeNode(get().root, srcAbs);
@@ -2544,7 +2558,12 @@ export const useVfsStore = create<VfsState>()(
         if (srcAbs.toLowerCase() === destAbs.toLowerCase()) return true;
         if (findNode(get().root, destAbs)) return false;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
+        if (
+          !ref ||
+          containsProtectedNode(ref.node) ||
+          isReadOnlyFile(ref.node)
+        )
+          return false;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         const parts = splitAbs(destAbs);
@@ -2593,7 +2612,12 @@ export const useVfsStore = create<VfsState>()(
         const dest = findNode(get().root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
         const ref = findParent(get().root, srcAbs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return null;
+        if (
+          !ref ||
+          containsProtectedNode(ref.node) ||
+          isReadOnlyFile(ref.node)
+        )
+          return null;
         if (ref.node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         // No-op if dropped back into its own parent.
@@ -2620,7 +2644,12 @@ export const useVfsStore = create<VfsState>()(
         if (!abs) return false;
         if (!isValidWindowsName(newName)) return false;
         const ref = findParent(get().root, abs);
-        if (!ref || ref.node.protected || isReadOnlyFile(ref.node)) return false;
+        if (
+          !ref ||
+          containsProtectedNode(ref.node) ||
+          isReadOnlyFile(ref.node)
+        )
+          return false;
         const siblings = {
           ...ref.parent,
           children: ref.parent.children!.filter((child) => child !== ref.node),

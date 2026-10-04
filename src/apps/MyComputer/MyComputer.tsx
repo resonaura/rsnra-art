@@ -41,6 +41,7 @@ import type { FolderViewMode } from "../../store/filePrefsStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useRecycleBinStore } from "../../store/recycleBinStore";
 import {
+  containsProtectedNode,
   isReadOnlyFile,
   useVfsStore,
   type VfsNode,
@@ -942,7 +943,21 @@ export function MyComputer({ windowId }: { windowId: string }) {
     nodes: VfsNode[],
     bypassRecycleBin = false,
   ) => {
-    const deletable = nodes.filter((node) => !node.protected);
+    const blockedByProtectedChildren = nodes.some(containsProtectedNode);
+    const deletable = nodes.filter((node) => !containsProtectedNode(node));
+    if (blockedByProtectedChildren && !deletable.length) {
+      void alertError(
+        "Access Denied",
+        "This selection contains Windows system files and cannot be deleted or moved.",
+      );
+      return;
+    }
+    if (blockedByProtectedChildren) {
+      await alertError(
+        "Access Denied",
+        "Windows system files were skipped. The remaining selected items can still be deleted.",
+      );
+    }
     if (!deletable.length) return;
     const containsReadOnly = deletable.some(containsReadOnlyFile);
     const label =
@@ -1043,8 +1058,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const cutSelected = (nodes: VfsNode[]) => {
+    if (nodes.some(containsProtectedNode)) {
+      void alertError(
+        "Access Denied",
+        "Windows system files cannot be moved and were skipped.",
+      );
+    }
     const paths = pathsFor(
-      nodes.filter((node) => !node.protected && !isReadOnlyFile(node)),
+      nodes.filter(
+        (node) => !containsProtectedNode(node) && !isReadOnlyFile(node),
+      ),
     );
     if (paths.length) clipboard.set("cut", paths);
   };
@@ -1077,7 +1100,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         clipboard.set("cut", failedPaths);
         void alertError(
           "Error Moving File or Folder",
-          `Could not move ${failures} item(s). Check that the source and destination are available and that the items are not read-only.`,
+          `Could not move ${failures} item(s). Check that the source and destination are available and that the items do not contain protected Windows files or Read-only files.`,
         );
       } else {
         clipboard.clear();
@@ -1117,11 +1140,11 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   // ── drag & drop ────────────────────────────────────────────────────────
-  // System items (and anything else the user didn't create) are protected:
+  // System items and any folder containing them are protected:
   // not draggable, and vfs.move()/rename()/remove() already refuse to touch
   // them, so a drop targeting one is a guaranteed no-op we short-circuit here.
   const handleDragStart = (node: VfsNode) => (e: React.DragEvent) => {
-    if (node.protected) {
+    if (containsProtectedNode(node)) {
       e.preventDefault();
       return;
     }
@@ -1267,7 +1290,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         mod &&
         key === "x" &&
         selectedNodes.some(
-          (node) => !node.protected && !isReadOnlyFile(node),
+          (node) => !containsProtectedNode(node) && !isReadOnlyFile(node),
         )
       ) {
         e.preventDefault();
@@ -1284,7 +1307,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       } else if (
         !mod &&
         key === "delete" &&
-        selectedNodes.some((node) => !node.protected)
+        selectedNodes.some((node) => !containsProtectedNode(node))
       ) {
         e.preventDefault();
         void deleteNodes(selectedNodes, e.shiftKey);
@@ -1293,7 +1316,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
         key === "f2" &&
         selectedNodes.length === 1 &&
         selectedNode &&
-        !selectedNode.protected &&
+        !containsProtectedNode(selectedNode) &&
         !isReadOnlyFile(selectedNode)
       ) {
         e.preventDefault();
@@ -1368,7 +1391,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           label: "Delete",
           action: () => void deleteNodes(selectedNodes),
           disabled:
-            !selectedNodes.some((node) => !node.protected) ||
+            !selectedNodes.some((node) => !containsProtectedNode(node)) ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1382,7 +1405,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
           },
           disabled:
             selectedNodes.length !== 1 ||
-            !!selectedNode?.protected ||
+            !!selectedNode && containsProtectedNode(selectedNode) ||
             !!selectedNode && isReadOnlyFile(selectedNode) ||
             path === "Control Panel" ||
             path === "Games",
@@ -1418,7 +1441,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
           action: () => cutSelected(selectedNodes),
           disabled:
             !selectedNodes.some(
-              (node) => !node.protected && !isReadOnlyFile(node),
+              (node) =>
+                !containsProtectedNode(node) && !isReadOnlyFile(node),
             ) ||
             path === "Control Panel" ||
             path === "Games",
@@ -1506,7 +1530,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
     const abs = vfs.resolvePath(node.name, path);
     const isDropTarget = node.type === "dir" && !!abs;
     return {
-      draggable: !node.protected,
+      draggable: !containsProtectedNode(node),
       onDragStart: handleDragStart(node),
       onDragOver: isDropTarget ? handleDragOverDir(node.name) : undefined,
       onDragLeave: isDropTarget ? handleDragLeaveDir(node.name) : undefined,
@@ -1920,7 +1944,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxDivider />
               <CtxItem
                 $disabled={
-                  !contextNodes.some((node) => !node.protected)
+                  !contextNodes.some((node) => !containsProtectedNode(node))
                 }
                 onClick={() =>
                   runCtx(() => cutSelected(contextNodes))
@@ -1935,12 +1959,12 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxItem
                 $disabled={
                   contextNodes.length !== 1 ||
-                  !!ctx.node!.protected ||
+                  containsProtectedNode(ctx.node!) ||
                   isReadOnlyFile(ctx.node!)
                 }
                 onClick={() => {
                   if (
-                    ctx.node!.protected ||
+                    containsProtectedNode(ctx.node!) ||
                     isReadOnlyFile(ctx.node!)
                   ) return;
                   runCtx(() => {
@@ -1954,7 +1978,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
               <CtxItem
                 $disabled={
                   !contextNodes.some(
-                    (node) => !node.protected && !isReadOnlyFile(node),
+                    (node) =>
+                      !containsProtectedNode(node) && !isReadOnlyFile(node),
                   )
                 }
                 onClick={() => {

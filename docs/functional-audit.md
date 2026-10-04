@@ -32,6 +32,8 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | File associations | File Properties hard-coded “Opens with” labels and offered no way to change the per-user association from the file itself. | Implemented: Properties reads the same association catalog/preferences as Folder Options and opens the existing Open With picker from Change…; live checked on a PNG without altering its association. |
 | P1 | File-open dispatch | Desktop, Explorer, and Find duplicated file-opening rules: the same object could behave differently, Find treated `.lnk` as text, and an Open With choice could intercept a registered executable. | Implemented: one VFS shell dispatcher now handles Desktop, Explorer, and Find; a desktop `.lnk` opened My Computer correctly, and Find located and launched that same shortcut. Folder browsing preferences, screen savers, Quick Launch's Show Desktop command, app executables, user associations, media, and the Notepad fallback keep their respective behavior. |
 | P2 | Read-only deletion | Explorer hid Delete for Read-only files and the virtual volume treated that DOS attribute as immutable ownership, so even an explicit shell confirmation could not remove them. | Implemented: Explorer now warns when deleting a Read-only file (including one inside a selected folder) and can send it to the Recycle Bin or permanently delete it; Command Prompt still refuses unless `DEL /F` is used. |
+| P1 | Protected descendants | A user-owned parent such as `Administrator` had `protected: false` while containing protected `NTUSER.DAT`; deleting it passed the top-level check, exceeded the bin quota, and permanently removed the whole profile without a Recycle Bin record. | Fixed: delete, rename, and move operations recursively reject any tree containing an immutable Windows-owned node; Explorer disables those operations and reports skipped/blocked selections. The memory-only regression check verifies remove, Recycle Bin, rename, and all move variants leave the profile and bin unchanged; live menu verification is pending. |
+| P2 | Context-menu disabled state | `$disabled` only changed `CtxItem` colors; native buttons remained clickable, so visually disabled shell actions could still run. | Fixed in code: disabled context items now set the native `disabled` attribute and expose `aria-disabled`, while retaining the Windows menu appearance; live accessibility verification is pending. |
 | P2 | Screen saver files | Double-clicking a `.scr` in Explorer or Find fell through to Notepad instead of running the selected saver. | Implemented: known `.scr` files launch the registered saver from Explorer and Find, matching Desktop behavior. |
 | P2 | File Dialog | Open/Save dialogs always hid Hidden files, regardless of Explorer's shared visibility preferences. | Implemented |
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
@@ -94,6 +96,15 @@ not a claim that every Windows 2000 feature is implemented.
     are available. **Partial:** the four stock profile entries are present;
     Desktop/My Documents work, while the floppy has no inserted virtual medium
     and Mail Recipient has no MAPI client to launch.
+16. Keep protected installed files safe when acting on their parent folders.
+    **Implemented:** VFS remove, rename, and move methods reject a selected
+    tree containing a protected object; Explorer reflects the same policy in
+    Delete, Rename, Cut, and drag behavior. Regression assertions cover a
+    profile with `NTUSER.DAT`; live menu verification remains pending.
+17. Make disabled context-menu items non-interactive, not merely gray.
+    **Implemented:** the shared context-menu item renders a native disabled
+    button with `aria-disabled`; live accessibility verification remains
+    pending.
 
 ## Historical checks used
 
