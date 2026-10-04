@@ -109,6 +109,7 @@ for (const name of [
   assert.equal(state.writeFile(`${commandFixture}\\${name}`, name), true);
 }
 assert.equal(state.mkdir(`${commandFixture}\\Folder`), true);
+assert.equal(state.mkdir(`${commandFixture}\\Folder\\Nested`), true);
 assert.equal(
   state.setAttributes(`${commandFixture}\\hidden.txt`, { hidden: true }),
   true,
@@ -126,6 +127,10 @@ assert.equal(
 );
 assert.equal(
   state.setAttributes(`${commandFixture}\\readonly.txt`, { readonly: true }),
+  true,
+);
+assert.equal(
+  state.writeFile(`${commandFixture}\\Folder\\Nested\\Deep note.txt`, "deep"),
   true,
 );
 
@@ -225,6 +230,48 @@ const longFileAlias = state.getShortName(longFilePath);
 assert.ok(longFileAlias && longFileAlias !== "Long regression filename.txt");
 const shortAliasDir = await runTerminalCommand(`dir /b "${commandFixture}\\${longFileAlias}"`);
 assert.equal(shortAliasDir.text, "Long regression filename.txt");
+const recursiveDir = await runTerminalCommand(`dir /b /s /a "${commandFixture}"`);
+assert.deepEqual(
+  recursiveDir.text.split("\n").sort(),
+  [
+    `${commandFixture}\\Folder`,
+    `${commandFixture}\\Folder\\Nested`,
+    `${commandFixture}\\Folder\\Nested\\Deep note.txt`,
+    `${commandFixture}\\Long regression filename.txt`,
+    `${commandFixture}\\README`,
+    `${commandFixture}\\hidden-system.txt`,
+    `${commandFixture}\\hidden.txt`,
+    `${commandFixture}\\plain.txt`,
+    `${commandFixture}\\readonly.txt`,
+    `${commandFixture}\\system.txt`,
+  ].sort(),
+);
+const recursiveTextFiles = await runTerminalCommand(
+  `dir /b /s "${commandFixture}\\*.txt"`,
+);
+assert.deepEqual(
+  recursiveTextFiles.text.split("\n").sort(),
+  [
+    `${commandFixture}\\Folder\\Nested\\Deep note.txt`,
+    `${commandFixture}\\Long regression filename.txt`,
+    `${commandFixture}\\plain.txt`,
+    `${commandFixture}\\readonly.txt`,
+  ].sort(),
+);
+const recursiveDirectories = await runTerminalCommand(
+  `dir /b /s /a:d "${commandFixture}"`,
+);
+assert.deepEqual(
+  recursiveDirectories.text.split("\n").sort(),
+  [`${commandFixture}\\Folder`, `${commandFixture}\\Folder\\Nested`].sort(),
+);
+const recursiveSummary = await runTerminalCommand(`dir /s /a "${commandFixture}"`);
+assert.ok(recursiveSummary.text.includes(`Directory of ${commandFixture}\\Folder\\Nested`));
+assert.ok(recursiveSummary.text.includes("Total Files Listed:"));
+const recursiveMiss = await runTerminalCommand(
+  `dir /b /s "${commandFixture}\\*.missing"`,
+);
+assert.equal(recursiveMiss.text, "File Not Found");
 
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
 assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);

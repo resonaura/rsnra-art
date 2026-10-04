@@ -248,6 +248,116 @@ function cmdDir(args: string[], ctx: CmdContext) {
   const bare = flags.some((f) => /^\/b/i.test(f));
   const wide = flags.some((f) => /^\/w/i.test(f));
   const showShortNames = flags.some((f) => /^\/x$/i.test(f));
+  const recursive = flags.some((f) => /^\/s$/i.test(f));
+
+  if (recursive) {
+    const folders: Array<{ path: string; node: VfsNode }> = [];
+    const visit = (path: string, folder: VfsNode) => {
+      folders.push({ path, node: folder });
+      for (const child of folder.children ?? []) {
+        if (child.type !== "dir") continue;
+        visit(`${path.replace(/\\+$/, "")}\\${child.name}`, child);
+      }
+    };
+    visit(abs, node);
+
+    const sections = folders
+      .map(({ path, node: folder }) => {
+        let children = folder.children ?? [];
+        if (filePattern !== null) {
+          children = expandWildcards(filePattern, children);
+        }
+        children = children.filter((entry) =>
+          matchesDosAttributeSelector(entry, attributeSelector),
+        );
+        return {
+          path,
+          entries: children.sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          }),
+        };
+      })
+      .filter((section) => filePattern === null || section.entries.length > 0);
+    const allEntries = sections.flatMap((section) =>
+      section.entries.map((entry) => ({
+        entry,
+        path: `${section.path.replace(/\\+$/, "")}\\${entry.name}`,
+      })),
+    );
+    if (filePattern !== null && allEntries.length === 0) {
+      ctx.print(["File Not Found"], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+
+    if (bare) {
+      ctx.print(allEntries.map(({ path }) => path));
+      return;
+    }
+
+    const lines: string[] = [];
+    let totalFiles = 0;
+    let totalDirs = 0;
+    let totalBytes = 0;
+    for (const section of sections) {
+      const files = section.entries.filter((entry) => entry.type === "file");
+      const dirs = section.entries.filter((entry) => entry.type === "dir");
+      totalFiles += files.length;
+      totalDirs += dirs.length;
+      totalBytes += files.reduce((sum, entry) => sum + fileSize(entry), 0);
+      lines.push(` Directory of ${section.path}`, "");
+
+      if (wide) {
+        const names = section.entries.map((entry) =>
+          entry.type === "dir" ? `[${entry.name}]` : entry.name,
+        );
+        for (let index = 0; index < names.length; index += 5) {
+          lines.push(
+            names
+              .slice(index, index + 5)
+              .map((name) => name.padEnd(20))
+              .join(""),
+          );
+        }
+      } else {
+        for (const entry of section.entries) {
+          const stamp = dirStamp(new Date(entry.modified ?? entry.created));
+          const shortName = showShortNames
+            ? ctx.vfs.getShortName(`${section.path.replace(/\\+$/, "")}\\${entry.name}`)
+            : null;
+          const shortNameColumn =
+            shortName && shortName.toLowerCase() !== entry.name.toLowerCase()
+              ? `${shortName.padEnd(13)}`
+              : "".padEnd(13);
+          if (entry.type === "dir") {
+            lines.push(
+              `${stamp}    <DIR>          ${shortNameColumn}${entry.name}`,
+            );
+          } else {
+            lines.push(
+              `${stamp}    ${String(fileSize(entry)).padStart(14)} ${shortNameColumn}${entry.name}`,
+            );
+          }
+        }
+      }
+
+      if (!wide) lines.push("");
+      lines.push(
+        `      ${files.length} file(s)    ${files.reduce((sum, entry) => sum + fileSize(entry), 0).toLocaleString()} bytes`,
+        `      ${dirs.length} dir(s)`,
+        "",
+      );
+    }
+    lines.push(
+      "     Total Files Listed:",
+      `      ${totalFiles} file(s)    ${totalBytes.toLocaleString()} bytes`,
+      `      ${totalDirs} dir(s)    ${ctx.vfs.diskUsage().free.toLocaleString()} bytes free`,
+    );
+    ctx.print(lines);
+    return;
+  }
+
   const sorted = [...entries].sort((a, b) => {
     if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -1899,12 +2009,13 @@ const REGISTRY: Record<string, CmdHandler> = {
 
 const HELP_TOPICS: Record<string, string[]> = {
   dir: [
-    "DIR [drive:][path][filename] [/B] [/W] [/A[[:]attributes]] [/X]",
+    "DIR [drive:][path][filename] [/B] [/W] [/A[[:]attributes]] [/S] [/X]",
     "  /X  Show short 8.3 names next to long file names.",
     "  Lists directory contents.",
     "  /B  Bare format (names only)",
     "  /W  Wide format",
     "  /A  Show all files; add D/R/H/S/A to filter by attributes",
+    "  /S  Include subdirectories (bare output uses full paths)",
   ],
   ls: [
     "LS [options] [path]",
