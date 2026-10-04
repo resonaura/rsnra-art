@@ -666,6 +666,35 @@ function cloneNode(node: VfsNode): VfsNode {
   };
 }
 
+function withReadAccessDate(node: VfsNode, accessed: number): VfsNode {
+  const children =
+    node.type === "dir"
+      ? (node.children ?? []).map((child) =>
+          withReadAccessDate(child, accessed),
+        )
+      : undefined;
+  const childrenChanged =
+    !!children && children.some((child, index) => child !== node.children?.[index]);
+  if (node.accessed === accessed && !childrenChanged) return node;
+  return {
+    ...node,
+    accessed,
+    ...(children && { children }),
+  };
+}
+
+function updateReadAccessDate(
+  root: VfsNode,
+  absPath: string,
+  accessed: number,
+): VfsNode {
+  const source = findNode(root, absPath);
+  if (!source) return root;
+  const accessedSource = withReadAccessDate(source, accessed);
+  if (accessedSource === source) return root;
+  return updateNode(root, absPath, () => accessedSource) ?? root;
+}
+
 // Is `maybeAncestor` the same path as `path`, or a parent directory of it?
 // Used to stop a folder being copied/moved into itself or one of its descendants.
 function isAncestorOrSelf(maybeAncestor: string, path: string): boolean {
@@ -2511,17 +2540,30 @@ export const useVfsStore = create<VfsState>()(
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return false;
-        const dest = findNode(get().root, destAbs);
+        const root = get().root;
+        const dest = findNode(root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return false;
-        const node = findNode(get().root, srcAbs);
+        const node = findNode(root, srcAbs);
         if (!node) return false;
         if (vfsNodeAllocatedByteSize(node) > get().diskUsage().free)
           return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         if (findChildByLongOrShortName(dest, node.name)) return false;
-        const newRoot = insertNode(get().root, destAbs, cloneNode(node));
+        const sourceAccessRoot = updateReadAccessDate(
+          root,
+          srcAbs,
+          fatAccessDate(now()),
+        );
+        const source = findNode(sourceAccessRoot, srcAbs);
+        if (!source) return false;
+        const newRoot = insertNode(
+          sourceAccessRoot,
+          destAbs,
+          cloneNode(source),
+        );
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
+        if (sourceAccessRoot !== root) set({ root: sourceAccessRoot });
         commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
@@ -2529,8 +2571,9 @@ export const useVfsStore = create<VfsState>()(
       copyAs: (src, destPath) => {
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destPath);
-        if (!srcAbs || !destAbs || findNode(get().root, destAbs)) return false;
-        const node = findNode(get().root, srcAbs);
+        const root = get().root;
+        if (!srcAbs || !destAbs || findNode(root, destAbs)) return false;
+        const node = findNode(root, srcAbs);
         if (
           !node ||
           vfsNodeAllocatedByteSize(node) > get().diskUsage().free
@@ -2547,10 +2590,18 @@ export const useVfsStore = create<VfsState>()(
             : "C:" + SEP + parts.slice(0, -1).join(SEP);
         const parent = findNode(get().root, parentPath);
         if (!parent || parent.type !== "dir") return false;
-        const clone = cloneNode(node);
+        const sourceAccessRoot = updateReadAccessDate(
+          root,
+          srcAbs,
+          fatAccessDate(now()),
+        );
+        const source = findNode(sourceAccessRoot, srcAbs);
+        if (!source) return false;
+        const clone = cloneNode(source);
         clone.name = name;
-        const newRoot = insertNode(get().root, parentPath, clone);
+        const newRoot = insertNode(sourceAccessRoot, parentPath, clone);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
+        if (sourceAccessRoot !== root) set({ root: sourceAccessRoot });
         commitFilesystemChange({ root: newRoot }, "Copy");
         return true;
       },
@@ -2592,19 +2643,28 @@ export const useVfsStore = create<VfsState>()(
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destDir);
         if (!srcAbs || !destAbs) return null;
-        const dest = findNode(get().root, destAbs);
+        const root = get().root;
+        const dest = findNode(root, destAbs);
         if (!dest || dest.type !== "dir" || !dest.children) return null;
-        const node = findNode(get().root, srcAbs);
+        const node = findNode(root, srcAbs);
         if (!node) return null;
         if (vfsNodeAllocatedByteSize(node) > get().diskUsage().free)
           return null;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return null;
         const newName = uniqueCopyName(dest, node.name);
-        const clone = cloneNode(node);
+        const sourceAccessRoot = updateReadAccessDate(
+          root,
+          srcAbs,
+          fatAccessDate(now()),
+        );
+        const source = findNode(sourceAccessRoot, srcAbs);
+        if (!source) return null;
+        const clone = cloneNode(source);
         clone.name = newName;
-        const newRoot = insertNode(get().root, destAbs, clone);
+        const newRoot = insertNode(sourceAccessRoot, destAbs, clone);
         if (!newRoot || !fitsOnDisk(newRoot)) return null;
+        if (sourceAccessRoot !== root) set({ root: sourceAccessRoot });
         commitFilesystemChange({ root: newRoot }, "Copy");
         return newName;
       },

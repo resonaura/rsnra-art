@@ -54,7 +54,7 @@ try {
   const sourceFile = state.resolve(copySourcePath);
   assert.ok(sourceFolder && sourceFile);
 
-  copyClock += 60_000;
+  copyClock += 24 * 60 * 60 * 1000 + 60_000;
   const copiedFolderName = state.copyTo(copyFixturePath, USER_DOCUMENTS_PATH);
   assert.ok(copiedFolderName);
   const copiedFolderPath = `${USER_DOCUMENTS_PATH}\\${copiedFolderName}`;
@@ -66,6 +66,11 @@ try {
   assert.notEqual(copiedFolder.modified, sourceFolder.modified);
   assert.notEqual(copiedFile.created, sourceFile.created);
   assert.equal(copiedFile.modified, sourceFile.modified);
+  assert.notEqual(state.resolve(copySourcePath)?.accessed, sourceFile.accessed);
+  assert.equal(
+    copiedFile.accessed,
+    state.resolve(copySourcePath)?.accessed,
+  );
 
   const explicitCopyPath = `${USER_DOCUMENTS_PATH}\\Explicit Copy.txt`;
   assert.equal(state.copyAs(copySourcePath, explicitCopyPath), true);
