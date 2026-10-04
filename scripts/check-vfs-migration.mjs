@@ -283,6 +283,24 @@ const recursiveMiss = await runTerminalCommand(
 );
 assert.equal(recursiveMiss.text, "File Not Found");
 
+const copyTarget = `${commandFixture}\\CopyTarget`;
+assert.equal(state.mkdir(copyTarget), true);
+assert.equal(state.writeFile(`${commandFixture}\\copy-one.dat`, "one"), true);
+assert.equal(state.writeFile(`${commandFixture}\\copy-two.dat`, "two"), true);
+const wildcardCopy = await runTerminalCommand(
+  `copy "${commandFixture}\\copy-*.dat" "${copyTarget}"`,
+);
+assert.equal(wildcardCopy.errorLevel, 0);
+assert.equal(wildcardCopy.text, "        2 file(s) copied.");
+assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
+assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
+assert.equal(useVfsStore.getState().undoDescription, "Copy files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.deepEqual(state.list(copyTarget), []);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
+assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
+
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\hidden.txt"`)).errorLevel, 1);
 assert.equal(state.exists(`${commandFixture}\\hidden.txt`), true);
 assert.equal((await runTerminalCommand(`del "${commandFixture}\\system.txt"`)).errorLevel, 1);
@@ -598,7 +616,7 @@ assert.equal(state.mkdirs(invalidTreePath), false);
 assert.equal(state.resolve(`${USER_DOCUMENTS_PATH}\\md-tree-invalid`), null);
 
 console.log(
-  "VFS, shell visibility, DOS attributes, copy timestamps, and migration checks passed.",
+  "VFS, shell, Command Prompt, copy timestamp, and migration checks passed.",
 );
 process.exit(0);
 

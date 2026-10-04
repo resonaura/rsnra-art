@@ -905,6 +905,57 @@ function cmdCopy(
     ctx.setErrorLevel(1);
     return;
   }
+
+  if (/[*?]/.test(src)) {
+    const lastSep = Math.max(src.lastIndexOf("\\"), src.lastIndexOf("/"));
+    const sourceDirArg = lastSep >= 0
+      ? src.slice(0, lastSep + 1)
+      : ctx.vfs.cwd;
+    const pattern = lastSep >= 0 ? src.slice(lastSep + 1) : src;
+    const sourceDirAbs = ctx.vfs.resolvePath(sourceDirArg);
+    const sourceDir = sourceDirAbs ? ctx.vfs.resolve(sourceDirAbs) : null;
+    if (!sourceDirAbs || sourceDir?.type !== "dir") {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const sources = expandWildcards(pattern, sourceDir.children ?? []).filter(
+      (node) => node.type === "file",
+    );
+    if (!sources.length) {
+      ctx.print(["The system cannot find the file specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const destinationAbs = ctx.vfs.resolvePath(dst);
+    const destination = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
+    if (destination?.type !== "dir") {
+      ctx.print(["The destination must be a directory for multiple files."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+
+    let copied = 0;
+    let failed = false;
+    ctx.vfs.transaction("Copy files", () => {
+      for (const source of sources) {
+        const sourcePath = `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`;
+        if (ctx.vfs.copy(sourcePath, dst)) {
+          copied++;
+        } else {
+          failed = true;
+          ctx.print(
+            [`The system cannot copy ${sourcePath}; the file exists or the disk is full.`],
+            "error",
+          );
+        }
+      }
+    });
+    if (copied) ctx.print([`        ${copied} file(s) copied.`]);
+    if (failed) ctx.setErrorLevel(1);
+    return;
+  }
+
   const srcAbs = ctx.vfs.resolvePath(src);
   const srcNode = srcAbs ? ctx.vfs.resolve(srcAbs) : null;
   if (!srcNode || srcNode.type !== "file") {
