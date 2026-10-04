@@ -111,7 +111,11 @@ export interface VfsState {
   copyAs: (
     src: string,
     destPath: string,
-    options?: { overwrite?: boolean },
+    options?: {
+      overwrite?: boolean;
+      overwriteReadOnly?: boolean;
+      preserveReadOnly?: boolean;
+    },
   ) => boolean;
   moveAs: (
     src: string,
@@ -2664,7 +2668,7 @@ export const useVfsStore = create<VfsState>()(
           (!options?.overwrite ||
             existing.type !== "file" ||
             existing.protected ||
-            isReadOnlyFile(existing))
+            (isReadOnlyFile(existing) && !options?.overwriteReadOnly))
         )
           return false;
         const node = findNode(root, srcAbs);
@@ -2699,6 +2703,12 @@ export const useVfsStore = create<VfsState>()(
         if (!destinationRoot) return false;
         const clone = cloneNode(source);
         clone.name = name;
+        if (
+          clone.type === "file" &&
+          options?.preserveReadOnly === false
+        ) {
+          clone.readonly = false;
+        }
         const newRoot = insertNode(destinationRoot, parentPath, clone);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         if (sourceAccessRoot !== root) set({ root: sourceAccessRoot });

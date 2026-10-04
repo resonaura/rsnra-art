@@ -77,6 +77,12 @@ function expandWildcards(pattern: string, entries: VfsNode[]): VfsNode[] {
   );
 }
 
+function parentDirectoryPath(path: string): string {
+  const separator = path.lastIndexOf("\\");
+  if (separator <= 2 && /^C:\\/i.test(path)) return "C:\\";
+  return path.slice(0, separator) || "C:\\";
+}
+
 interface Redirection {
   cmd: string;
   redirect?: { file: string; append: boolean };
@@ -1204,6 +1210,382 @@ async function cmdCopy(
     });
   }
   ctx.print([`        ${copied} file(s) copied.`]);
+  if (failed) ctx.setErrorLevel(1);
+}
+
+async function cmdXcopy(args: string[], ctx: CmdContext) {
+  const supportedSwitches = new Set([
+    "s", "e", "h", "i", "y", "-y", "q", "f", "l", "t", "k", "r", "p", "c",
+  ]);
+  const switches = new Set<string>();
+  const operands: string[] = [];
+  for (const argument of args) {
+    if (/^\/-?[a-z]$/i.test(argument)) {
+      const value = argument.slice(1).toLowerCase();
+      if (!supportedSwitches.has(value)) {
+        ctx.print([`Invalid switch - ${argument}`], "error");
+        ctx.setErrorLevel(1);
+        return;
+      }
+      switches.add(value);
+    } else {
+      operands.push(argument);
+    }
+  }
+
+  if (
+    operands.length !== 2 ||
+    (switches.has("y") && switches.has("-y")) ||
+    (switches.has("s") && switches.has("t"))
+  ) {
+    ctx.print(["The syntax of the command is incorrect."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  const [sourceArg, destinationArg] = operands;
+  const includeHidden = switches.has("h");
+  const recurse = switches.has("s") || switches.has("e") || switches.has("t");
+  const includeEmptyDirectories = switches.has("e");
+  const listOnly = switches.has("l");
+  const directoriesOnly = switches.has("t");
+  const wildcardSource = /[*?]/.test(sourceArg);
+  const isVisibleSource = (node: VfsNode) =>
+    includeHidden || (!node.hidden && !node.system);
+  const sourceFiles: Array<{ path: string; relativePath: string }> = [];
+  const sourceDirectories = new Set<string>();
+  let sourceDirectoryPath = "";
+  let directorySource = false;
+
+  const addFile = (
+    node: VfsNode,
+    path: string,
+    relativePath: string,
+    explicitlyNamed = false,
+  ) => {
+    if (node.type === "file" && (explicitlyNamed || isVisibleSource(node))) {
+      sourceFiles.push({ path, relativePath });
+    }
+  };
+  const visitDirectory = (
+    directory: VfsNode,
+    directoryPath: string,
+    relativeDirectory: string,
+    sourcePattern: string | null,
+  ) => {
+    for (const child of directory.children ?? []) {
+      const childPath = `${directoryPath.replace(/[\\/]+$/, "")}\\${child.name}`;
+      const relativePath = relativeDirectory
+        ? `${relativeDirectory}\\${child.name}`
+        : child.name;
+      if (child.type === "file") {
+        const matches =
+          sourcePattern === null ||
+          (sourcePattern === "*.*" ||
+            matchWildcard(sourcePattern, child.name) ||
+            matchWildcard(sourcePattern, child.shortName ?? ""));
+        if (matches) addFile(child, childPath, relativePath);
+      } else if (recurse && isVisibleSource(child)) {
+        sourceDirectories.add(relativePath);
+        visitDirectory(child, childPath, relativePath, sourcePattern);
+      }
+    }
+  };
+
+  if (wildcardSource) {
+    const sourceSeparator = Math.max(
+      sourceArg.lastIndexOf("\\"),
+      sourceArg.lastIndexOf("/"),
+    );
+    const directoryArgument =
+      sourceSeparator >= 0 ? sourceArg.slice(0, sourceSeparator + 1) : ctx.vfs.cwd;
+    const sourcePattern =
+      sourceSeparator >= 0 ? sourceArg.slice(sourceSeparator + 1) : sourceArg;
+    const resolvedDirectory = ctx.vfs.resolvePath(directoryArgument);
+    const sourceDirectory = resolvedDirectory
+      ? ctx.vfs.resolve(resolvedDirectory)
+      : null;
+    if (!resolvedDirectory || sourceDirectory?.type !== "dir") {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    sourceDirectoryPath = resolvedDirectory;
+    visitDirectory(sourceDirectory, resolvedDirectory, "", sourcePattern);
+    directorySource = true;
+  } else {
+    const resolvedSource = ctx.vfs.resolvePath(sourceArg);
+    const sourceNode = resolvedSource ? ctx.vfs.resolve(resolvedSource) : null;
+    if (!resolvedSource || !sourceNode) {
+      ctx.print(["The system cannot find the file specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    if (sourceNode.type === "dir") {
+      sourceDirectoryPath = resolvedSource;
+      visitDirectory(sourceNode, resolvedSource, "", null);
+      directorySource = true;
+    } else {
+      addFile(sourceNode, resolvedSource, sourceNode.name, true);
+    }
+  }
+
+  if (directoriesOnly && !directorySource) {
+    ctx.print(["The /T switch is valid only when the source is a directory."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  if (!sourceFiles.length && !includeEmptyDirectories && !directoriesOnly) {
+    ctx.print(["File not found."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  const destinationAbs = ctx.vfs.resolvePath(destinationArg);
+  if (!destinationAbs) {
+    ctx.print(["The system cannot find the path specified."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+  const destinationNode = ctx.vfs.resolve(destinationAbs);
+  const forceDirectory = switches.has("i");
+  const directoryDestination =
+    directorySource || wildcardSource || forceDirectory || destinationNode?.type === "dir";
+  let destinationRoot = destinationAbs;
+  let destinationFile = "";
+
+  if (directoryDestination) {
+    if (destinationNode && destinationNode.type !== "dir") {
+      ctx.print([`The destination is not a directory: ${destinationAbs}.`], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    if (!destinationNode) {
+      const destinationParent = parentDirectoryPath(destinationAbs);
+      const parentNode = ctx.vfs.resolve(destinationParent);
+      if (parentNode?.type !== "dir") {
+        ctx.print(["The system cannot find the path specified."], "error");
+        ctx.setErrorLevel(1);
+        return;
+      }
+      if (!forceDirectory && !listOnly) {
+        const accepted = ctx.confirm
+          ? await ctx.confirm(`Create destination directory ${destinationAbs}? (Y/N)`)
+          : false;
+        if (!accepted) {
+          ctx.print(["The destination directory was not created."], "error");
+          ctx.setErrorLevel(1);
+          return;
+        }
+      }
+    }
+  } else {
+    if (destinationNode?.type === "dir") {
+      destinationRoot = destinationAbs;
+      destinationFile = sourceFiles[0]?.relativePath ?? "";
+    } else {
+      destinationRoot = parentDirectoryPath(destinationAbs);
+      destinationFile = destinationAbs.slice(destinationAbs.lastIndexOf("\\") + 1);
+      if (ctx.vfs.resolve(destinationRoot)?.type !== "dir") {
+        ctx.print(["The system cannot find the path specified."], "error");
+        ctx.setErrorLevel(1);
+        return;
+      }
+    }
+  }
+
+  if (
+    directorySource &&
+    (destinationAbs.toLowerCase() === sourceDirectoryPath.toLowerCase() ||
+      destinationAbs
+        .toLowerCase()
+        .startsWith(`${sourceDirectoryPath.toLowerCase().replace(/[\\/]+$/, "")}\\`))
+  ) {
+    ctx.print(["Cannot copy a directory into itself or one of its subdirectories."], "error");
+    ctx.setErrorLevel(1);
+    return;
+  }
+
+  const directoryPaths = new Map<string, string>();
+  if (directoryDestination) {
+    const hasOutput =
+      sourceFiles.length > 0 || sourceDirectories.size > 0 || includeEmptyDirectories || directoriesOnly;
+    if (hasOutput) directoryPaths.set(destinationAbs.toLowerCase(), destinationAbs);
+
+    let selectedDirectories: string[] = [];
+    if (includeEmptyDirectories) {
+      selectedDirectories = [...sourceDirectories];
+    } else if (recurse) {
+      for (const sourceFile of sourceFiles) {
+        const parts = sourceFile.relativePath.split("\\").slice(0, -1);
+        for (let count = 1; count <= parts.length; count++) {
+          const relativePath = parts.slice(0, count).join("\\");
+          if (sourceDirectories.has(relativePath)) selectedDirectories.push(relativePath);
+        }
+      }
+    }
+    for (const relativePath of new Set(selectedDirectories)) {
+      const path = `${destinationAbs.replace(/[\\/]+$/, "")}\\${relativePath}`;
+      directoryPaths.set(path.toLowerCase(), path);
+    }
+  }
+
+  const fileCandidates: Array<{
+    sourcePath: string;
+    destinationPath: string;
+    relativePath: string;
+    existing: VfsNode | null;
+  }> = [];
+  const continueOnError = switches.has("c");
+  let failed = false;
+  if (!directoriesOnly) {
+    for (const sourceFile of sourceFiles) {
+      const targetPath = directoryDestination
+        ? `${destinationAbs.replace(/[\\/]+$/, "")}\\${sourceFile.relativePath}`
+        : destinationFile
+          ? `${destinationRoot.replace(/[\\/]+$/, "")}\\${destinationFile}`
+          : destinationAbs;
+      const sourcePath = ctx.vfs.resolvePath(sourceFile.path);
+      const targetAbs = ctx.vfs.resolvePath(targetPath);
+      const sourceNode = sourcePath ? ctx.vfs.resolve(sourcePath) : null;
+      if (!sourcePath || !targetAbs || sourceNode?.type !== "file") {
+        ctx.print([`The path is too long or invalid: ${targetPath}.`], "error");
+        failed = true;
+        if (!continueOnError) {
+          ctx.setErrorLevel(1);
+          return;
+        }
+        continue;
+      }
+      if (sourcePath.toLowerCase() === targetAbs.toLowerCase()) {
+        ctx.print([`Access is denied - ${targetAbs}.`], "error");
+        failed = true;
+        if (!continueOnError) {
+          ctx.setErrorLevel(1);
+          return;
+        }
+        continue;
+      }
+      fileCandidates.push({
+        sourcePath,
+        destinationPath: targetAbs,
+        relativePath: sourceFile.relativePath,
+        existing: ctx.vfs.resolve(targetAbs),
+      });
+    }
+  }
+
+  const forceOverwrite = switches.has("y");
+  const forcePrompt = switches.has("-y");
+  const copyCmd = getEnvVar(ctx.vars, "COPYCMD") ?? "";
+  const environmentOverwrite = /(?:^|\\s)\/y(?:$|\\s)/i.test(copyCmd);
+  const promptOverwrites = forcePrompt
+    ? true
+    : forceOverwrite || environmentOverwrite
+      ? false
+      : !ctx.inBatch;
+  const approved: typeof fileCandidates = [];
+
+  for (const candidate of fileCandidates) {
+    const existing = candidate.existing;
+    if (
+      existing &&
+      (existing.type !== "file" ||
+        existing.protected ||
+        (isReadOnlyFile(existing) && !switches.has("r")))
+    ) {
+      failed = true;
+      ctx.print([`Access is denied - ${candidate.destinationPath}.`], "error");
+      if (!continueOnError) break;
+      continue;
+    }
+    if (!listOnly && existing && promptOverwrites) {
+      const accepted = ctx.confirm
+        ? await ctx.confirm(`Overwrite ${candidate.destinationPath}? (Y/N)`)
+        : false;
+      if (!accepted) continue;
+    }
+    if (!listOnly && switches.has("p")) {
+      const accepted = ctx.confirm
+        ? await ctx.confirm(`Copy ${candidate.sourcePath}? (Y/N)`)
+        : false;
+      if (!accepted) continue;
+    }
+    approved.push(candidate);
+  }
+
+  if (listOnly) {
+    if (!switches.has("q") && directoriesOnly) {
+      for (const directory of directoryPaths.values()) ctx.print([directory]);
+    }
+    if (!switches.has("q")) {
+      for (const candidate of approved) {
+        ctx.print([
+          switches.has("f")
+            ? `${candidate.sourcePath} -> ${candidate.destinationPath}`
+            : candidate.relativePath,
+        ]);
+      }
+    }
+    ctx.print([`        0 File(s) copied.`]);
+    if (failed) ctx.setErrorLevel(1);
+    return;
+  }
+
+  const plannedDirectories = [...directoryPaths.values()].sort(
+    (left, right) => left.split("\\").length - right.split("\\").length,
+  );
+  let copied = 0;
+  if (plannedDirectories.length || approved.length) {
+    ctx.vfs.transaction("XCOPY", () => {
+      for (const directoryPath of plannedDirectories) {
+        if (failed && !continueOnError) break;
+        const existing = ctx.vfs.resolve(directoryPath);
+        if (existing?.type === "dir") continue;
+        if (existing || !ctx.vfs.mkdir(directoryPath)) {
+          failed = true;
+          ctx.print([`The directory could not be created: ${directoryPath}.`], "error");
+          if (!continueOnError) break;
+        }
+      }
+
+      for (const candidate of approved) {
+        if (failed && !continueOnError) break;
+        const parent = parentDirectoryPath(candidate.destinationPath);
+        if (ctx.vfs.resolve(parent)?.type !== "dir") {
+          failed = true;
+          ctx.print([`The system cannot find the path specified: ${parent}.`], "error");
+          if (!continueOnError) break;
+          continue;
+        }
+        const success = ctx.vfs.copyAs(
+          candidate.sourcePath,
+          candidate.destinationPath,
+          {
+            overwrite: !!candidate.existing,
+            overwriteReadOnly: switches.has("r"),
+            preserveReadOnly: switches.has("k"),
+          },
+        );
+        if (success) {
+          copied++;
+          if (switches.has("f")) {
+            ctx.print([`${candidate.sourcePath} -> ${candidate.destinationPath}`]);
+          }
+        } else {
+          failed = true;
+          ctx.print(
+            [`The system cannot copy ${candidate.sourcePath}; the destination is protected or the disk is full.`],
+            "error",
+          );
+          if (!continueOnError) break;
+        }
+      }
+    });
+  }
+
+  if (!switches.has("q")) ctx.print([`        ${copied} File(s) copied.`]);
   if (failed) ctx.setErrorLevel(1);
 }
 
@@ -2555,6 +2937,7 @@ const REGISTRY: Record<string, CmdHandler> = {
   // File copy/move/rename
   copy: cmdCopy,
   cp: cmdCopy,
+  xcopy: cmdXcopy,
   move: cmdMove,
   mv: cmdMove,
   ren: cmdRen,
@@ -2652,6 +3035,20 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  /N   Use a source file's short 8.3 name at the destination",
     "  /Y   Overwrite existing files without asking",
     "  /-Y  Ask before overwriting (the interactive default)",
+  ],
+  xcopy: [
+    "XCOPY source [destination] [/S [/E]] [/H] [/I] [/T] [/L] [/Q] [/F] [/P] [/C] [/R] [/K] [/Y | /-Y]",
+    "  Copies files and directory trees.",
+    "  /S   Copy subdirectories that contain files; omit empty directories",
+    "  /E   Copy all subdirectories, including empty ones",
+    "  /H   Include Hidden and System files and directories",
+    "  /I   Assume the destination is a directory; create it if needed",
+    "  /T   Create the directory structure only (use /E for empty folders)",
+    "  /L   List files without copying; /F shows full source and destination paths",
+    "  /Q   Suppress per-file output; /P prompts before each file",
+    "  /C   Continue after errors; /R overwrite read-only destination files",
+    "  /K   Preserve the source Read-only attribute",
+    "  /Y   Overwrite without asking; /-Y always asks",
   ],
   move: [
     "MOVE [/Y | /-Y] <src> <dst>   (MV)",
@@ -2756,6 +3153,7 @@ export function buildHelpText(): string[] {
     "  path                 pwd                which <cmd>",
     "  title <text>         prompt <text>      color <code>",
     "  date                 time               exit",
+    "  copy / xcopy / move / ren",
     "",
     "Network:",
     "  ping [-n count] <host>",

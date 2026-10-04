@@ -1,4 +1,4 @@
-# Functional audit — 2026-10-03
+# Functional audit — 2026-10-04
 
 Baseline: Windows 2000 (NT 5.0), not Windows 95/Me. Scope covers desktop and
 window behavior, Explorer and the virtual filesystem, screen savers, Recycle
@@ -29,6 +29,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Command Prompt / directory ordering | `DIR` silently ignored `/O` and `/T`, so scripts could not request documented ordering or choose the displayed/sorted timestamp. | Implemented: `/O` supports `N`, `E`, `G`, `S`, and `D`, reversed criteria, and chained keys; `/T:C`, `/T:A`, and `/T:W` select creation/access/write times for display and date sorting in ordinary and recursive listings. Dispatcher regressions cover all fields and invalid syntax. |
 | P2 | Command Prompt / recursive deletion | `DEL /S` was ignored, so a wildcard that should span subdirectories only removed matching files from the current directory; each successful file deletion also created its own Undo entry. | Implemented: `/S` searches the selected virtual subtree with the same wildcard and DOS attribute rules, leaves directories in place, reports full paths, and groups the batch into one Undo/Redo transaction. |
 | P2 | Command Prompt / wildcard copy | `COPY` accepted only one literal source, so normal patterns such as `COPY *.TXT destination` failed even though the DOS wildcard resolver already existed for listing/deletion. | Implemented: wildcard sources resolve both long names and their stored 8.3 aliases, copy only matching files into an existing destination folder, report the count, and form one Undo/Redo step. |
+| P2 | Command Prompt / directory copy | The shell lacked `XCOPY`, so users could not copy a directory tree, preserve or omit empty subdirectories, include Hidden/System entries, or preview a recursive copy. | Implemented: `XCOPY` supports default top-level copies, `/S`, `/E`, `/H`, `/I`, `/T`, `/L`, `/Q`, `/F`, `/P`, `/C`, `/R`, `/K`, `/Y`, and `/-Y`; tree writes share one Undo step. Memory regressions cover filtering, empty folders, Read-only handling, preview-only mode, overwrite decisions, and Undo/Redo. |
 | P2 | Command Prompt / short-name copy | `COPY /N` was ignored, so scripts could not create a destination using the source file's short 8.3 name. | Implemented: `/N` uses the stored VFAT alias for long names copied into a directory, leaves already-8.3 names unchanged, and respects an explicit destination filename; alias collisions use normal confirmation and Undo. |
 | P2 | Command Prompt / copy overwrite policy | `COPY` rejected an existing destination instead of using Windows 2000's overwrite warning and `/Y`/`/-Y` controls. | Implemented: interactive overwrites ask per file; `/Y` and `COPYCMD=/Y` suppress the prompt, `/-Y` forces it, and batch files overwrite without the interactive prompt. Replacements preserve the old file in the command's single Undo step. |
 | P2 | Command Prompt / wildcard move | `MOVE` accepted one literal source, so a batch of matching files could not be moved into another directory as a unit. | Implemented: wildcard matches are resolved by long/short name, moved into an existing directory, and grouped into one Undo/Redo transaction with per-file failures preserved. |
@@ -205,6 +206,12 @@ not a claim that every Windows 2000 feature is implemented.
 38. Enforce the classic Win32 path boundary after Rename. **Complete:** the
     target's caller-visible parent path plus the new name must remain below
     260 characters, and an in-memory check covers both sides of the boundary.
+39. Implement Windows 2000 `XCOPY` tree operations. **Complete:** support
+    non-recursive copies, `/S`/`/E`, Hidden/System filtering and `/H`,
+    destination directory inference and `/I`, directory-only `/T`, preview
+    `/L`, overwrite prompts, `/R` and `/K` Read-only semantics, `/P`, `/Q`,
+    `/F`, `/C`, and one-step Undo/Redo. Regressions run through the real
+    Command Prompt dispatcher against the virtual FAT volume.
 
 ## Historical checks used
 
@@ -229,6 +236,7 @@ not a claim that every Windows 2000 feature is implemented.
 - [Microsoft Windows 2000 Server Operations Guide: Using Long File Names](https://flylib.com/books/en/2.901.1.54/1/): documents that Windows 2000's command-line wildcard matching for `COPY` and `DEL` checks both long names and their short 8.3 aliases.
 - [Microsoft Learn: DEL](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc771049%28v%3Dws.11%29): corroborates DEL's `/A` filters, including the `-` exclusion prefix, and `/Q`/`/P` semantics; Windows 2000-specific option codes are taken from the period reference above.
 - [Microsoft Learn: COPY](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/copy): corroborates the `/Y`, `/-Y`, `/N`, `/V`, and `COPYCMD` behavior; Windows 2000 batch semantics use KB 240268 above.
+- [Microsoft Learn: XCOPY (previous versions)](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc771254%28v%3Dws.11%29): explicitly includes Windows Server 2000 and documents `/S`, `/E`, `/H`, `/I`, `/T`, `/L`, `/R`, `/K`, `/Y`, and `/-Y`; the current [Microsoft Learn: XCOPY](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/xcopy) corroborates `/P`, `/Q`, `/F`, `/C`, and option descriptions.
 - [Microsoft Learn: DIR](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/dir): corroborates that `DIR` omits Hidden/System by default, `/A` alone shows all, `/A` combines and negates attributes, `/O` chains or reverses sort keys, and `/T` selects timestamps for display and date sorting; current documentation is used as corroboration for the Windows 2000 command reference.
 - [Microsoft Learn: MS-FSCC 8.3 Filename](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/18e63b13-ba43-4f5f-a5b7-11e871b71f14): defines the character and length constraints for an 8.3/DOS filename.
 - [Microsoft Learn: File Times](https://learn.microsoft.com/en-us/windows/win32/sysinfo/file-times): FAT creation time resolves to 10 ms, write time to 2 seconds, and access time to one day (the access date).

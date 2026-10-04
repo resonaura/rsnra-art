@@ -563,6 +563,175 @@ assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
 assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
 
+const xcopySource = `${commandFixture}\\XCOPY source`;
+const xcopyChild = `${xcopySource}\\Child`;
+const xcopyHiddenDirectory = `${xcopySource}\\Hidden folder`;
+assert.equal(state.mkdir(xcopySource), true);
+assert.equal(state.mkdir(xcopyChild), true);
+assert.equal(state.mkdir(`${xcopyChild}\\Empty nested`), true);
+assert.equal(state.mkdir(`${xcopySource}\\Empty`), true);
+assert.equal(state.mkdir(xcopyHiddenDirectory), true);
+assert.equal(state.writeFile(`${xcopySource}\\root.txt`, "root"), true);
+assert.equal(state.writeFile(`${xcopyChild}\\inner.txt`, "inner"), true);
+assert.equal(state.writeFile(`${xcopyHiddenDirectory}\\hidden.txt`, "hidden"), true);
+assert.equal(state.writeFile(`${xcopySource}\\hidden.txt`, "hidden"), true);
+assert.equal(state.setAttributes(`${xcopySource}\\hidden.txt`, { hidden: true, system: true }), true);
+assert.equal(state.setAttributes(xcopyHiddenDirectory, { hidden: true }), true);
+assert.equal(state.writeFile(`${xcopySource}\\readonly.txt`, "read-only"), true);
+assert.equal(state.setAttributes(`${xcopySource}\\readonly.txt`, { readonly: true }), true);
+
+const xcopyDefaultTarget = `${commandFixture}\\XCOPY default`;
+const xcopyDefault = await runTerminalCommand(
+  `xcopy "${xcopySource}" "${xcopyDefaultTarget}" /I`,
+);
+assert.equal(xcopyDefault.errorLevel, 0);
+assert.equal(state.read(`${xcopyDefaultTarget}\\root.txt`), "root");
+assert.equal(state.exists(`${xcopyDefaultTarget}\\Child`), false);
+assert.equal(state.exists(`${xcopyDefaultTarget}\\hidden.txt`), false);
+assert.equal(state.resolve(`${xcopyDefaultTarget}\\readonly.txt`)?.readonly, false);
+
+const xcopyExplicitHiddenTarget = `${commandFixture}\\XCOPY explicit hidden`;
+assert.equal(
+  (await runTerminalCommand(
+    `xcopy "${xcopySource}\\hidden.txt" "${xcopyExplicitHiddenTarget}" /I`,
+  )).errorLevel,
+  0,
+);
+assert.equal(state.resolve(`${xcopyExplicitHiddenTarget}\\hidden.txt`)?.system, true);
+
+const xcopyTreeTarget = `${commandFixture}\\XCOPY tree`;
+const xcopyTree = await runTerminalCommand(
+  `xcopy "${xcopySource}" "${xcopyTreeTarget}" /S /I`,
+);
+assert.equal(xcopyTree.errorLevel, 0);
+assert.equal(state.read(`${xcopyTreeTarget}\\Child\\inner.txt`), "inner");
+assert.equal(state.exists(`${xcopyTreeTarget}\\Empty`), false);
+assert.equal(state.exists(`${xcopyTreeTarget}\\Child\\Empty nested`), false);
+assert.equal(state.exists(`${xcopyTreeTarget}\\Hidden folder`), false);
+assert.equal(useVfsStore.getState().undoDescription, "XCOPY");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.exists(xcopyTreeTarget), false);
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.read(`${xcopyTreeTarget}\\Child\\inner.txt`), "inner");
+
+const xcopyAllTarget = `${commandFixture}\\XCOPY all`;
+const xcopyAll = await runTerminalCommand(
+  `xcopy "${xcopySource}" "${xcopyAllTarget}" /E /H /I`,
+);
+assert.equal(xcopyAll.errorLevel, 0);
+assert.equal(state.exists(`${xcopyAllTarget}\\Empty`), true);
+assert.equal(state.exists(`${xcopyAllTarget}\\Child\\Empty nested`), true);
+assert.equal(state.read(`${xcopyAllTarget}\\Hidden folder\\hidden.txt`), "hidden");
+assert.equal(state.resolve(`${xcopyAllTarget}\\hidden.txt`)?.system, true);
+assert.equal(state.resolve(`${xcopyAllTarget}\\readonly.txt`)?.readonly, false);
+
+const xcopyKeepTarget = `${commandFixture}\\XCOPY keep attributes`;
+const xcopyKeep = await runTerminalCommand(
+  `xcopy "${xcopySource}\\readonly.txt" "${xcopyKeepTarget}" /I /K`,
+);
+assert.equal(xcopyKeep.errorLevel, 0);
+assert.equal(state.resolve(`${xcopyKeepTarget}\\readonly.txt`)?.readonly, true);
+
+const xcopyStructureTarget = `${commandFixture}\\XCOPY structure`;
+const xcopyStructure = await runTerminalCommand(
+  `xcopy "${xcopySource}" "${xcopyStructureTarget}" /T /E /I`,
+);
+assert.equal(xcopyStructure.errorLevel, 0);
+assert.equal(state.exists(`${xcopyStructureTarget}\\Child\\Empty nested`), true);
+assert.equal(state.exists(`${xcopyStructureTarget}\\root.txt`), false);
+
+const xcopyListTarget = `${commandFixture}\\XCOPY list only`;
+const xcopyList = await runTerminalCommand(
+  `xcopy "${xcopySource}\\*.txt" "${xcopyListTarget}" /S /L /I`,
+);
+assert.equal(xcopyList.errorLevel, 0);
+assert.match(xcopyList.text, /root\.txt/);
+assert.match(xcopyList.text, /Child\\inner\.txt/);
+assert.equal(state.exists(xcopyListTarget), false);
+
+const xcopyOverwriteSource = `${commandFixture}\\XCOPY overwrite.txt`;
+const xcopyOverwriteTarget = `${commandFixture}\\XCOPY overwrite target`;
+assert.equal(state.writeFile(xcopyOverwriteSource, "original"), true);
+assert.equal(
+  (await runTerminalCommand(`xcopy "${xcopyOverwriteSource}" "${xcopyOverwriteTarget}" /I`)).errorLevel,
+  0,
+);
+assert.equal(state.writeFile(xcopyOverwriteSource, "replacement"), true);
+const xcopyOverwriteQuestions = [];
+const xcopyDeclinedOverwrite = await runTerminalCommand(
+  `xcopy "${xcopyOverwriteSource}" "${xcopyOverwriteTarget}" /-Y`,
+  {
+    confirm: async (question) => {
+      xcopyOverwriteQuestions.push(question);
+      return false;
+    },
+  },
+);
+assert.equal(xcopyDeclinedOverwrite.errorLevel, 0);
+assert.deepEqual(xcopyOverwriteQuestions, [
+  `Overwrite ${xcopyOverwriteTarget}\\XCOPY overwrite.txt? (Y/N)`,
+]);
+assert.equal(state.read(`${xcopyOverwriteTarget}\\XCOPY overwrite.txt`), "original");
+assert.equal(
+  (await runTerminalCommand(
+    `xcopy "${xcopyOverwriteSource}" "${xcopyOverwriteTarget}" /Y`,
+  )).errorLevel,
+  0,
+);
+assert.equal(state.read(`${xcopyOverwriteTarget}\\XCOPY overwrite.txt`), "replacement");
+
+const xcopyReadonlySource = `${commandFixture}\\XCOPY readonly source.txt`;
+const xcopyReadonlyTarget = `${commandFixture}\\XCOPY readonly target`;
+assert.equal(state.writeFile(xcopyReadonlySource, "new data"), true);
+assert.equal(state.mkdir(xcopyReadonlyTarget), true);
+assert.equal(state.writeFile(`${xcopyReadonlyTarget}\\XCOPY readonly source.txt`, "old data"), true);
+assert.equal(
+  state.setAttributes(`${xcopyReadonlyTarget}\\XCOPY readonly source.txt`, { readonly: true }),
+  true,
+);
+const deniedReadonlyOverwrite = await runTerminalCommand(
+  `xcopy /Y "${xcopyReadonlySource}" "${xcopyReadonlyTarget}"`,
+);
+assert.equal(deniedReadonlyOverwrite.errorLevel, 1);
+assert.equal(state.read(`${xcopyReadonlyTarget}\\XCOPY readonly source.txt`), "old data");
+const allowedReadonlyOverwrite = await runTerminalCommand(
+  `xcopy /Y /R "${xcopyReadonlySource}" "${xcopyReadonlyTarget}"`,
+);
+assert.equal(allowedReadonlyOverwrite.errorLevel, 0);
+assert.equal(state.read(`${xcopyReadonlyTarget}\\XCOPY readonly source.txt`), "new data");
+
+const xcopyPromptQuestions = [];
+const xcopyPrompted = await runTerminalCommand(
+  `xcopy /P /Y "${xcopyReadonlySource}" "${xcopyReadonlyTarget}"`,
+  {
+    confirm: async (question) => {
+      xcopyPromptQuestions.push(question);
+      return false;
+    },
+  },
+);
+assert.equal(xcopyPrompted.errorLevel, 0);
+assert.deepEqual(xcopyPromptQuestions, [`Copy ${xcopyReadonlySource}? (Y/N)`]);
+assert.equal(state.read(`${xcopyReadonlyTarget}\\XCOPY readonly source.txt`), "new data");
+
+const xcopyContinueSource = `${commandFixture}\\XCOPY continue source`;
+const xcopyContinueTarget = `${commandFixture}\\XCOPY continue target`;
+assert.equal(state.mkdir(xcopyContinueSource), true);
+assert.equal(state.writeFile(`${xcopyContinueSource}\\blocked.txt`, "blocked"), true);
+assert.equal(state.writeFile(`${xcopyContinueSource}\\good.txt`, "good"), true);
+assert.equal(state.mkdir(xcopyContinueTarget), true);
+assert.equal(state.mkdir(`${xcopyContinueTarget}\\blocked.txt`), true);
+const xcopyStopOnError = await runTerminalCommand(
+  `xcopy /Y "${xcopyContinueSource}" "${xcopyContinueTarget}"`,
+);
+assert.equal(xcopyStopOnError.errorLevel, 1);
+assert.equal(state.exists(`${xcopyContinueTarget}\\good.txt`), false);
+const xcopyContinueOnError = await runTerminalCommand(
+  `xcopy /Y /C "${xcopyContinueSource}" "${xcopyContinueTarget}"`,
+);
+assert.equal(xcopyContinueOnError.errorLevel, 1);
+assert.equal(state.read(`${xcopyContinueTarget}\\good.txt`), "good");
+
 const longCopySource = `${commandFixture}\\Long regression filename.txt`;
 const shortCopyName = state.getShortName(longCopySource);
 assert.ok(shortCopyName && shortCopyName !== "Long regression filename.txt");
