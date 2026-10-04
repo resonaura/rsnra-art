@@ -732,14 +732,20 @@ function uniqueCopyName(parent: VfsNode, name: string): string {
   if (!taken.has(name.toLowerCase())) return name;
   const dot = name.lastIndexOf(".");
   const base = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : "";
+  const extension = dot > 0 ? name.slice(dot) : "";
   let n = 2;
-  let candidate: string;
-  do {
-    candidate = n === 2 ? `Copy of ${name}` : `Copy (${n}) of ${base}${ext}`;
+  while (true) {
+    const prefix = n === 2 ? "Copy of " : `Copy (${n}) of `;
+    // Keep generated components within VFAT's 255-character limit. If an
+    // unusually long extension consumes the available space, trim it only as
+    // much as needed to retain at least one character from the base name.
+    const extensionBudget = Math.max(0, 254 - prefix.length);
+    const safeExtension = extension.slice(0, extensionBudget);
+    const baseBudget = Math.max(1, 255 - prefix.length - safeExtension.length);
+    const candidate = `${prefix}${base.slice(0, baseBudget)}${safeExtension}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
     n++;
-  } while (taken.has(candidate.toLowerCase()));
-  return candidate;
+  }
 }
 
 // ─── Immutable path-copy helpers ──────────────────────────────────────────────

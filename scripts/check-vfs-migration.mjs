@@ -87,6 +87,16 @@ assert.equal(
   USER_DOCUMENTS_PATH,
 );
 
+// Collision-generated copy names still fit a FAT/VFAT filename component.
+const maxComponentName = `${"a".repeat(251)}.txt`;
+const maxComponentPath = `C:\\${maxComponentName}`;
+assert.equal(maxComponentName.length, 255);
+assert.equal(state.writeFile(maxComponentPath, "copy boundary"), true);
+const copiedMaxComponentName = state.copyTo(maxComponentPath, "C:\\");
+assert.ok(copiedMaxComponentName);
+assert.ok(copiedMaxComponentName.length <= 255);
+assert.equal(state.resolve(`C:\\${copiedMaxComponentName}`)?.type, "file");
+
 // Profile-level operations must not carry away the protected NTUSER.DAT or
 // leave the rest of the profile partially altered.
 const protectedProfileFile = `${USER_PROFILE_PATH}\\NTUSER.DAT`;
