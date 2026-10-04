@@ -6,6 +6,7 @@ import { ScrollArea } from "../../components/ScrollArea";
 import { FileIcon } from "../FileIcon/FileIcon";
 
 import { vfsNodeByteSize } from "../../lib/vfsSize";
+import { isVfsNodeVisible } from "../../lib/fileVisibility";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
 import { useVfsStore, type VfsNode } from "../../store/vfsStore";
 import { SystemDialog } from "../SystemDialog/SystemDialog";
@@ -243,9 +244,8 @@ export function FileDialog({
     const node = vfs.resolve(currentDir);
     if (!node || node.type !== "dir" || !node.children) return [];
     return node.children
-      .filter((c) => showHidden || !c.hidden)
-      .filter(
-        (c) => !hideProtectedSystemFiles || !(c.system && c.hidden),
+      .filter((node) =>
+        isVfsNodeVisible(node, showHidden, hideProtectedSystemFiles),
       )
       .filter((c) => c.type === "dir" || matchesFilter(c.name, currentFilter))
       .sort(sortNodes);

@@ -16,12 +16,16 @@ const [
   { dispatchSendToEntry, isSendToMenuEntry, sendToMenuLabel },
   paths,
   { mergeCommonAndUserEntries },
+  { isVfsNodeVisible },
+  { useFilePrefsStore },
 ] =
   await Promise.all([
     import("../src/store/vfsStore.ts"),
     import("../src/lib/sendTo.ts"),
     import("../src/lib/windowsPaths.ts"),
     import("../src/lib/shellFolders.ts"),
+    import("../src/lib/fileVisibility.ts"),
+    import("../src/store/filePrefsStore.ts"),
   ]);
 
 const {
@@ -31,6 +35,15 @@ const {
   USER_SEND_TO_PATH,
 } = paths;
 const state = useVfsStore.getState();
+const filePrefs = useFilePrefsStore.getState();
+assert.equal(filePrefs.showHidden, true);
+assert.equal(filePrefs.hideProtectedSystemFiles, false);
+
+assert.equal(isVfsNodeVisible({ hidden: true, system: true }, true, false), true);
+assert.equal(isVfsNodeVisible({ hidden: true, system: true }, true, true), false);
+assert.equal(isVfsNodeVisible({ hidden: true }, true, true), true);
+assert.equal(isVfsNodeVisible({ hidden: true }, false, false), false);
+assert.equal(isVfsNodeVisible({ system: true }, true, true), true);
 
 assert.equal(state.resolve(COMMON_DESKTOP_PATH)?.type, "dir");
 assert.deepEqual(

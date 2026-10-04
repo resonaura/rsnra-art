@@ -8,6 +8,7 @@ import { Icon } from "../../components/Icon/Icon";
 import { ScrollArea } from "../../components/ScrollArea";
 import { iconForNode } from "../../data/fileIcons";
 import { alertError } from "../../lib/systemDialogs";
+import { isVfsNodeVisible } from "../../lib/fileVisibility";
 import { openVfsNode } from "../../lib/openVfsNode";
 import { vfsNodeByteSize } from "../../lib/vfsSize";
 import { USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
@@ -132,9 +133,7 @@ function search(
       for (const c of node.children) {
         const childPath =
           path.endsWith("\\") ? `${path}${c.name}` : `${path}\\${c.name}`;
-        if (c.hidden && (!showHidden || (c.system && hideProtectedSystemFiles))) {
-          continue;
-        }
+        if (!isVfsNodeVisible(c, showHidden, hideProtectedSystemFiles)) continue;
         if (rx.test(c.name)) {
           out.push({ path: childPath, folder: path, node: c });
         }

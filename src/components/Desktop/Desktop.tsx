@@ -17,6 +17,7 @@ import {
   recycleBinPayloadSizes,
   willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
+import { isVfsNodeVisible } from "../../lib/fileVisibility";
 import { alertError, confirmDialog } from "../../lib/systemDialogs";
 import {
   desktopEntryId,
@@ -176,6 +177,9 @@ export function Desktop() {
   const layoutHeight = winHeight / zoom;
 
   const showHidden = useFilePrefsStore((s) => s.showHidden);
+  const hideProtectedSystemFiles = useFilePrefsStore(
+    (s) => s.hideProtectedSystemFiles,
+  );
   const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
   const underlineMode = useFilePrefsStore((s) => s.underlineMode);
   const hideKnownExtensions = useFilePrefsStore((s) => s.hideKnownExtensions);
@@ -207,12 +211,12 @@ export function Desktop() {
     ({ node }) =>
       node.type === "file" &&
       node.system &&
-      node.name.toLowerCase().endsWith(".lnk"),
+      node.name.toLowerCase().endsWith(".lnk") &&
+      isVfsNodeVisible(node, showHidden, hideProtectedSystemFiles),
   );
   const rest = desktopEntries.filter(({ node }) => {
     if (node.system && node.name.toLowerCase().endsWith(".lnk")) return false;
-    if (node.hidden && !showHidden) return false;
-    return true;
+    return isVfsNodeVisible(node, showHidden, hideProtectedSystemFiles);
   });
 
   const [selected, setSelected] = useState<string | null>(null);

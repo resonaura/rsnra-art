@@ -19,6 +19,7 @@ import { displayName, iconForNode } from "../../data/fileIcons";
 import { getPreferredApp } from "../../data/fileOpen";
 import { GAMES } from "../../data/games";
 import { playSound } from "../../lib/audio";
+import { isVfsNodeVisible } from "../../lib/fileVisibility";
 import {
   containsReadOnlyFile,
   deleteConfirmationMessage,
@@ -738,12 +739,8 @@ export function MyComputer({ windowId }: { windowId: string }) {
     );
   }
   const entries = allEntries.filter(
-    (n) =>
-      (showHidden || !n.hidden) &&
-      // Windows only treats hidden system objects as protected OS files.
-      // A normal system-owned folder/shortcut (including the Games folder)
-      // must not disappear when the recommended option is enabled.
-      (!hideProtectedSystemFiles || !(n.system && n.hidden)),
+    (node) =>
+      isVfsNodeVisible(node, showHidden, hideProtectedSystemFiles),
   );
 
   const sortValue = (n: VfsNode): string | number => {

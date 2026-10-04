@@ -38,6 +38,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Context-menu disabled state | `$disabled` only changed `CtxItem` colors; native buttons remained clickable, so visually disabled shell actions could still run. | Fixed in code: disabled context items now set the native `disabled` attribute and expose `aria-disabled`, while retaining the Windows menu appearance; live accessibility verification is pending. |
 | P2 | Screen saver files | Double-clicking a `.scr` in Explorer or Find fell through to Notepad instead of running the selected saver. | Implemented: known `.scr` files launch the registered saver from Explorer and Find, matching Desktop behavior. |
 | P2 | File Dialog | Open/Save dialogs always hid Hidden files, regardless of Explorer's shared visibility preferences. | Implemented |
+| P2 | Folder Options visibility | Desktop ignored “Hide protected operating system files” while Explorer, Find, and Open/Save dialogs applied it. | Fixed: one shared VFS visibility predicate now drives all four surfaces; in-memory checks cover hidden/system combinations, including the inspectable default. |
 | P2 | Properties | Attribute checkboxes held their initial local values if the underlying file changed while Properties stayed open. | Implemented |
 | P2 | Find | Results had no working Select All or Save Results command. | Implemented; selection and saving wired to the virtual filesystem |
 | P2 | Start Menu / user profiles | Programs read only `All Users\Start Menu\Programs`, so per-user shortcuts and groups were missing; identical groups had no merge behavior. | Implemented and live checked: `Administrator\Start Menu\Programs` now merges with `All Users\Start Menu\Programs`; matching groups merge recursively and a same-name per-user shortcut takes precedence. A unique per-user test group appeared immediately; a same-named `Games` group retained the four shared game entries. Both test folders were removed through Explorer Undo. |
@@ -130,6 +131,11 @@ not a claim that every Windows 2000 feature is implemented.
     **Complete:** the destination directory's caller-visible normalized form
     and final filename are checked before editing the tree; regression checks
     verify an overlong Copy/Move is rejected atomically.
+23. Apply shared Folder Options visibility consistently to the Desktop.
+    **Complete:** Desktop, Explorer, Find, and file dialogs share one visibility
+    predicate; tests verify that protected hidden system files are shown by
+    default, hidden when the option is enabled, and ordinary hidden files stay
+    independently controlled by “Show hidden files”.
 
 ## Historical checks used
 
