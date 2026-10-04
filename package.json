@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:vfs-migration": "bun scripts/check-vfs-migration.mjs",
     "preview": "vite preview",
     "icons:list": "python3 scripts/icons/convert_icons.py list",
     "icons:get": "python3 scripts/icons/convert_icons.py get",

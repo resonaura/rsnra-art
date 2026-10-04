@@ -41,7 +41,7 @@ not a claim that every Windows 2000 feature is implemented.
 | P2 | Taskbar properties | Taskbar context-menu Properties was disabled, so the documented General/Advanced property sheet and its shell options were unavailable. | Implemented and live checked: General/Advanced tabs, staged Apply/OK/Cancel, taskbar topmost/auto-hide, small Start-menu icons, clock, and personalized menus persist and affect the shell. Show Clock, auto-hide, small icons, and restoration to the user's prior settings were verified live. |
 | P2 | Shell shortcuts / context menus | Explorer and Desktop could open `.lnk` files but offered no normal Send To action for creating a file/folder shortcut; clicking a nested context menu also bubbled to the owning Explorer window and closed the menu. | Implemented and live checked: the common `Send To → Desktop (create shortcut)` action creates a collision-safe, icon-preserving virtual `.lnk`; shortcuts reopen the original file and are undoable. Explorer multi-selection is one Undo; Desktop-origin shortcuts are undoable too. ContextMenu stops portal click bubbling. |
 | P2 | Per-user Send To | `C:\Documents and Settings\Administrator\SendTo` existed but was empty while Explorer hard-coded a single Desktop action; My Documents and user-defined folder/program destinations could not participate. | Implemented: VFS v21 seeds all four historical destinations (floppy, Desktop, Mail Recipient, My Documents), and the submenu enumerates current profile-folder contents. Desktop shortcuts, My Documents copies, custom folder copies and supported app shortcuts execute; the empty A: drive and absent MAPI client report specific Windows-style errors. Live checked: My Documents copy/Undo and immediate menu removal/restoration after deleting/undoing DeskLink. |
-| P1 | VFS schema migration | Advancing persisted VFS v19 to a newer schema would route modern `RecycledItem` records through the legacy detached-node migration path, which expects an embedded `node` and can fail with non-empty Recycle Bin metadata. | Fixed in v20: v19 recycled metadata and already-moved `C:\Recycled` payload/index are preserved, while missing SendTo defaults are added once. Live migration checked against the existing v19 profile and document tree; the test profile's Recycle Bin was empty. Populated-bin migration remains code-reviewed but lacks a dedicated fixture. |
+| P1 | VFS schema migration | Advancing persisted VFS v19 to a newer schema would route modern `RecycledItem` records through the legacy detached-node migration path, which expects an embedded `node` and can fail with non-empty Recycle Bin metadata. | Fixed in v20 and regression-tested for both v19/v20 → v21: populated `RecycledItem` metadata, `C:\Recycled` payload, and binary INFO2 content survive unchanged; missing SendTo defaults are added without dropping a custom destination. `pnpm test:vfs-migration` passes. |
 | P3 | App menus | Several Help/About entries and secondary modes remain disabled; these are lower impact than core file and window operations. | Pending |
 
 ## Work sequence
@@ -86,10 +86,10 @@ not a claim that every Windows 2000 feature is implemented.
     folder is now virtual and live; Desktop and My Documents entries work, and
     folder/app shortcuts are dispatched. Floppy and mail destinations still
     need corresponding virtual device/client behavior.
-14. Keep schema upgrades non-destructive as the VFS grows. **Partial:** v19
-    Recycle Bin metadata is no longer interpreted as the detached legacy format;
-    the live v19 migration check had no recycled payloads, so populated-bin
-    migration still needs a dedicated fixture test.
+14. Keep schema upgrades non-destructive as the VFS grows. **Complete:** a
+    memory-only fixture migrates populated v19 and v20 bins, checks the payload
+    and INFO2 bytes, and confirms custom SendTo entries survive while new stock
+    entries are added.
 15. Match the historical Send To defaults without pretending missing devices
     are available. **Partial:** the four stock profile entries are present;
     Desktop/My Documents work, while the floppy has no inserted virtual medium
