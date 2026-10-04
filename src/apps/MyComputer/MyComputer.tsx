@@ -579,6 +579,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
       copyTo: s.copyTo,
       moveTo: s.moveTo,
       move: s.move,
+      setVolumeLabel: s.setVolumeLabel,
       diskUsage: s.diskUsage,
       // Free-space display also has to react when only the Recycle Bin changes.
       recycled: s.recycled,
@@ -648,6 +649,20 @@ export function MyComputer({ windowId }: { windowId: string }) {
   const isRoot = path === MY_COMPUTER;
   const isDriveRoot = /^([A-Za-z]):\\$/.test(path);
   const driveNotReady = /^[AD]:\\$/.test(path);
+  useEffect(() => {
+    if (!isRoot) return;
+    const currentDriveLabel = `${vfs.root.volumeLabel || "Local Disk"} (C:)`;
+    setSelected((current) =>
+      current.some((label) => label.endsWith(" (C:)"))
+        ? current.map((label) =>
+            label.endsWith(" (C:)") ? currentDriveLabel : label,
+          )
+        : current,
+    );
+    setSelectionAnchor((current) =>
+      current?.endsWith(" (C:)") ? currentDriveLabel : current,
+    );
+  }, [isRoot, vfs.root.volumeLabel]);
   const showHidden = useFilePrefsStore((s) => s.showHidden);
   const singleClickOpen = useFilePrefsStore((s) => s.singleClickOpen);
   const underlineMode = useFilePrefsStore((s) => s.underlineMode);
@@ -1037,20 +1052,41 @@ export function MyComputer({ windowId }: { windowId: string }) {
   };
 
   const commitRename = () => {
-    if (renaming && renameVal.trim()) {
-      const abs = vfs.resolvePath(renaming, path);
+    if (renaming) {
       const nextName = renameVal.trim();
-      if (abs && vfs.rename(abs, nextName)) {
-        setSelected((current) =>
-          current.map((name) => (name === renaming ? nextName : name)),
-        );
-        setSelectionAnchor(nextName);
+      const volumeDrive = isRoot
+        ? driveEntries.find(
+            (drive) => drive.label === renaming && drive.target === "C:\\",
+          )
+        : undefined;
+      if (volumeDrive) {
+        if (vfs.setVolumeLabel(nextName)) {
+          const nextDriveName = `${nextName.toUpperCase() || "Local Disk"} (C:)`;
+          setSelected([nextDriveName]);
+          setSelectionAnchor(nextDriveName);
+        } else {
+          playSound("error");
+        }
       } else {
-        playSound("error");
+        const abs = nextName ? vfs.resolvePath(renaming, path) : null;
+        if (abs && vfs.rename(abs, nextName)) {
+          setSelected((current) =>
+            current.map((name) => (name === renaming ? nextName : name)),
+          );
+          setSelectionAnchor(nextName);
+        } else if (nextName) {
+          playSound("error");
+        }
       }
     }
     setRenaming(null);
     refresh();
+  };
+
+  const beginDriveRename = (drive: Drive) => {
+    if (drive.target !== "C:\\") return;
+    setRenaming(drive.label);
+    setRenameVal(vfs.root.volumeLabel ?? "");
   };
 
   // ── clipboard: copy / cut / paste ───────────────────────────────────────
@@ -1320,6 +1356,9 @@ export function MyComputer({ windowId }: { windowId: string }) {
       ) {
         e.preventDefault();
         void deleteNodes(selectedNodes, e.shiftKey);
+      } else if (!mod && key === "f2" && selectedDrive?.target === "C:\\") {
+        e.preventDefault();
+        beginDriveRename(selectedDrive);
       } else if (
         !mod &&
         key === "f2" &&
@@ -1358,7 +1397,16 @@ export function MyComputer({ windowId }: { windowId: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, renaming, selected, path, isRoot, driveNotReady, sorted]);
+  }, [
+    isFocused,
+    renaming,
+    selected,
+    path,
+    isRoot,
+    driveNotReady,
+    sorted,
+    vfs.root.volumeLabel,
+  ]);
 
   const menus: MenuDef[] = [
     {
@@ -1407,15 +1455,19 @@ export function MyComputer({ windowId }: { windowId: string }) {
         {
           label: "Rename",
           action: () => {
-            if (selectedNodes.length === 1 && selectedNode) {
+            if (selectedDrive?.target === "C:\\") {
+              beginDriveRename(selectedDrive);
+            } else if (selectedNodes.length === 1 && selectedNode) {
               setRenaming(selectedNode.name);
               setRenameVal(selectedNode.name);
             }
           },
           disabled:
-            selectedNodes.length !== 1 ||
-            !!selectedNode && containsProtectedNode(selectedNode) ||
-            !!selectedNode && isReadOnlyFile(selectedNode) ||
+            selectedDrive
+              ? selectedDrive.target !== "C:\\"
+              : selectedNodes.length !== 1 ||
+                !!selectedNode && containsProtectedNode(selectedNode) ||
+                !!selectedNode && isReadOnlyFile(selectedNode) ||
             path === "Control Panel" ||
             path === "Games",
         },
@@ -1802,7 +1854,7 @@ export function MyComputer({ windowId }: { windowId: string }) {
               }}
             >
               <Icon src={d.icon} size={32} />
-              {d.label}
+              {renaming === d.label ? renameBox(100) : d.label}
             </IconItem>
           ))
         ) : view === "large" ? (
