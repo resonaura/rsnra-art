@@ -108,7 +108,11 @@ export interface VfsState {
   copy: (src: string, destDir: string) => boolean;
   // Copy/move to an exact destination path (including a new name). These are
   // atomic: a failed validation never leaves a half-written destination.
-  copyAs: (src: string, destPath: string) => boolean;
+  copyAs: (
+    src: string,
+    destPath: string,
+    options?: { overwrite?: boolean },
+  ) => boolean;
   moveAs: (src: string, destPath: string) => boolean;
   // Copy/move `src` into directory `destDir`, auto-renaming on collision with
   // the Win95 "Copy of <name>" scheme. Returns the resulting node name, or
@@ -2640,21 +2644,37 @@ export const useVfsStore = create<VfsState>()(
         return true;
       },
 
-      copyAs: (src, destPath) => {
+      copyAs: (src, destPath, options) => {
         const srcAbs = resolveInputPath(src);
         const destAbs = resolveInputPath(destPath);
         const root = get().root;
-        if (!srcAbs || !destAbs || findNode(root, destAbs)) return false;
+        if (
+          !srcAbs ||
+          !destAbs ||
+          srcAbs.toLowerCase() === destAbs.toLowerCase()
+        )
+          return false;
+        const existing = findNode(root, destAbs);
+        if (
+          existing &&
+          (!options?.overwrite ||
+            existing.type !== "file" ||
+            existing.protected ||
+            isReadOnlyFile(existing))
+        )
+          return false;
         const node = findNode(root, srcAbs);
         if (
           !node ||
-          vfsNodeAllocatedByteSize(node) > get().diskUsage().free
+          vfsNodeAllocatedByteSize(node) >
+            get().diskUsage().free +
+              (existing ? vfsNodeAllocatedByteSize(existing) : 0)
         )
           return false;
         if (node.type === "dir" && isAncestorOrSelf(srcAbs, destAbs))
           return false;
         const parts = splitAbs(destAbs);
-        const name = parts.at(-1);
+        const name = existing?.name ?? parts.at(-1);
         if (!name || !isValidWindowsName(name)) return false;
         const parentPath =
           parts.length === 1
@@ -2669,9 +2689,13 @@ export const useVfsStore = create<VfsState>()(
         );
         const source = findNode(sourceAccessRoot, srcAbs);
         if (!source) return false;
+        const destinationRoot = existing
+          ? removeNode(sourceAccessRoot, destAbs)
+          : sourceAccessRoot;
+        if (!destinationRoot) return false;
         const clone = cloneNode(source);
         clone.name = name;
-        const newRoot = insertNode(sourceAccessRoot, parentPath, clone);
+        const newRoot = insertNode(destinationRoot, parentPath, clone);
         if (!newRoot || !fitsOnDisk(newRoot)) return false;
         if (sourceAccessRoot !== root) set({ root: sourceAccessRoot });
         commitFilesystemChange({ root: newRoot }, "Copy");

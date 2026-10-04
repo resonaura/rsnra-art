@@ -44,6 +44,7 @@ export interface CmdContext {
   setPromptStr: (p: string) => void;
   promptStr: string;
   errorLevel: number;
+  inBatch?: boolean;
   setErrorLevel: (n: number) => void;
   confirm?: (question: string) => Promise<boolean>;
   setColor?: (bg: string, fg: string) => void;
@@ -1021,12 +1022,14 @@ async function cmdDel(
   }
 }
 
-function cmdCopy(
+async function cmdCopy(
   args: string[],
   ctx: CmdContext,
   _raw: string,
   cmdName: string,
 ) {
+  const hasFlag = (flag: string) =>
+    args.some((argument) => argument.toLowerCase() === flag.toLowerCase());
   const targets = args.filter((a) => !a.startsWith("-") && !a.startsWith("/"));
   const [src, dst] = targets;
   if (!src || !dst) {
@@ -1035,7 +1038,14 @@ function cmdCopy(
     return;
   }
 
-  if (/[*?]/.test(src)) {
+  const wildcard = /[*?]/.test(src);
+  const candidates: Array<{
+    sourcePath: string;
+    destinationPath: string;
+    sourceName: string;
+  }> = [];
+
+  if (wildcard) {
     const lastSep = Math.max(src.lastIndexOf("\\"), src.lastIndexOf("/"));
     const sourceDirArg = lastSep >= 0
       ? src.slice(0, lastSep + 1)
@@ -1058,72 +1068,130 @@ function cmdCopy(
     }
     const destinationAbs = ctx.vfs.resolvePath(dst);
     const destination = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
-    if (destination?.type !== "dir") {
+    if (!destinationAbs || destination?.type !== "dir") {
       ctx.print(["The destination must be a directory for multiple files."], "error");
       ctx.setErrorLevel(1);
       return;
     }
 
-    let copied = 0;
-    let failed = false;
-    ctx.vfs.transaction("Copy files", () => {
-      for (const source of sources) {
-        const sourcePath = `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`;
-        if (ctx.vfs.copy(sourcePath, dst)) {
+    for (const source of sources) {
+      candidates.push({
+        sourcePath: `${sourceDirAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
+        destinationPath: `${destinationAbs.replace(/[\\/]+$/, "")}\\${source.name}`,
+        sourceName: source.name,
+      });
+    }
+  } else {
+    const srcAbs = ctx.vfs.resolvePath(src);
+    const srcNode = srcAbs ? ctx.vfs.resolve(srcAbs) : null;
+    if (!srcAbs || !srcNode || srcNode.type !== "file") {
+      const msg =
+        cmdName === "cp"
+          ? `cp: ${src}: No such file or directory`
+          : `The system cannot find the file specified.`;
+      ctx.print([msg], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+
+    const dstAbs = ctx.vfs.resolvePath(dst);
+    if (!dstAbs) {
+      ctx.print(["The system cannot find the path specified."], "error");
+      ctx.setErrorLevel(1);
+      return;
+    }
+    const dstNode = ctx.vfs.resolve(dstAbs);
+    candidates.push({
+      sourcePath: srcAbs,
+      destinationPath:
+        dstNode?.type === "dir"
+          ? `${dstAbs.replace(/[\\/]+$/, "")}\\${srcNode.name}`
+          : dstAbs,
+      sourceName: srcNode.name,
+    });
+  }
+
+  const forcePrompt = hasFlag("/-y");
+  const forceOverwrite = hasFlag("/y");
+  const copyCmd = getEnvVar(ctx.vars, "COPYCMD") ?? "";
+  const environmentOverwrite = /(?:^|\s)\/y(?:$|\s)/i.test(copyCmd);
+  const promptOverwrites = forcePrompt
+    ? true
+    : forceOverwrite || environmentOverwrite
+      ? false
+      : !ctx.inBatch;
+
+  let failed = false;
+  const approved: Array<{
+    sourcePath: string;
+    destinationPath: string;
+    overwrite: boolean;
+  }> = [];
+  for (const candidate of candidates) {
+    const sourceAbs = ctx.vfs.resolvePath(candidate.sourcePath);
+    const destinationAbs = ctx.vfs.resolvePath(candidate.destinationPath);
+    const existing = destinationAbs ? ctx.vfs.resolve(destinationAbs) : null;
+    if (
+      wildcard &&
+      existing &&
+      existing.name.toLowerCase() !== candidate.sourceName.toLowerCase()
+    ) {
+      failed = true;
+      ctx.print(
+        [`The destination name is already in use: ${candidate.destinationPath}.`],
+        "error",
+      );
+      continue;
+    }
+    if (
+      existing &&
+      (existing.type !== "file" ||
+        existing.protected ||
+        isReadOnlyFile(existing) ||
+        sourceAbs?.toLowerCase() === destinationAbs?.toLowerCase())
+    ) {
+      failed = true;
+      ctx.print([`Access is denied - ${candidate.destinationPath}.`], "error");
+      continue;
+    }
+    if (
+      existing &&
+      promptOverwrites &&
+      (!ctx.confirm ||
+        !(await ctx.confirm(`Overwrite ${candidate.destinationPath}? (Y/N)`)))
+    ) {
+      continue;
+    }
+    approved.push({
+      ...candidate,
+      overwrite: !!existing,
+    });
+  }
+
+  let copied = 0;
+  if (approved.length) {
+    ctx.vfs.transaction(wildcard ? "Copy files" : "Copy", () => {
+      for (const candidate of approved) {
+        if (
+          ctx.vfs.copyAs(candidate.sourcePath, candidate.destinationPath, {
+            overwrite: candidate.overwrite,
+          })
+        ) {
           copied++;
         } else {
           failed = true;
           ctx.print(
-            [`The system cannot copy ${sourcePath}; the file exists or the disk is full.`],
+            [
+              `The system cannot copy ${candidate.sourcePath}; the destination is protected or the disk is full.`,
+            ],
             "error",
           );
         }
       }
     });
-    if (copied) ctx.print([`        ${copied} file(s) copied.`]);
-    if (failed) ctx.setErrorLevel(1);
-    return;
   }
-
-  const srcAbs = ctx.vfs.resolvePath(src);
-  const srcNode = srcAbs ? ctx.vfs.resolve(srcAbs) : null;
-  if (!srcNode || srcNode.type !== "file") {
-    const msg =
-      cmdName === "cp"
-        ? `cp: ${src}: No such file or directory`
-        : `The system cannot find the file specified.`;
-    ctx.print([msg], "error");
-    ctx.setErrorLevel(1);
-    return;
-  }
-  // Check if dst is a directory
-  const dstAbs = ctx.vfs.resolvePath(dst);
-  const dstNode = dstAbs ? ctx.vfs.resolve(dstAbs) : null;
-  if (dstNode && dstNode.type === "dir") {
-    // Copy into directory, keep same filename
-    if (ctx.vfs.copy(src, dst)) {
-      ctx.print(["        1 file(s) copied."]);
-    } else {
-      ctx.print(
-        ["The system cannot find the file specified, or it already exists."],
-        "error",
-      );
-      ctx.setErrorLevel(1);
-    }
-  } else {
-    // Copy to an exact path while preserving the file's type and attributes.
-    if (ctx.vfs.copyAs(src, dst)) {
-      ctx.print(["        1 file(s) copied."]);
-    } else {
-      ctx.print(
-        [
-          "The system cannot find the path, the disk is full, or the file already exists.",
-        ],
-        "error",
-      );
-      ctx.setErrorLevel(1);
-    }
-  }
+  ctx.print([`        ${copied} file(s) copied.`]);
+  if (failed) ctx.setErrorLevel(1);
 }
 
 function cmdMove(
@@ -2327,12 +2395,14 @@ const REGISTRY: Record<string, CmdHandler> = {
 
 const HELP_TOPICS: Record<string, string[]> = {
   dir: [
-    "DIR [drive:][path][filename] [/B] [/W] [/A[[:]attributes]] [/S] [/X]",
+    "DIR [drive:][path][filename] [/B] [/W] [/A[[:]attributes]] [/O[[:]order]] [/T[:time]] [/S] [/X]",
     "  /X  Show short 8.3 names next to long file names.",
     "  Lists directory contents.",
     "  /B  Bare format (names only)",
     "  /W  Wide format",
     "  /A  Show all files; add D/R/H/S/A to filter by attributes",
+    "  /O  Sort by N(name), E(extension), G(directories), S(size), or D(date); prefix a key with - to reverse",
+    "  /T  Display and sort by C(creation), A(access), or W(last write) time",
     "  /S  Include subdirectories (bare output uses full paths)",
   ],
   ls: [
@@ -2373,7 +2443,12 @@ const HELP_TOPICS: Record<string, string[]> = {
     "  /A  Select by attributes (R/H/S/A); hidden/system files are skipped by default",
     "  Supports wildcards: del *.txt",
   ],
-  copy: ["COPY <src> <dst>   (CP)", "  Copies a file."],
+  copy: [
+    "COPY [/Y | /-Y] <src> <dst>   (CP)",
+    "  Copies a file or wildcard set.",
+    "  /Y   Overwrite existing files without asking",
+    "  /-Y  Ask before overwriting (the interactive default)",
+  ],
   move: ["MOVE <src> <dst>   (MV)", "  Moves a file or directory."],
   ren: ["REN <file> <newname>   (RENAME, MV)", "  Renames a file."],
   attrib: [
@@ -2573,7 +2648,11 @@ async function dispatchCommand(cmdLine: string, ctx: CmdContext) {
           batchVars[String(idx + 1)] = a;
         });
         batchVars["0"] = cmd;
-        const batchCtx: CmdContext = { ...ctx, vars: batchVars };
+        const batchCtx: CmdContext = {
+          ...ctx,
+          vars: batchVars,
+          inBatch: true,
+        };
         await executeBatch(content, batchCtx);
         // Sync back any new variables
         for (const k of Object.keys(batchCtx.vars)) {

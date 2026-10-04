@@ -144,6 +144,7 @@ assert.equal(
 const runTerminalCommand = async (command, options = {}) => {
   const output = [];
   let errorLevel = 0;
+  const vars = options.vars ?? {};
   await executeLine(command, {
     vfs: state,
     print: (lines, kind = "output") => output.push({ lines, kind }),
@@ -151,8 +152,11 @@ const runTerminalCommand = async (command, options = {}) => {
     closeWindow: () => {},
     windowId: "vfs-regression",
     enterNano: () => {},
-    vars: {},
-    setVar: () => {},
+    vars,
+    inBatch: options.inBatch,
+    setVar: (name, value) => {
+      vars[name] = value;
+    },
     setTitle: () => {},
     setPromptStr: () => {},
     promptStr: "$P$G",
@@ -469,6 +473,108 @@ assert.equal(useVfsStore.getState().redo(), true);
 assert.equal(state.read(`${copyTarget}\\copy-one.dat`), "one");
 assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
 
+const copyOnePath = `${commandFixture}\\copy-one.dat`;
+const copiedOnePath = `${copyTarget}\\copy-one.dat`;
+assert.equal(state.writeFile(copyOnePath, "updated-one"), true);
+const declinedCopyPrompts = [];
+const declinedCopy = await runTerminalCommand(
+  `copy "${copyOnePath}" "${copyTarget}"`,
+  {
+    confirm: async (question) => {
+      declinedCopyPrompts.push(question);
+      return false;
+    },
+  },
+);
+assert.equal(declinedCopy.errorLevel, 0);
+assert.equal(declinedCopy.text, "        0 file(s) copied.");
+assert.deepEqual(declinedCopyPrompts, [`Overwrite ${copiedOnePath}? (Y/N)`]);
+assert.equal(state.read(copiedOnePath), "one");
+const acceptedCopy = await runTerminalCommand(
+  `copy "${copyOnePath}" "${copyTarget}"`,
+  { confirm: async () => true },
+);
+assert.equal(acceptedCopy.errorLevel, 0);
+assert.equal(state.read(copiedOnePath), "updated-one");
+assert.equal(useVfsStore.getState().undoDescription, "Copy");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.read(copiedOnePath), "one");
+assert.equal(useVfsStore.getState().redo(), true);
+assert.equal(state.read(copiedOnePath), "updated-one");
+
+assert.equal(state.writeFile(copyOnePath, "copy-y"), true);
+let copyYPromptCount = 0;
+const quietCopy = await runTerminalCommand(
+  `copy /y "${copyOnePath}" "${copyTarget}"`,
+  {
+    confirm: async () => {
+      copyYPromptCount++;
+      return false;
+    },
+  },
+);
+assert.equal(quietCopy.errorLevel, 0);
+assert.equal(copyYPromptCount, 0);
+assert.equal(state.read(copiedOnePath), "copy-y");
+
+assert.equal(state.writeFile(copyOnePath, "copycmd-y"), true);
+let copyCmdPromptCount = 0;
+await runTerminalCommand(`copy "${copyOnePath}" "${copyTarget}"`, {
+  vars: { copycmd: "/Y" },
+  confirm: async () => {
+    copyCmdPromptCount++;
+    return false;
+  },
+});
+assert.equal(copyCmdPromptCount, 0);
+assert.equal(state.read(copiedOnePath), "copycmd-y");
+
+assert.equal(state.writeFile(copyOnePath, "copy-minus-y"), true);
+const copyMinusY = await runTerminalCommand(
+  `copy /-y "${copyOnePath}" "${copyTarget}"`,
+  { vars: { COPYCMD: "/Y" }, confirm: async () => true },
+);
+assert.equal(copyMinusY.errorLevel, 0);
+assert.match(copyMinusY.text, /1 file\(s\) copied\./);
+assert.equal(state.read(copiedOnePath), "copy-minus-y");
+
+assert.equal(state.writeFile(copyOnePath, "wildcard-one"), true);
+assert.equal(state.writeFile(`${commandFixture}\\copy-two.dat`, "wildcard-two"), true);
+const wildcardCopyAnswers = [true, false];
+const wildcardOverwrite = await runTerminalCommand(
+  `copy /-y "${commandFixture}\\copy-*.dat" "${copyTarget}"`,
+  { confirm: async () => wildcardCopyAnswers.shift() },
+);
+assert.equal(wildcardOverwrite.errorLevel, 0);
+assert.equal(wildcardOverwrite.text, "        1 file(s) copied.");
+assert.equal(state.read(copiedOnePath), "wildcard-one");
+assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
+assert.equal(useVfsStore.getState().undoDescription, "Copy files");
+assert.equal(useVfsStore.getState().undo(), true);
+assert.equal(state.read(copiedOnePath), "copy-minus-y");
+assert.equal(state.read(`${copyTarget}\\copy-two.dat`), "two");
+assert.equal(useVfsStore.getState().redo(), true);
+
+assert.equal(state.writeFile(copyOnePath, "batch-overwrite"), true);
+const batchCopyPath = `${commandFixture}\\copy-overwrite.bat`;
+assert.equal(
+  state.writeFile(
+    batchCopyPath,
+    `@echo off\ncopy "${copyOnePath}" "${copyTarget}"`,
+  ),
+  true,
+);
+let batchCopyPromptCount = 0;
+const batchCopy = await runTerminalCommand(`"${batchCopyPath}"`, {
+  confirm: async () => {
+    batchCopyPromptCount++;
+    return false;
+  },
+});
+assert.equal(batchCopy.errorLevel, 0);
+assert.equal(batchCopyPromptCount, 0);
+assert.equal(state.read(copiedOnePath), "batch-overwrite");
+
 const moveTarget = `${commandFixture}\\MoveTarget`;
 assert.equal(state.mkdir(moveTarget), true);
 assert.equal(state.writeFile(`${commandFixture}\\move-one.dat`, "one"), true);
@@ -593,6 +699,14 @@ assert.equal(state.exists(shellPromptPath), true);
 memoryTerminal.send("Y\r");
 await tick();
 assert.equal(state.exists(shellPromptPath), false);
+
+assert.equal(state.writeFile(copyOnePath, "shell-copy"), true);
+memoryTerminal.send(`copy /-y "${copyOnePath}" "${copyTarget}"\r`);
+await tick();
+assert.ok(memoryTerminal.output.includes(`Overwrite ${copiedOnePath}? (Y/N)`));
+memoryTerminal.send("Y\r");
+await tick();
+assert.equal(state.read(copiedOnePath), "shell-copy");
 
 const cancelledPromptA = `${commandFixture}\\shell-cancel-a.tmp`;
 const cancelledPromptB = `${commandFixture}\\shell-cancel-b.tmp`;
