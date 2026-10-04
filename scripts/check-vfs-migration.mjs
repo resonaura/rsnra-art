@@ -194,6 +194,7 @@ const runTerminalCommand = async (command, options = {}) => {
 
 const volumeLabel = () => useVfsStore.getState().root.volumeLabel;
 assert.equal(volumeLabel(), "SYSTEM");
+assert.equal(useVfsStore.getState().root.volumeSerialNumber, "4A2B-2000");
 const defaultVolume = await runTerminalCommand("vol");
 assert.equal(
   defaultVolume.text,
@@ -1448,16 +1449,26 @@ for (const [version, persistedRoot] of [
   [19, withV19SendTo],
   [20, withV19SendTo],
   [21, before.root],
+  [22, before.root],
 ]) {
   const migrated = await migrate(
     {
-      root: { ...persistedRoot, volumeLabel: "CUSTOM" },
+      root: {
+        ...persistedRoot,
+        volumeLabel: "CUSTOM",
+        volumeSerialNumber: "ABCD-1234",
+      },
       cwd: USER_DOCUMENTS_PATH,
       recycled: before.recycled,
     },
     version,
   );
   assert.equal(migrated.root.volumeLabel, "CUSTOM", `v${version} lost the volume label`);
+  assert.equal(
+    migrated.root.volumeSerialNumber,
+    "ABCD-1234",
+    `v${version} lost the volume serial`,
+  );
 
   const afterPayload = findNode(migrated.root, recycledPath);
   const afterIndex = findNode(migrated.root, indexPath);
@@ -1498,15 +1509,17 @@ for (const [version, persistedRoot] of [
 
 const rootWithoutLabel = { ...before.root };
 delete rootWithoutLabel.volumeLabel;
+delete rootWithoutLabel.volumeSerialNumber;
 const defaultLabelMigration = await migrate(
   {
     root: rootWithoutLabel,
     cwd: USER_DOCUMENTS_PATH,
     recycled: before.recycled,
   },
-  21,
+  22,
 );
 assert.equal(defaultLabelMigration.root.volumeLabel, "SYSTEM");
+assert.equal(defaultLabelMigration.root.volumeSerialNumber, "4A2B-2000");
 
 const nestedDirectoryPath = `${USER_DOCUMENTS_PATH}\\md-tree-regression\\level-one\\level-two`;
 assert.equal(state.mkdirs(nestedDirectoryPath), true);

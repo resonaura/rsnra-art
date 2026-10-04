@@ -29,6 +29,7 @@ export type VfsNodeType = "dir" | "file";
 export interface VfsNode {
   name: string; // filesystem name (case-insensitive lookups, preserves case)
   volumeLabel?: string; // root volume label (FAT16 supports 11 characters)
+  volumeSerialNumber?: string; // root FAT volume serial, formatted as XXXX-XXXX
   shortName?: string; // stable FAT/VFAT 8.3 alias stored with the directory entry
   type: VfsNodeType;
   children?: VfsNode[]; // dir
@@ -1700,7 +1701,11 @@ v4.2000
     ],
     true,
   );
-  return { ...root, volumeLabel: "SYSTEM" };
+  return {
+    ...root,
+    volumeLabel: "SYSTEM",
+    volumeSerialNumber: "4A2B-2000",
+  };
 }
 
 /**
@@ -1741,6 +1746,9 @@ function mergeCanonicalTree(
     ...canonical,
     ...(persisted.volumeLabel !== undefined && {
       volumeLabel: persisted.volumeLabel,
+    }),
+    ...(persisted.volumeSerialNumber !== undefined && {
+      volumeSerialNumber: persisted.volumeSerialNumber,
     }),
     children,
   };
@@ -2990,7 +2998,7 @@ export const useVfsStore = create<VfsState>()(
     },
     {
       name: "rsnra95-vfs",
-      version: 22,
+      version: 23,
       partialize: (state) => ({
         root: state.root,
         cwd: state.cwd,

@@ -2081,14 +2081,12 @@ function cmdVol(_args: string[], ctx: CmdContext) {
   ctx.print(volumeInfoLines(ctx.vfs.root));
 }
 
-const VIRTUAL_VOLUME_SERIAL = "4A2B-2000";
-
 function volumeInfoLines(root: VfsNode): string[] {
   return [
     root.volumeLabel
       ? ` Volume in drive C is ${root.volumeLabel}`
       : " Volume in drive C has no label.",
-    ` Volume Serial Number is ${VIRTUAL_VOLUME_SERIAL}`,
+    ` Volume Serial Number is ${root.volumeSerialNumber ?? ""}`,
     "",
   ];
 }
