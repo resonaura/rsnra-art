@@ -7,6 +7,7 @@ export const ALL_USERS_PROFILE_PATH = `${DOCUMENTS_AND_SETTINGS_PATH}\\All Users
 export const USER_DOCUMENTS_PATH = `${USER_PROFILE_PATH}\\My Documents`;
 export const USER_PICTURES_PATH = `${USER_PROFILE_PATH}\\My Pictures`;
 export const USER_DESKTOP_PATH = `${USER_PROFILE_PATH}\\Desktop`;
+export const COMMON_DESKTOP_PATH = `${ALL_USERS_PROFILE_PATH}\\Desktop`;
 export const USER_APPLICATION_DATA_PATH = `${USER_PROFILE_PATH}\\Application Data`;
 export const USER_COOKIES_PATH = `${USER_PROFILE_PATH}\\Cookies`;
 export const USER_FAVORITES_PATH = `${USER_PROFILE_PATH}\\Favorites`;

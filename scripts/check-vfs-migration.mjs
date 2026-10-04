@@ -11,15 +11,68 @@ globalThis.localStorage = {
   removeItem: (key) => localStorageValues.delete(key),
 };
 
-const [{ useVfsStore }, { dispatchSendToEntry, isSendToMenuEntry, sendToMenuLabel }, paths] =
+const [
+  { useVfsStore },
+  { dispatchSendToEntry, isSendToMenuEntry, sendToMenuLabel },
+  paths,
+  { mergeCommonAndUserEntries },
+] =
   await Promise.all([
     import("../src/store/vfsStore.ts"),
     import("../src/lib/sendTo.ts"),
     import("../src/lib/windowsPaths.ts"),
+    import("../src/lib/shellFolders.ts"),
   ]);
 
-const { USER_DOCUMENTS_PATH, USER_PROFILE_PATH, USER_SEND_TO_PATH } = paths;
+const {
+  COMMON_DESKTOP_PATH,
+  USER_DOCUMENTS_PATH,
+  USER_PROFILE_PATH,
+  USER_SEND_TO_PATH,
+} = paths;
 const state = useVfsStore.getState();
+
+assert.equal(state.resolve(COMMON_DESKTOP_PATH)?.type, "dir");
+assert.deepEqual(
+  mergeCommonAndUserEntries(
+    COMMON_DESKTOP_PATH,
+    [
+      { name: "Shared.lnk", source: "common" },
+      { name: "Common Only.lnk", source: "common" },
+    ],
+    paths.USER_DESKTOP_PATH,
+    [
+      { name: "shared.LNK", source: "user" },
+      { name: "Personal Only.lnk", source: "user" },
+    ],
+  ),
+  [
+    {
+      node: { name: "Shared.lnk", source: "common" },
+      path: COMMON_DESKTOP_PATH,
+      id: `${COMMON_DESKTOP_PATH.toLowerCase()}\\shared.lnk`,
+      positionKey: `${COMMON_DESKTOP_PATH.toLowerCase()}\\shared.lnk`,
+    },
+    {
+      node: { name: "Common Only.lnk", source: "common" },
+      path: COMMON_DESKTOP_PATH,
+      id: `${COMMON_DESKTOP_PATH.toLowerCase()}\\common only.lnk`,
+      positionKey: `${COMMON_DESKTOP_PATH.toLowerCase()}\\common only.lnk`,
+    },
+    {
+      node: { name: "shared.LNK", source: "user" },
+      path: paths.USER_DESKTOP_PATH,
+      id: `${paths.USER_DESKTOP_PATH.toLowerCase()}\\shared.lnk`,
+      positionKey: "shared.LNK",
+    },
+    {
+      node: { name: "Personal Only.lnk", source: "user" },
+      path: paths.USER_DESKTOP_PATH,
+      id: `${paths.USER_DESKTOP_PATH.toLowerCase()}\\personal only.lnk`,
+      positionKey: "Personal Only.lnk",
+    },
+  ],
+);
 
 // MAX_PATH is 260 characters including the terminating NUL, so 259 visible
 // characters work and a 260-character input path does not.

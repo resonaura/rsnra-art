@@ -18,7 +18,15 @@ import {
   willRecycleBinEvictOldestItems,
 } from "../../lib/recycleBin";
 import { alertError, confirmDialog } from "../../lib/systemDialogs";
-import { USER_DESKTOP_PATH, USER_DOCUMENTS_PATH } from "../../lib/windowsPaths";
+import {
+  desktopEntryId,
+  mergeCommonAndUserEntries,
+} from "../../lib/shellFolders";
+import {
+  COMMON_DESKTOP_PATH,
+  USER_DESKTOP_PATH,
+  USER_DOCUMENTS_PATH,
+} from "../../lib/windowsPaths";
 import { useDesktopStore } from "../../store/desktopStore";
 import { useDisplayStore } from "../../store/displayStore";
 import { useFilePrefsStore } from "../../store/filePrefsStore";
@@ -57,7 +65,48 @@ const EMPTY: VfsNode[] = [];
 
 type IconCtx =
   | { kind: "recycle"; x: number; y: number }
-  | { kind: "node"; x: number; y: number; node: VfsNode };
+  | { kind: "node"; x: number; y: number; node: VfsNode; path: string };
+
+type DesktopEntry = {
+  node: VfsNode;
+  path: string;
+  id: string;
+  positionKey: string;
+};
+
+type DesktopItem =
+  | {
+      key: string;
+      positionKey: string;
+      type: "lnk";
+      node: VfsNode;
+      path: string;
+      label: string;
+    }
+  | {
+      key: string;
+      positionKey: string;
+      type: "node";
+      node: VfsNode;
+      path: string;
+      label: string;
+    }
+  | {
+      key: string;
+      positionKey: string;
+      type: "recycle";
+      label: string;
+      node?: VfsNode;
+      path?: string;
+    }
+  | {
+      key: string;
+      positionKey: string;
+      type: "mydocs";
+      label: string;
+      node?: VfsNode;
+      path?: string;
+    };
 
 function getAutoArrangedPosition(index: number, heightLimit: number) {
   const rowHeight = 82;
@@ -139,26 +188,39 @@ export function Desktop() {
   const emptyRecycleBin = useVfsStore((s) => s.emptyRecycleBin);
 
   const desktopNode = useVfsStore((s) => s.resolve(DESKTOP_PATH));
-
-  const desktopNodes = useMemo(
-    () => desktopNode?.children ?? EMPTY,
-    [desktopNode],
+  const commonDesktopNode = useVfsStore((s) =>
+    s.resolve(COMMON_DESKTOP_PATH),
   );
+  const desktopEntries = useMemo<DesktopEntry[]>(() => {
+    const userNodes = desktopNode?.children ?? EMPTY;
+    const commonNodes = commonDesktopNode?.children ?? EMPTY;
+    return mergeCommonAndUserEntries(
+      COMMON_DESKTOP_PATH,
+      commonNodes,
+      DESKTOP_PATH,
+      userNodes,
+    );
+  }, [desktopNode, commonDesktopNode]);
+  const desktopNodes = desktopNode?.children ?? EMPTY;
 
-  const systemLnks = desktopNodes.filter(
-    (n) =>
-      n.type === "file" && n.system && n.name.toLowerCase().endsWith(".lnk"),
+  const systemLnks = desktopEntries.filter(
+    ({ node }) =>
+      node.type === "file" &&
+      node.system &&
+      node.name.toLowerCase().endsWith(".lnk"),
   );
-  const rest = desktopNodes.filter((n) => {
-    if (n.system && n.name.toLowerCase().endsWith(".lnk")) return false;
-    if (n.hidden && !showHidden) return false;
+  const rest = desktopEntries.filter(({ node }) => {
+    if (node.system && node.name.toLowerCase().endsWith(".lnk")) return false;
+    if (node.hidden && !showHidden) return false;
     return true;
   });
 
   const [selected, setSelected] = useState<string | null>(null);
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const [iconCtx, setIconCtx] = useState<IconCtx | null>(null);
-  const [openWithNode, setOpenWithNode] = useState<VfsNode | null>(null);
+  const [openWithEntry, setOpenWithEntry] = useState<
+    Pick<DesktopEntry, "node" | "path"> | null
+  >(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
 
@@ -175,7 +237,8 @@ export function Desktop() {
       setRenaming(null);
       return;
     }
-    const node = desktopNodes.find((n) => n.name === renaming);
+    const entry = desktopEntries.find(({ id }) => id === renaming);
+    const node = entry?.node;
     let newName = renameVal.trim();
     if (
       node?.name.toLowerCase().endsWith(".lnk") &&
@@ -183,9 +246,16 @@ export function Desktop() {
     ) {
       newName += ".lnk";
     }
-    useVfsStore.getState().rename(`${DESKTOP_PATH}\\${renaming}`, newName);
+    if (entry) {
+      useVfsStore.getState().rename(
+        `${entry.path}\\${entry.node.name}`,
+        newName,
+      );
+    }
     setRenaming(null);
-    if (selected === renaming) setSelected(newName);
+    if (selected === renaming && entry) {
+      setSelected(desktopEntryId(entry.path, newName));
+    }
   };
 
   const newFolder = () => {
@@ -193,8 +263,9 @@ export function Desktop() {
     let i = 1;
     while (vfsExists(desktopNodes, name)) name = `New Folder (${++i})`;
     useVfsStore.getState().mkdir(`${DESKTOP_PATH}\\${name}`);
-    setSelected(name);
-    setRenaming(name);
+    const id = desktopEntryId(DESKTOP_PATH, name);
+    setSelected(id);
+    setRenaming(id);
     setRenameVal(name);
   };
 
@@ -203,12 +274,13 @@ export function Desktop() {
     let i = 1;
     while (vfsExists(desktopNodes, name)) name = `New Text Document (${++i}).txt`;
     useVfsStore.getState().writeFile(`${DESKTOP_PATH}\\${name}`, "");
-    setSelected(name);
-    setRenaming(name);
+    const id = desktopEntryId(DESKTOP_PATH, name);
+    setSelected(id);
+    setRenaming(id);
     setRenameVal(name.replace(/\.txt$/i, ""));
   };
 
-  const renderLnk = (node: VfsNode, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
+  const renderLnk = (node: VfsNode, path: string, id: string, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
     const lnk = parseLnk(node);
     if (!lnk) return null;
     const label = node.name.replace(/\.lnk$/i, "");
@@ -219,27 +291,27 @@ export function Desktop() {
         : lnk.icon || "/icons/shell32.dll/109.ico";
     return (
       <DesktopIcon
-        key={node.name}
+        key={id}
         label={label}
         icon={lnkIcon}
         shortcut={lnk.shortcut}
-        selected={selected === node.name}
-        renaming={renaming === node.name}
+        selected={selected === id}
+        renaming={renaming === id}
         renameVal={renameVal}
         onRenameChange={setRenameVal}
         onRenameCommit={commitRename}
         onRenameCancel={() => setRenaming(null)}
         onSelect={() => {
-          setSelected(node.name);
+          setSelected(id);
           closeAll();
         }}
-        onOpen={() => openVfsNode(node, `${DESKTOP_PATH}\\${node.name}`)}
+        onOpen={() => openVfsNode(node, `${path}\\${node.name}`)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setSelected(node.name);
+          setSelected(id);
           setBgMenu(null);
-          setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node });
+          setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node, path });
         }}
         draggable={draggable}
         onDragStart={onDragStart}
@@ -250,34 +322,34 @@ export function Desktop() {
     );
   };
 
-  const renderNode = (node: VfsNode, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
+  const renderNode = (node: VfsNode, path: string, id: string, draggable?: boolean, onDragStart?: (e: React.DragEvent) => void) => {
     const isLnk = node.name.toLowerCase().endsWith(".lnk");
     const label = isLnk ? node.name.replace(/\.lnk$/i, "") : displayName(node.name, hideKnownExtensions);
     const lnk = isLnk ? parseLnk(node) : null;
     const icon = lnk?.icon ?? iconForNode(node, extensionIcons);
     return (
       <DesktopIcon
-        key={node.name}
+        key={id}
         label={label}
         icon={icon}
         shortcut={lnk?.shortcut}
-        selected={selected === node.name}
-        renaming={renaming === node.name}
+        selected={selected === id}
+        renaming={renaming === id}
         renameVal={renameVal}
         onRenameChange={setRenameVal}
         onRenameCommit={commitRename}
         onRenameCancel={() => setRenaming(null)}
         onSelect={() => {
-          setSelected(node.name);
+          setSelected(id);
           closeAll();
         }}
-        onOpen={() => openVfsNode(node, `${DESKTOP_PATH}\\${node.name}`)}
+        onOpen={() => openVfsNode(node, `${path}\\${node.name}`)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setSelected(node.name);
+          setSelected(id);
           setBgMenu(null);
-          setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node });
+          setIconCtx({ kind: "node", x: e.clientX, y: e.clientY, node, path });
         }}
         draggable={draggable}
         onDragStart={onDragStart}
@@ -290,33 +362,39 @@ export function Desktop() {
 
   // Combine system links, Recycle Bin, and rest of files/folders
   const allItems = useMemo(() => {
-    const res: any[] = [];
-    systemLnks.forEach((n) => {
+    const res: DesktopItem[] = [];
+    systemLnks.forEach(({ node, path, id, positionKey }) => {
       res.push({
-        key: n.name,
+        key: id,
+        positionKey,
         type: "lnk",
-        node: n,
-        label: n.name.replace(/\.lnk$/i, ""),
+        node,
+        path,
+        label: node.name.replace(/\.lnk$/i, ""),
       });
     });
     res.push({
       key: "__recycle__",
+      positionKey: "__recycle__",
       type: "recycle",
       label: "Recycle Bin",
     });
     if (showMyDocumentsOnDesktop) {
       res.push({
         key: "__mydocs__",
+        positionKey: "__mydocs__",
         type: "mydocs",
         label: "My Documents",
       });
     }
-    rest.forEach((n) => {
+    rest.forEach(({ node, path, id, positionKey }) => {
       res.push({
-        key: n.name,
+        key: id,
+        positionKey,
         type: "node",
-        node: n,
-        label: n.name.toLowerCase().endsWith(".lnk") ? n.name.replace(/\.lnk$/i, "") : n.name,
+        node,
+        path,
+        label: node.name.toLowerCase().endsWith(".lnk") ? node.name.replace(/\.lnk$/i, "") : node.name,
       });
     });
     return res;
@@ -324,8 +402,16 @@ export function Desktop() {
 
   // Sort elements if sortBy is selected
   const sortedItems = useMemo(() => {
-    const systemItems = allItems.filter((item) => item.key === "My Computer.lnk" || item.key === "__recycle__");
-    const userItems = allItems.filter((item) => item.key !== "My Computer.lnk" && item.key !== "__recycle__");
+    const systemItems = allItems.filter(
+      (item) =>
+        item.type === "recycle" ||
+        item.node?.name.toLowerCase() === "my computer.lnk",
+    );
+    const userItems = allItems.filter(
+      (item) =>
+        item.type !== "recycle" &&
+        item.node?.name.toLowerCase() !== "my computer.lnk",
+    );
     
     if (!sortBy) return allItems;
 
@@ -362,7 +448,7 @@ export function Desktop() {
       if (autoArrange) {
         pos = getAutoArrangedPosition(index, layoutHeight);
       } else {
-        const saved = iconPositions[item.key];
+        const saved = iconPositions[item.positionKey];
         if (saved) {
           pos = saved;
         } else {
@@ -402,15 +488,19 @@ export function Desktop() {
     }
   };
 
-  const handleIconDragStart = (key: string, e: React.DragEvent) => {
-    const sourceNode = desktopNodes.find((node) => node.name === key);
-    if (sourceNode && containsProtectedNode(sourceNode)) {
+  const handleIconDragStart = (
+    positionKey: string,
+    e: React.DragEvent,
+    node?: VfsNode,
+    path?: string,
+  ) => {
+    if (node && containsProtectedNode(node)) {
       e.preventDefault();
       return;
     }
-    e.dataTransfer.setData("desktop-icon-name", key);
-    if (key !== "__recycle__" && key !== "__mydocs__") {
-      const abs = `${DESKTOP_PATH}\\${key}`;
+    e.dataTransfer.setData("desktop-icon-name", positionKey);
+    if (node && path) {
+      const abs = `${path}\\${node.name}`;
       e.dataTransfer.setData("application/x-rsnra-vfs-path", abs);
       e.dataTransfer.setData("text/plain", abs);
     }
@@ -450,8 +540,16 @@ export function Desktop() {
             >
               {renderLnk(
                 item.node,
+                item.path,
+                item.key,
                 !containsProtectedNode(item.node),
-                (e) => handleIconDragStart(item.key, e),
+                (e) =>
+                  handleIconDragStart(
+                    item.positionKey,
+                    e,
+                    item.node,
+                    item.path,
+                  ),
               )}
             </div>
           );
@@ -542,8 +640,16 @@ export function Desktop() {
           >
             {renderNode(
               item.node,
+              item.path,
+              item.key,
               !containsProtectedNode(item.node),
-              (e) => handleIconDragStart(item.key, e),
+              (e) =>
+                handleIconDragStart(
+                  item.positionKey,
+                  e,
+                  item.node,
+                  item.path,
+                ),
             )}
           </div>
         );
@@ -606,11 +712,11 @@ export function Desktop() {
 
       {iconCtx?.kind === "node" &&
         (() => {
-          const { node } = iconCtx;
+          const { node, path } = iconCtx;
           const lnk = parseLnk(node);
           const isLnk = node.name.toLowerCase().endsWith(".lnk");
           const label = isLnk ? node.name.replace(/\.lnk$/i, "") : node.name;
-          const abs = `${DESKTOP_PATH}\\${node.name}`;
+          const abs = `${path}\\${node.name}`;
           const targetIcon = lnk?.icon ?? iconForNode(node, extensionIcons);
           return (
             <ContextMenu
@@ -674,7 +780,7 @@ export function Desktop() {
               {!isLnk && node.type === "file" && (
                 <CtxItem
                   onClick={() => {
-                    setOpenWithNode(node);
+                    setOpenWithEntry({ node, path });
                     setIconCtx(null);
                   }}
                 >
@@ -687,7 +793,9 @@ export function Desktop() {
                   {!isReadOnlyFile(node) && (
                     <CtxItem
                       onClick={() => {
-                        setRenaming(node.name);
+                        const entryId = desktopEntryId(path, node.name);
+                        setRenaming(entryId);
+                        setSelected(entryId);
                         setRenameVal(label);
                         setIconCtx(null);
                       }}
@@ -734,7 +842,9 @@ export function Desktop() {
                         );
                         return;
                       }
-                      if (selected === node.name) setSelected(null);
+                      if (selected === desktopEntryId(path, node.name)) {
+                        setSelected(null);
+                      }
                       setIconCtx(null);
                     }}
                   >
@@ -762,11 +872,11 @@ export function Desktop() {
             </ContextMenu>
           );
         })()}
-      {openWithNode && (
+      {openWithEntry && (
         <OpenWithDialog
-          fileName={openWithNode.name}
-          filePath={`${DESKTOP_PATH}\\${openWithNode.name}`}
-          onClose={() => setOpenWithNode(null)}
+          fileName={openWithEntry.node.name}
+          filePath={`${openWithEntry.path}\\${openWithEntry.node.name}`}
+          onClose={() => setOpenWithEntry(null)}
         />
       )}
     </Wrapper>
